@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model bse_equity {
+  id         Int    @id @default(autoincrement())
+  symbol_id  BigInt?
+  symbol     String    @db.VarChar(50)
+  date       DateTime  @db.Date
+  open       Float?
+  high       Float?
+  low        Float?
+  close      Float?
+  volume     Int?
+  oi         Int?
+  exchange   String?   @db.VarChar(10)
+  created_at DateTime? @db.Timestamp(6)
+  updated_at DateTime? @db.Timestamp(6)
+
+  @@unique([symbol, date], map: "bse_equity_symbol_date_unique")
+  @@index([symbol, date], map: "idx_bse_eq_symbol_date")
+}
+
+model nse_equity {
+  id         Int    @id @default(autoincrement())
+  symbol_id  BigInt?
+  symbol     String    @db.VarChar(50)
+  date       DateTime  @db.Date
+  open       Float?
+  high       Float?
+  low        Float?
+  close      Float?
+  volume     Int?
+  oi         Int?
+  exchange   String?   @db.VarChar(10)
+  created_at DateTime? @db.Timestamp(6)
+  updated_at DateTime? @db.Timestamp(6)
+
+  @@unique([symbol, date], map: "nse_equity_symbol_date_unique")
+  @@index([symbol, date], map: "idx_nse_eq_symbol_date")
+}
+
+model nse_futures {
+  id          Int    @id @default(autoincrement())
+  symbol_id   BigInt?
+  symbol      String    @db.VarChar(100)
+  date        DateTime  @db.Date
+  open        Float?
+  high        Float?
+  low         Float?
+  close       Float?
+  volume      Int?
+  oi          Int?
+  underlying  String?   @db.VarChar(50)
+  expiry_date DateTime? @db.Date
+  created_at  DateTime? @db.Timestamp(6)
+  updated_at  DateTime? @db.Timestamp(6)
+
+  @@unique([symbol, date], map: "nse_futures_symbol_date_unique")
+  @@index([symbol, date], map: "idx_nse_fut_symbol_date")
+  @@index([underlying, expiry_date], map: "idx_nse_fut_underlying_expiry")
+}
+
+model nse_options {
+  id          Int    @id @default(autoincrement())
+  symbol_id   BigInt?
+  symbol      String    @db.VarChar(100)
+  date        DateTime  @db.Date
+  open        Float?
+  high        Float?
+  low         Float?
+  close       Float?
+  volume      Int?
+  oi          Int?
+  underlying  String?   @db.VarChar(50)
+  expiry_date DateTime? @db.Date
+  strike      Float?
+  option_type String?   @db.VarChar(2)
+  created_at  DateTime? @db.Timestamp(6)
+  updated_at  DateTime? @db.Timestamp(6)
+
+  @@unique([symbol, date], map: "nse_options_symbol_date_unique")
+  @@index([strike, date], map: "idx_nse_opt_strike_date")
+  @@index([symbol, date], map: "idx_nse_opt_symbol_date")
+  @@index([underlying, expiry_date, option_type], map: "idx_nse_opt_underlying_expiry")
+}
+
+model instrument_lists {
+  id              Int    @id @default(autoincrement())
+  exchange        String    @db.VarChar(100)
+  instrument_type String    @db.VarChar(100)
+  created_at      DateTime? @db.Timestamp(6)
+  updated_at      DateTime? @db.Timestamp(6)
+
+  intrumentExpiry instruments_expiry[]
+
+  @@unique([exchange, instrument_type], map: "instrument_lists_exchange_instrument_type_unique")
+  @@index([exchange, instrument_type], map: "idx_instrument_lists_exchange_instrument_type")
+}
+
+model instruments_expiry {
+  id            Int    @id @default(autoincrement())
+  instrument_id Int?
+  expiry_date   DateTime? @db.Date
+  created_at    DateTime? @db.Timestamp(6)
+  updated_at    DateTime? @db.Timestamp(6)
+
+  instrumentList instrument_lists? @relation(fields: [instrument_id], references: [id])
+
+  @@unique([instrument_id, expiry_date], map: "instruments_expiry_instrument_id_expiry_date_unique")
+  @@index([instrument_id, expiry_date], map: "idx_instruments_expiry_instrument_id_expiry_date")
+}
+
+model bhavcopy_uploaded {
+  id          Int    @id @default(autoincrement())
+  date        DateTime  @db.Date
+  count       Int
+  segment     String?   @db.VarChar(100)
+  created_at  DateTime? @db.Timestamp(6)
+  updated_at  DateTime? @db.Timestamp(6)
+
+  @@unique([date, count, segment], map: "bhavcopy_date_count_segment_unique")
+  @@index([date, count, segment], map: "idx_bhavcopy_date_count_segment")
+}
+
+model dates_missed {
+  id          Int    @id @default(autoincrement())
+  date        DateTime  @db.Date
+  day         String?   @db.VarChar(100)
+  segment     String?   @db.VarChar(100)
+  created_at  DateTime? @db.Timestamp(6)
+  updated_at  DateTime? @db.Timestamp(6)
+
+  @@unique([date, segment], map: "dates_missed_date_segment_unique")
+  @@index([date, segment], map: "idx_dates_missed_date_segment")
+}

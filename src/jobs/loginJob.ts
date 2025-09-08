@@ -3,8 +3,9 @@ import { setAccessToken } from '../config/store';
 import cron from 'node-cron';
 import qs from 'qs';
 import { loadEnv } from '../config/env';
-import { getNseFuturesHistory } from '../nseFutures/nseFuturesHistory';
-import { insertIntoDataBase } from '../nseFutures/insertIntoDataBase';
+import { insertFutIntoDataBase } from '../nseFutures/insertFutIntoDataBase';
+import { insertOptIntoDataBase } from '../nseOptions/insertOptIntoDataBase';
+import { insertEqIntoDataBase } from '../nseEquity/insertEqtIntoDatabase';
 loadEnv();
 
 // API endpoint for login
@@ -29,17 +30,29 @@ async function fetchAccessToken(): Promise<void> {
         "Content-Type": "application/x-www-form-urlencoded"
       }
     });
-    // console.log('✅ Login response:', response.data);
+    console.log('✅ Login response:', response.data);
     
     // Assuming the API returns the token in the response data
     const accessToken = response.data.access_token;
     
     if (accessToken) {
       // Store the token in the global store
+      // console.log(accessToken)
       setAccessToken(accessToken);
-      console.log(accessToken)
-      console.log(new Date().toISOString().split('T')[0])
-      insertIntoDataBase(new Date().toISOString().split('T')[0]);
+      // insertFutIntoDataBase(`2022-01-03`);
+      // insertOptIntoDataBase(`2022-01-03`);
+      // insertOptIntoDataBase(`2022-07-04`);
+      // insertOptIntoDataBase(`2022-09-15`);
+      // insertOptIntoDataBase(`2022-10-27`);
+      // insertOptIntoDataBase(`2023-07-28`);
+      // insertOptIntoDataBase(`2023-12-09`);
+      // insertOptIntoDataBase(`2024-04-24`);
+      // insertOptIntoDataBase(`2025-01-10`);
+      // insertOptIntoDataBase(`2025-06-11`);
+      // insertEqIntoDataBase(`2018-01-01`)
+      // insertEqIntoDataBase(`2019-07-18`)
+      // insertEqIntoDataBase(`2019-10-02`)
+      insertEqIntoDataBase(`2024-07-23`)
       console.log('✅ Access token updated successfully');
     } else {
       console.error('❌ No access token received from API');

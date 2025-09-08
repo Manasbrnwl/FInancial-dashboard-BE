@@ -9,58 +9,58 @@ datasource db {
 }
 
 model bse_equity {
-  id         Int    @id @default(autoincrement())
-  symbol_id  BigInt?
+  id         Int       @id @default(autoincrement())
+  symbol_id  String?
   symbol     String    @db.VarChar(50)
   date       DateTime  @db.Date
   open       Float?
   high       Float?
   low        Float?
   close      Float?
-  volume     Int?
-  oi         Int?
+  volume     String?
+  oi         String?
   exchange   String?   @db.VarChar(10)
-  created_at DateTime? @db.Timestamp(6)
-  updated_at DateTime? @db.Timestamp(6)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @updatedAt @db.Timestamp(6)
 
   @@unique([symbol, date], map: "bse_equity_symbol_date_unique")
   @@index([symbol, date], map: "idx_bse_eq_symbol_date")
 }
 
 model nse_equity {
-  id         Int    @id @default(autoincrement())
-  symbol_id  BigInt?
+  id         Int       @id @default(autoincrement())
+  symbol_id  String?
   symbol     String    @db.VarChar(50)
   date       DateTime  @db.Date
   open       Float?
   high       Float?
   low        Float?
   close      Float?
-  volume     Int?
-  oi         Int?
+  volume     String?
+  oi         String?
   exchange   String?   @db.VarChar(10)
-  created_at DateTime? @db.Timestamp(6)
-  updated_at DateTime? @db.Timestamp(6)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @updatedAt @db.Timestamp(6)
 
   @@unique([symbol, date], map: "nse_equity_symbol_date_unique")
   @@index([symbol, date], map: "idx_nse_eq_symbol_date")
 }
 
 model nse_futures {
-  id          Int    @id @default(autoincrement())
-  symbol_id   BigInt?
+  id          Int       @id @default(autoincrement())
+  symbol_id   String?
   symbol      String    @db.VarChar(100)
   date        DateTime  @db.Date
   open        Float?
   high        Float?
   low         Float?
   close       Float?
-  volume      Int?
-  oi          Int?
+  volume      String?
+  oi          String?
   underlying  String?   @db.VarChar(50)
   expiry_date DateTime? @db.Date
-  created_at  DateTime? @db.Timestamp(6)
-  updated_at  DateTime? @db.Timestamp(6)
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  updated_at  DateTime? @updatedAt @db.Timestamp(6)
 
   @@unique([symbol, date], map: "nse_futures_symbol_date_unique")
   @@index([symbol, date], map: "idx_nse_fut_symbol_date")
@@ -68,22 +68,22 @@ model nse_futures {
 }
 
 model nse_options {
-  id          Int    @id @default(autoincrement())
-  symbol_id   BigInt?
+  id          Int       @id @default(autoincrement())
+  symbol_id   String?
   symbol      String    @db.VarChar(100)
   date        DateTime  @db.Date
   open        Float?
   high        Float?
   low         Float?
   close       Float?
-  volume      Int?
-  oi          Int?
+  volume      String?
+  oi          String?
   underlying  String?   @db.VarChar(50)
   expiry_date DateTime? @db.Date
-  strike      Float?
+  strike      String?
   option_type String?   @db.VarChar(2)
-  created_at  DateTime? @db.Timestamp(6)
-  updated_at  DateTime? @db.Timestamp(6)
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  updated_at  DateTime? @updatedAt @db.Timestamp(6)
 
   @@unique([symbol, date], map: "nse_options_symbol_date_unique")
   @@index([strike, date], map: "idx_nse_opt_strike_date")
@@ -92,11 +92,11 @@ model nse_options {
 }
 
 model instrument_lists {
-  id              Int    @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   exchange        String    @db.VarChar(100)
   instrument_type String    @db.VarChar(100)
-  created_at      DateTime? @db.Timestamp(6)
-  updated_at      DateTime? @db.Timestamp(6)
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+  updated_at      DateTime? @updatedAt @db.Timestamp(6)
 
   intrumentExpiry instruments_expiry[]
 
@@ -105,11 +105,11 @@ model instrument_lists {
 }
 
 model instruments_expiry {
-  id            Int    @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   instrument_id Int?
   expiry_date   DateTime? @db.Date
-  created_at    DateTime? @db.Timestamp(6)
-  updated_at    DateTime? @db.Timestamp(6)
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  updated_at    DateTime? @updatedAt @db.Timestamp(6)
 
   instrumentList instrument_lists? @relation(fields: [instrument_id], references: [id])
 
@@ -118,24 +118,24 @@ model instruments_expiry {
 }
 
 model bhavcopy_uploaded {
-  id          Int    @id @default(autoincrement())
-  date        DateTime  @db.Date
-  count       Int
-  segment     String?   @db.VarChar(100)
-  created_at  DateTime? @db.Timestamp(6)
-  updated_at  DateTime? @db.Timestamp(6)
+  id         Int       @id @default(autoincrement())
+  date       DateTime  @db.Date
+  count      Int
+  segment    String?   @db.VarChar(100)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @updatedAt @db.Timestamp(6)
 
   @@unique([date, count, segment], map: "bhavcopy_date_count_segment_unique")
   @@index([date, count, segment], map: "idx_bhavcopy_date_count_segment")
 }
 
 model dates_missed {
-  id          Int    @id @default(autoincrement())
-  date        DateTime  @db.Date
-  day         String?   @db.VarChar(100)
-  segment     String?   @db.VarChar(100)
-  created_at  DateTime? @db.Timestamp(6)
-  updated_at  DateTime? @db.Timestamp(6)
+  id         Int       @id @default(autoincrement())
+  date       DateTime  @db.Date
+  day        String?   @db.VarChar(100)
+  segment    String?   @db.VarChar(100)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @updatedAt @db.Timestamp(6)
 
   @@unique([date, segment], map: "dates_missed_date_segment_unique")
   @@index([date, segment], map: "idx_dates_missed_date_segment")

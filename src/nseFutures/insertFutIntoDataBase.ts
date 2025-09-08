@@ -5,15 +5,24 @@ import { getNseFuturesHistory } from "./nseFuturesHistory";
 
 const prisma = new PrismaClient();
 
-async function insertIntoDataBase(date: any) {
-    console.log(date)
-    const dates = getDatesFromPastToToday(date)
-console.log(dates) 
-return;
+// Delay function to add pause between API calls
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-    dates.map(async (date: string) => {
+async function insertFutIntoDataBase(date: any) {
+    const dates = getDatesFromPastToToday(date)
+    for (let index = 0; index < dates.length; index++) {
+        const date = dates[index];
+        console.log("api called ", index)
         const response = await getNseFuturesHistory(date);
-        for (const data of response) {
+        
+        // Add delay between API calls (1000ms = 1 second)
+        if (index < dates.length - 1) {
+            await delay(5000);
+        }
+        if(response == false){
+            console.log("skipped ", date)
+        }else{
+        for (const data of response.Records) {
             const symbol = parseContract(data[1])
             if (symbol?.type !== "FUT") {
                 continue;
@@ -33,22 +42,24 @@ return;
             });
             await prisma.nse_futures.create({
                 data: {
-                    symbol_id: data[0],
+                    symbol_id: data[0].toString(),
                     symbol: symbol?.symbol || data[1],
-                    expiry_date: symbol?.expiry,
+                    expiry_date: new Date(symbol?.expiry),
                     open: data[3],
                     high: data[4],
                     low: data[5],
                     close: data[6],
-                    volume: data[8],
-                    oi: data[9],
+                    volume: data[7].toString(),
+                    oi: data[8].toString(),
                     underlying: symbol?.instrument,
-                    date: data[2]
+                    date: new Date(data[2])
                 }
             })
 
         }
-    })
+        console.log("uploaded all FO data")
+    }
+}
 }
 
-export {insertIntoDataBase}
+export {insertFutIntoDataBase}

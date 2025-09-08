@@ -4,13 +4,13 @@ import { PrismaClient } from "../generated/prisma";
 
 const prisma = new PrismaClient();
 
-async function getNseFuturesHistory(date: string) {
+async function getNseOptionsHistory(date: string) {
     const accessToken = getAccessToken();
     try {
         if (!accessToken) {
             throw new Error("Access token not found");
         }
-        const response = await axios.get(`https://history.truedata.in/getbhavcopystatus?segment=FO&date=${date}&response=json`, {
+        const response = await axios.get(`https://history.truedata.in/getbhavcopystatus?segment=EQ&date=${date}&response=json`, {
             headers: {
                 "Authorization": `Bearer ${accessToken}`
             }
@@ -26,7 +26,7 @@ async function getNseFuturesHistory(date: string) {
             console.log("Bhavcopy not found");
             return false
         }else{
-            const bhavcopy = await axios.get(`https://history.truedata.in/getbhavcopy?segment=fo&date=${date}&response=json`, {
+            const bhavcopy = await axios.get(`https://history.truedata.in/getbhavcopy?segment=eq&date=${date}&response=json`, {
                 headers: {
                     "Authorization": `Bearer ${accessToken}`
                 }
@@ -38,6 +38,6 @@ async function getNseFuturesHistory(date: string) {
     }
 }
 
-export { getNseFuturesHistory };
+export { getNseOptionsHistory };
 
 // DRREDDY25SEPFUT  ->  DRREDDY 25 SEP FUT

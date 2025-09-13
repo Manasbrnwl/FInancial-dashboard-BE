@@ -1,4 +1,4 @@
-import { PrismaClient } from "../generated/prisma";
+import { PrismaClient } from "@prisma/client";
 import { getDatesFromPastToToday } from "../utils/dateRange";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { parseContract } from "./helper";

@@ -1,4 +1,4 @@
-import { PrismaClient } from "../generated/prisma";
+import { PrismaClient } from "@prisma/client";
 import { getDatesFromPastToToday } from "../utils/dateRange";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { getNseOptionsHistory } from "./nseEquityHistory";
@@ -61,7 +61,7 @@ async function insertEqIntoDataBase(date: any) {
     }
   } catch (error: any) {
     await sendEmailNotification(
-      process.env.RECEIVER_EMAIL || 'tech@anfy.in',
+      process.env.RECEIVER_EMAIL || "tech@anfy.in",
       "Finance Dashboard History Cron",
       `Error Uploading NSE EQ`,
       `<h1>Finance Dashboard History</h1><p>Cron have error <strong>${error}</strong></p><p>On uploading NSE EQ Data.</p>`

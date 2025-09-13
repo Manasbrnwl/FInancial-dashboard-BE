@@ -30,30 +30,18 @@ async function fetchAccessToken(): Promise<void> {
         "Content-Type": "application/x-www-form-urlencoded"
       }
     });
-    console.log('✅ Login response:', response.data);
+    // console.log('✅ Login response:', response.data);
     
     // Assuming the API returns the token in the response data
     const accessToken = response.data.access_token;
+    const date = new Date();
     
     if (accessToken) {
-      // Store the token in the global store
-      // console.log(accessToken)
       setAccessToken(accessToken);
-      // insertFutIntoDataBase(`2022-01-03`);
-      // insertOptIntoDataBase(`2022-01-03`);
-      // insertOptIntoDataBase(`2022-07-04`);
-      // insertOptIntoDataBase(`2022-09-15`);
-      // insertOptIntoDataBase(`2022-10-27`);
-      // insertOptIntoDataBase(`2023-07-28`);
-      // insertOptIntoDataBase(`2023-12-09`);
-      // insertOptIntoDataBase(`2024-04-24`);
-      // insertOptIntoDataBase(`2025-01-10`);
-      // insertOptIntoDataBase(`2025-06-11`);
-      // insertEqIntoDataBase(`2018-01-01`)
-      // insertEqIntoDataBase(`2019-07-18`)
-      // insertEqIntoDataBase(`2019-10-02`)
-      insertEqIntoDataBase(`2024-07-23`)
-      console.log('✅ Access token updated successfully');
+      insertFutIntoDataBase(date.toISOString().split("T")[0]);
+      insertOptIntoDataBase(date.toISOString().split("T")[0]);
+      insertEqIntoDataBase(date.toISOString().split("T")[0]);
+      // console.log('✅ Access token updated successfully');
     } else {
       console.error('❌ No access token received from API');
     }
@@ -71,8 +59,8 @@ export function initializeLoginJob(): void {
   // Run immediately when the application starts
   fetchAccessToken();
   
-  // Schedule to run every morning at 6:00 AM
-  cron.schedule('0 6 * * *', fetchAccessToken);
+  // Schedule to run every day at 9:00 PM
+  cron.schedule('0 21 * * *', fetchAccessToken);
   
-  // console.log('⏰ Login job scheduled to run every day at 6:00 AM');
+  // console.log('⏰ Login job scheduled to run every day at 9:00 PM');
 }

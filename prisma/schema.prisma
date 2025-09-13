@@ -92,12 +92,11 @@ model nse_options {
 }
 
 model instrument_lists {
-  id              Int       @id @default(autoincrement())
-  exchange        String    @db.VarChar(100)
-  instrument_type String    @db.VarChar(100)
-  created_at      DateTime? @default(now()) @db.Timestamp(6)
-  updated_at      DateTime? @updatedAt @db.Timestamp(6)
-
+  id              Int                  @id @default(autoincrement())
+  exchange        String               @db.VarChar(100)
+  instrument_type String               @db.VarChar(100)
+  created_at      DateTime?            @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?            @updatedAt @db.Timestamp(6)
   intrumentExpiry instruments_expiry[]
 
   @@unique([exchange, instrument_type], map: "instrument_lists_exchange_instrument_type_unique")
@@ -105,12 +104,11 @@ model instrument_lists {
 }
 
 model instruments_expiry {
-  id            Int       @id @default(autoincrement())
-  instrument_id Int?
-  expiry_date   DateTime? @db.Date
-  created_at    DateTime? @default(now()) @db.Timestamp(6)
-  updated_at    DateTime? @updatedAt @db.Timestamp(6)
-
+  id             Int               @id @default(autoincrement())
+  instrument_id  Int?
+  expiry_date    DateTime?         @db.Date
+  created_at     DateTime?         @default(now()) @db.Timestamp(6)
+  updated_at     DateTime?         @updatedAt @db.Timestamp(6)
   instrumentList instrument_lists? @relation(fields: [instrument_id], references: [id])
 
   @@unique([instrument_id, expiry_date], map: "instruments_expiry_instrument_id_expiry_date_unique")
@@ -139,4 +137,15 @@ model dates_missed {
 
   @@unique([date, segment], map: "dates_missed_date_segment_unique")
   @@index([date, segment], map: "idx_dates_missed_date_segment")
+}
+
+model symbols_list {
+  id            Int       @id @default(autoincrement())
+  instrument_id Int
+  symbol        String    @db.VarChar(100)
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  updated_at    DateTime? @updatedAt @db.Timestamp(6)
+
+  @@unique([instrument_id, symbol], map: "instrument_symbol_unique")
+  @@index([instrument_id, symbol], map: "idx_instrument_symbol")
 }

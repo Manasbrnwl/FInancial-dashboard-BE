@@ -62,9 +62,8 @@ model nse_futures {
   created_at  DateTime? @default(now()) @db.Timestamp(6)
   updated_at  DateTime? @updatedAt @db.Timestamp(6)
 
-  @@unique([symbol, date], map: "nse_futures_symbol_date_unique")
+  @@unique([symbol, date, underlying, expiry_date], map: "nse_futures_symbol_date_underlying_expir_unique")
   @@index([symbol, date], map: "idx_nse_fut_symbol_date")
-  @@index([underlying, expiry_date], map: "idx_nse_fut_underlying_expiry")
 }
 
 model nse_options {
@@ -85,10 +84,9 @@ model nse_options {
   created_at  DateTime? @default(now()) @db.Timestamp(6)
   updated_at  DateTime? @updatedAt @db.Timestamp(6)
 
-  @@unique([symbol, date], map: "nse_options_symbol_date_unique")
+  @@unique([symbol, date, underlying, expiry_date, option_type], map: "nse_options_symbol_date_underlying_expiry_unique")
   @@index([strike, date], map: "idx_nse_opt_strike_date")
   @@index([symbol, date], map: "idx_nse_opt_symbol_date")
-  @@index([underlying, expiry_date, option_type], map: "idx_nse_opt_underlying_expiry")
 }
 
 model instrument_lists {

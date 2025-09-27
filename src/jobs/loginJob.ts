@@ -7,6 +7,7 @@ import { insertFutIntoDataBase } from "../nseFutures/insertFutIntoDataBase";
 import { insertOptIntoDataBase } from "../nseOptions/insertOptIntoDataBase";
 import { insertEqIntoDataBase } from "../nseEquity/insertEqtIntoDatabase";
 import { sendEmailNotification } from "../utils/sendEmail";
+import { getBseEquityHistory } from "../bseEquity/bseEquityHistory";
 loadEnv();
 
 // API endpoint for login
@@ -51,9 +52,13 @@ async function fetchAccessToken(): Promise<void> {
 
     if (accessToken) {
       setAccessToken(accessToken);
-      insertFutIntoDataBase(date.toISOString().split("T")[0]);
-      insertOptIntoDataBase(date.toISOString().split("T")[0]);
-      insertEqIntoDataBase(date.toISOString().split("T")[0]);
+      // getBseEquityHistory();
+      // insertFutIntoDataBase(date.toISOString().split("T")[0]);
+      insertFutIntoDataBase("2025-09-19");
+      // insertOptIntoDataBase(date.toISOString().split("T")[0]);
+      insertOptIntoDataBase("2025-09-22");
+      // insertEqIntoDataBase(date.toISOString().split("T")[0]);
+      insertEqIntoDataBase("2025-09-22");
       // console.log('✅ Access token updated successfully');
     } else {
       console.error("❌ No access token received from API");

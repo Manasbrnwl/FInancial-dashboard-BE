@@ -12,6 +12,7 @@ export const loadEnv = () => {
     "EMAIL_USER",
     "EMAIL_PASS",
     "RECEIVER_EMAIL",
+    "ACCESS_TOKEN",
   ];
 
   // Check if all required environment variables are set

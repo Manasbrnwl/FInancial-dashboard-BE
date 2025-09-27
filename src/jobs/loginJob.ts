@@ -53,12 +53,12 @@ async function fetchAccessToken(): Promise<void> {
     if (accessToken) {
       setAccessToken(accessToken);
       // getBseEquityHistory();
-      // insertFutIntoDataBase(date.toISOString().split("T")[0]);
-      insertFutIntoDataBase("2025-09-19");
-      // insertOptIntoDataBase(date.toISOString().split("T")[0]);
-      insertOptIntoDataBase("2025-09-22");
-      // insertEqIntoDataBase(date.toISOString().split("T")[0]);
-      insertEqIntoDataBase("2025-09-22");
+      insertFutIntoDataBase(date.toISOString().split("T")[0]);
+      // insertFutIntoDataBase("2025-09-19");
+      insertOptIntoDataBase(date.toISOString().split("T")[0]);
+      // insertOptIntoDataBase("2025-09-22");
+      insertEqIntoDataBase(date.toISOString().split("T")[0]);
+      // insertEqIntoDataBase("2025-09-22");
       // console.log('✅ Access token updated successfully');
     } else {
       console.error("❌ No access token received from API");

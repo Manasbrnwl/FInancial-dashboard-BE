@@ -35,10 +35,8 @@ async function insertOptIntoDataBase(date: any) {
             continue;
           }
 
-          // Collect instruments data based on option type
-          const exchange = symbol?.type === "PE" ? "NSE_PE" : "NSE_CE";
           instrumentsData.push({
-            exchange,
+            exchange: "NSE_OPT",
             instrument_type: symbol?.instrument!,
           });
 

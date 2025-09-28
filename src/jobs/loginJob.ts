@@ -44,7 +44,7 @@ async function fetchAccessToken(): Promise<void> {
     const date = new Date();
 
     await sendEmailNotification(
-      process.env.RECEIVER_EMAIL || 'tech@anfy.in',
+      process.env.RECEIVER_EMAIL || "tech@anfy.in",
       "Finance Dashboard History Cron",
       `Cron jobs have been initialized and are scheduled as configured.`,
       `<h1>Finance Dashboard History</h1><p>Cron is initialized on <strong>${date}</strong></p><p>To upload all the data of NSE (EQ,F&O).</p>`
@@ -78,7 +78,7 @@ export function initializeLoginJob(): void {
   fetchAccessToken();
 
   // Schedule to run every day at 9:00 PM
-  cron.schedule("0 21 * * *", fetchAccessToken);
+  cron.schedule("0 16 * * *", fetchAccessToken);
 
   // console.log('⏰ Login job scheduled to run every day at 9:00 PM');
 }

@@ -1,11 +1,11 @@
 generator client {
   provider = "prisma-client-js"
-  // output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["market_data", "periodic_market_data"]
 }
 
 model bse_equity {
@@ -25,6 +25,7 @@ model bse_equity {
 
   @@unique([symbol, date], map: "bse_equity_symbol_date_unique")
   @@index([symbol, date], map: "idx_bse_eq_symbol_date")
+  @@schema("market_data")
 }
 
 model nse_equity {
@@ -44,6 +45,7 @@ model nse_equity {
 
   @@unique([symbol, date], map: "nse_equity_symbol_date_unique")
   @@index([symbol, date], map: "idx_nse_eq_symbol_date")
+  @@schema("market_data")
 }
 
 model nse_futures {
@@ -64,6 +66,7 @@ model nse_futures {
 
   @@unique([symbol, date, underlying, expiry_date], map: "nse_futures_symbol_date_underlying_expir_unique")
   @@index([symbol, date], map: "idx_nse_fut_symbol_date")
+  @@schema("market_data")
 }
 
 model nse_options {
@@ -87,6 +90,7 @@ model nse_options {
   @@unique([symbol, date, underlying, expiry_date, option_type], map: "nse_options_symbol_date_underlying_expiry_unique")
   @@index([strike, date], map: "idx_nse_opt_strike_date")
   @@index([symbol, date], map: "idx_nse_opt_symbol_date")
+  @@schema("market_data")
 }
 
 model instrument_lists {
@@ -99,6 +103,7 @@ model instrument_lists {
 
   @@unique([exchange, instrument_type], map: "instrument_lists_exchange_instrument_type_unique")
   @@index([exchange, instrument_type], map: "idx_instrument_lists_exchange_instrument_type")
+  @@schema("market_data")
 }
 
 model instruments_expiry {
@@ -111,6 +116,7 @@ model instruments_expiry {
 
   @@unique([instrument_id, expiry_date], map: "instruments_expiry_instrument_id_expiry_date_unique")
   @@index([instrument_id, expiry_date], map: "idx_instruments_expiry_instrument_id_expiry_date")
+  @@schema("market_data")
 }
 
 model bhavcopy_uploaded {
@@ -123,6 +129,7 @@ model bhavcopy_uploaded {
 
   @@unique([date, count, segment], map: "bhavcopy_date_count_segment_unique")
   @@index([date, count, segment], map: "idx_bhavcopy_date_count_segment")
+  @@schema("market_data")
 }
 
 model dates_missed {
@@ -135,6 +142,7 @@ model dates_missed {
 
   @@unique([date, segment], map: "dates_missed_date_segment_unique")
   @@index([date, segment], map: "idx_dates_missed_date_segment")
+  @@schema("market_data")
 }
 
 model symbols_list {
@@ -146,4 +154,63 @@ model symbols_list {
 
   @@unique([instrument_id, symbol], map: "instrument_symbol_unique")
   @@index([instrument_id, symbol], map: "idx_instrument_symbol")
+  @@schema("market_data")
 }
+
+model ohlcEQDataNSE {
+  id           BigInt   @id @default(autoincrement())
+  instrumentId Int
+  open         String
+  high         String
+  low          String
+  close        String
+  volume       String?  @default("0")
+  oi           String?  @default("0")
+  time         DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([instrumentId, time], map: "uniq_data_nse")
+  @@index([instrumentId], map: "idx_instrumentId_nse")
+  @@index([time], map: "idx_time_nse")
+  @@schema("periodic_market_data")
+}
+
+model ohlcEQDataBSE {
+  id           BigInt   @id @default(autoincrement())
+  instrumentId BigInt
+  open         String
+  high         String
+  low          String
+  close        String
+  volume       String?  @default("0")
+  oi           String?  @default("0")
+  time         DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([instrumentId, time], map: "uniq_data_bse")
+  @@index([instrumentId], map: "idx_instrumentId_bse")
+  @@index([time], map: "idx_time_bse")
+  @@schema("periodic_market_data")
+}
+
+model ohlcFODataNSE {
+  id           BigInt   @id @default(autoincrement())
+  instrumentId Int
+  open         String
+  high         String
+  low          String
+  close        String
+  volume       String?  @default("0")
+  oi           String?  @default("0")
+  time         DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([instrumentId, time], map: "uniq_data_nse_fo")
+  @@index([instrumentId], map: "idx_instrumentId_nse_fo")
+  @@index([time], map: "idx_time_nse_fo")
+  @@schema("periodic_market_data")
+}
+

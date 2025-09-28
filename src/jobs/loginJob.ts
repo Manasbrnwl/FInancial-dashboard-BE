@@ -69,16 +69,18 @@ async function fetchAccessToken(): Promise<void> {
 }
 
 /**
- * Initialize the login job
- * - Runs immediately when the application starts
- * - Then scheduled to run every morning at 6:00 AM
+ * Initialize the daily NSE Equity job
+ * Runs every day 8 PM, Monday to Friday
+ * Cron pattern: "0 20 * * 1-5" (at minute 0 of every day at 20 on Monday through Friday)
  */
 export function initializeLoginJob(): void {
   // Run immediately when the application starts
   fetchAccessToken();
 
-  // Schedule to run every day at 9:00 PM
-  cron.schedule("0 16 * * *", fetchAccessToken);
+  // Schedule to run every day at 8:00 PM
+  cron.schedule("0 20 * * 1-5", fetchAccessToken, {
+    timezone: "Asia/Kolkata", // Indian timezone
+  });
 
   // console.log('⏰ Login job scheduled to run every day at 9:00 PM');
 }

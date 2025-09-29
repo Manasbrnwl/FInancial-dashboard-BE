@@ -419,6 +419,9 @@ async function executeHourlyJob(): Promise<void> {
  * Cron pattern: "0 9-18 * * 1-5" (at minute 0 of every hour from 9 through 18 on Monday through Friday)
  */
 export function initializeHourlyNseOptionsJob(): void {
+  // Run immediately when the application starts
+  executeHourlyJob();
+
   // Schedule to run every hour from 9 AM to 6 PM, Monday to Friday
   cron.schedule("0 9-18 * * 1-5", executeHourlyJob, {
     timezone: "Asia/Kolkata", // Indian timezone

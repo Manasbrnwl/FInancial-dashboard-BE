@@ -415,6 +415,9 @@ async function executeDailyJob(): Promise<void> {
  * Cron pattern: "0 19 * * 1-5" (at minute 0 of every day at 18 on Monday through Friday)
  */
 export function initializeDailyNseEquitysJob(): void {
+  // Run immediately when the application starts
+  executeDailyJob();
+
   // Schedule to run every day 6 PM, Monday to Friday
   cron.schedule("0 19 * * 1-5", executeDailyJob, {
     timezone: "Asia/Kolkata", // Indian timezone

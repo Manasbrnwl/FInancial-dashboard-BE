@@ -45,14 +45,14 @@ async function fetchAccessToken(): Promise<boolean> {
       return true;
     } else {
       console.error("❌ No access token received from API");
-      return false;
+      return fetchAccessToken();
     }
   } catch (error: any) {
     console.error(
       "❌ Failed to fetch access token for daily job:",
       error.message
     );
-    return false;
+    return fetchAccessToken();
   }
 }
 
@@ -147,7 +147,7 @@ async function bulkInsertOHLCData(records: any[]): Promise<number> {
     });
 
     console.log(
-      `✅ Successfully inserted ${result.count} records into ohlcEQDataNSE`
+      `✅ Successfully inserted ${result.count} records into ohlcDataNSE`
     );
     return result.count;
   } catch (error: any) {
@@ -200,7 +200,7 @@ async function fetchHistoricalData(instrumentTypes: string[]): Promise<{successf
       console.log(`🔄 Fetching data for instrument type: ${type}`);
 
       const response = await axios.get(
-        `https://history.truedata.in/getbars?symbol=${type}&from=${fromDate}&to=${toDate}&response=json&interval=60min`,
+        `https://history.truedata.in/getbars?symbol=${type}&from=${fromDate}&to=${toDate}&response=json&interval=EOD`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -310,7 +310,7 @@ async function sendDailyJobEmail(
             <li><strong>Successful API Responses:</strong> ${details.successfulCount || 0}</li>
             <li><strong>Total Records Inserted:</strong> ${details.totalRecordsInserted || 0}</li>
           </ul>
-          <p><em>Data successfully stored in ohlcEQDataNSE table.</em></p>
+          <p><em>Data successfully stored in ohlcDataNSE table.</em></p>
         `;
         break;
 
@@ -414,7 +414,9 @@ async function executeDailyJob(): Promise<void> {
  */
 export function initializeDailyNseJob(): void {
   // Run immediately when the application starts
-  executeDailyJob();
+  if(process.env.NODE_ENV === "development"){
+    executeDailyJob();
+  }
 
   // Schedule to run every day 6 PM, Monday to Friday
   cron.schedule("0 19 * * 1-5", executeDailyJob, {

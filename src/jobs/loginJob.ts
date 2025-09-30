@@ -62,9 +62,11 @@ async function fetchAccessToken(): Promise<void> {
       // console.log('✅ Access token updated successfully');
     } else {
       console.error("❌ No access token received from API");
+      fetchAccessToken();
     }
   } catch (error: any) {
     console.error("❌ Failed to fetch access token:", error.message);
+    fetchAccessToken();
   }
 }
 
@@ -75,7 +77,9 @@ async function fetchAccessToken(): Promise<void> {
  */
 export function initializeLoginJob(): void {
   // Run immediately when the application starts
-  fetchAccessToken();
+  if(process.env.NODE_ENV === "development"){
+    fetchAccessToken();
+  }
 
   // Schedule to run every day at 8:00 PM
   cron.schedule("0 20 * * 1-5", fetchAccessToken, {

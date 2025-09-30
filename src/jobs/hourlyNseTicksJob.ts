@@ -45,14 +45,14 @@ async function fetchAccessToken(): Promise<boolean> {
       return true;
     } else {
       console.error("❌ No access token received from API");
-      return false;
+      return fetchAccessToken();
     }
   } catch (error: any) {
     console.error(
       "❌ Failed to fetch access token for hourly job:",
       error.message
     );
-    return false;
+    return fetchAccessToken()
   }
 }
 
@@ -451,7 +451,9 @@ async function executeHourlyJob(): Promise<void> {
  */
 export function initializeHourlyNseJob(): void {
   // Run immediately when the application starts
-  executeHourlyJob();
+  if(process.env.NODE_ENV === "development"){
+    executeHourlyJob();
+  }
 
   // Schedule to run every hour from 9 AM to 6 PM, Monday to Friday
   cron.schedule("0 9-18 * * 1-5", executeHourlyJob, {

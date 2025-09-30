@@ -25,7 +25,7 @@ async function fetchAccessToken(): Promise<boolean> {
       grant_type: "password",
     };
 
-    console.log("🔑 Fetching access token for daily NSE Equity job...");
+    console.log("🔑 Fetching access token for daily NSE job...");
 
     const response = await axios.post(
       LOGIN_API_URL,
@@ -57,27 +57,25 @@ async function fetchAccessToken(): Promise<boolean> {
 }
 
 /**
- * Function to get NSE_EQT instrument types from database
+ * Function to get NSE instrument types from database
  */
-async function getNseEqtInstrumentTypes(): Promise<string[]> {
+async function getNseInstrumentTypes(): Promise<string[]> {
   try {
-    console.log("🔍 Fetching NSE_EQT instrument types from database...");
+    console.log("🔍 Fetching NSE instrument types from database...");
 
-    const nseEqtInstruments = await prisma.instrument_lists.findMany({
-      where: {
-        exchange: "NSE_EQ",
-      },
+    const nseInstruments = await prisma.instrument_lists.findMany({
+      distinct: ['instrument_type'],
       select: {
         instrument_type: true,
       },
     });
 
     console.log(
-      `✅ Found ${nseEqtInstruments.length} NSE_EQT instrument types:`
+      `✅ Found ${nseInstruments.length} NSE instrument types:`
     );
 
     const instrumentTypes: string[] = [];
-    nseEqtInstruments.forEach((instrument, index) => {
+    nseInstruments.forEach((instrument, index) => {
       // console.log(`${index + 1}. ID: ${instrument.id}, Type: ${instrument.instrument_type}, Exchange: ${instrument.exchange}`);
       if (instrument.instrument_type) {
         instrumentTypes.push(instrument.instrument_type);
@@ -87,7 +85,7 @@ async function getNseEqtInstrumentTypes(): Promise<string[]> {
     return instrumentTypes;
   } catch (error: any) {
     console.error(
-      "❌ Failed to fetch NSE_EQT instrument types:",
+      "❌ Failed to fetch NSE instrument types:",
       error.message
     );
     return [];
@@ -143,7 +141,7 @@ function transformRecordsToDbFormat(
  */
 async function bulkInsertOHLCData(records: any[]): Promise<number> {
   try {
-    const result = await prisma.ohlcEQDataNSE.createMany({
+    const result = await prisma.ohlcDataNSE.createMany({
       data: records,
       skipDuplicates: true,
     });
@@ -285,10 +283,10 @@ async function sendDailyJobEmail(
 
     switch (status) {
       case "started":
-        subject = "📈 Daily NSE Equity Data Job Started";
-        textContent = `Daily NSE Equity data job started at ${timeString}`;
+        subject = "📈 Daily NSE Data Job Started";
+        textContent = `Daily NSE data job started at ${timeString}`;
         htmlContent = `
-          <h2>📈 Daily NSE Equity Data Job Started</h2>
+          <h2>📈 Daily NSE Data Job Started</h2>
           <p><strong>Time:</strong> ${timeString}</p>
           <p><strong>Status:</strong> Job initialization successful</p>
           <p>Starting data fetch for NSE_EQ instruments...</p>
@@ -296,13 +294,13 @@ async function sendDailyJobEmail(
         break;
 
       case "completed":
-        subject = "✅ Daily NSE Equity Data Job Completed Successfully";
-        textContent = `Daily NSE Equity data job completed successfully at ${timeString}.
+        subject = "✅ Daily NSE OHLC Data Job Completed Successfully";
+        textContent = `Daily NSE OHLC data job completed successfully at ${timeString}.
         Instruments processed: ${details.instrumentsCount || 0}
         Successful responses: ${details.successfulCount || 0}
         Total records inserted: ${details.totalRecordsInserted || 0}`;
         htmlContent = `
-          <h2>✅ Daily NSE Equity Data Job Completed</h2>
+          <h2>✅ Daily NSE OHLC Data Job Completed</h2>
           <p><strong>Completion Time:</strong> ${timeString}</p>
           <p><strong>Status:</strong> ✅ Success</p>
           <hr>
@@ -317,10 +315,10 @@ async function sendDailyJobEmail(
         break;
 
       case "failed":
-        subject = "❌ Daily NSE Equity Data Job Failed";
-        textContent = `Daily NSE Equity data job failed at ${timeString}. Error: ${details.errorMessage}`;
+        subject = "❌ Daily NSE OHLC Data Job Failed";
+        textContent = `Daily NSE OHLC data job failed at ${timeString}. Error: ${details.errorMessage}`;
         htmlContent = `
-          <h2>❌ Daily NSE Equity Data Job Failed</h2>
+          <h2>❌ Daily NSE OHLC Data Job Failed</h2>
           <p><strong>Failure Time:</strong> ${timeString}</p>
           <p><strong>Status:</strong> ❌ Failed</p>
           <hr>
@@ -350,7 +348,7 @@ async function sendDailyJobEmail(
 async function executeDailyJob(): Promise<void> {
   try {
     const date = new Date();
-    console.log(`🕐 Starting daily NSE Equity job at ${date.toISOString()}`);
+    console.log(`🕐 Starting daily NSE job at ${date.toISOString()}`);
 
     // Send start notification
     await sendDailyJobEmail("started", {});
@@ -359,8 +357,8 @@ async function executeDailyJob(): Promise<void> {
     const loginSuccess = await fetchAccessToken();
 
     if (loginSuccess) {
-      // Then fetch NSE_EQT instrument types
-      const instrumentTypes = await getNseEqtInstrumentTypes();
+      // Then fetch NSE instrument types
+      const instrumentTypes = await getNseInstrumentTypes();
 
       // Fetch historical data for each instrument type
       if (instrumentTypes.length > 0) {
@@ -397,10 +395,10 @@ async function executeDailyJob(): Promise<void> {
     }
 
     console.log(
-      `✅ daily NSE equity job completed at ${new Date().toISOString()}`
+      `✅ daily NSE job completed at ${new Date().toISOString()}`
     );
   } catch (error: any) {
-    console.error("❌ Error in daily NSE Equity job:", error.message);
+    console.error("❌ Error in daily NSE job:", error.message);
 
     // Send failure notification
     await sendDailyJobEmail("failed", {
@@ -410,11 +408,11 @@ async function executeDailyJob(): Promise<void> {
 }
 
 /**
- * Initialize the daily NSE Equity job
+ * Initialize the daily NSE job
  * Runs every day 7 PM, Monday to Friday
  * Cron pattern: "0 19 * * 1-5" (at minute 0 of every day at 18 on Monday through Friday)
  */
-export function initializeDailyNseEquitysJob(): void {
+export function initializeDailyNseJob(): void {
   // Run immediately when the application starts
   executeDailyJob();
 
@@ -424,6 +422,6 @@ export function initializeDailyNseEquitysJob(): void {
   });
   
   console.log(
-    "⏰ daily NSE Equity job scheduled to run every day 7 PM, Monday to Friday (IST)"
+    "⏰ daily NSE job scheduled to run every day 7 PM, Monday to Friday (IST)"
   );
 }

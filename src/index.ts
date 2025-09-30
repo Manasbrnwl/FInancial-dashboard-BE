@@ -3,8 +3,8 @@ import dotenv from "dotenv";
 // import healthRouter from "./routes/health";
 import { loadEnv } from "./config/env";
 import { initializeLoginJob } from "./jobs/loginJob";
-import { initializeHourlyNseOptionsJob } from "./jobs/hourlyNseOptionsJob";
-import { initializeDailyNseEquitysJob } from "./jobs/dailyNseEquityJob";
+import { initializeHourlyNseJob } from "./jobs/hourlyNseTicksJob";
+import { initializeDailyNseJob } from "./jobs/dailyNseOhlcJob";
 
 dotenv.config();
 loadEnv();
@@ -21,10 +21,10 @@ app.use(express.json());
 initializeLoginJob();
 
 // Initialize the hourly NSE options job
-initializeHourlyNseOptionsJob();
+initializeHourlyNseJob();
 
 // Initialize the hourly NSE options job
-initializeDailyNseEquitysJob();
+initializeDailyNseJob();
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);

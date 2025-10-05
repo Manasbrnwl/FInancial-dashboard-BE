@@ -25,7 +25,7 @@ async function fetchAccessToken(): Promise<boolean> {
       grant_type: "password",
     };
 
-    console.log("🔑 Fetching access token for hourly NSE job...");
+    console.log("🔑 Fetching access token for hourly NSE Futures job...");
 
     const response = await axios.post(
       LOGIN_API_URL,
@@ -57,57 +57,34 @@ async function fetchAccessToken(): Promise<boolean> {
 }
 
 /**
- * Function to get NSE_OPT instrument types from database
+ * Function to get NSE Futures futures instruments with IDs from database
  */
-async function getNseInstrumentTypes(): Promise<string[]> {
+async function getNseInstruments(): Promise<Map<string, number>> {
   try {
-    console.log("🔍 Fetching NSE instrument types from database...");
+    console.log("🔍 Fetching NSE Futures instruments from database...");
 
-    const nseInstruments = await prisma.instrument_lists.findMany({
-      distinct: ["instrument_type"],
-      select: {
-        instrument_type: true,
-      },
+    const instruments = await prisma.$queryRaw<Array<{
+      instrumentid: number;
+      instrument_type: string;
+    }>>`
+      SELECT DISTINCT li.id as instrumentId, fut.symbol as instrument_type
+      FROM market_data.nse_futures fut
+      INNER JOIN market_data.symbols_list li ON fut.symbol = li.symbol
+      WHERE fut.expiry_date >= CURRENT_DATE
+    `;
+
+    console.log(`✅ Found ${instruments.length} NSE Futures futures instruments`);
+
+    // Create a Map of instrument_type -> instrumentId
+    const instrumentMap = new Map<string, number>();
+    instruments.forEach((instrument) => {
+      instrumentMap.set(instrument.instrument_type, instrument.instrumentid);
     });
 
-    console.log(`✅ Found ${nseInstruments.length} NSE_OPT instrument types:`);
-
-    const instrumentTypes: string[] = [];
-    nseInstruments.forEach((instrument, index) => {
-      // console.log(`${index + 1}. ID: ${instrument.id}, Type: ${instrument.instrument_type}, Exchange: ${instrument.exchange}`);
-      if (instrument.instrument_type) {
-        instrumentTypes.push(instrument.instrument_type);
-      }
-    });
-
-    return instrumentTypes;
+    return instrumentMap;
   } catch (error: any) {
-    console.error("❌ Failed to fetch NSE instrument types:", error.message);
-    return [];
-  }
-}
-
-/**
- * Function to get instrument ID from database by instrument type
- */
-async function getInstrumentId(instrumentType: string): Promise<number | null> {
-  try {
-    const instrument = await prisma.instrument_lists.findFirst({
-      where: {
-        instrument_type: instrumentType,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    return instrument?.id || null;
-  } catch (error: any) {
-    console.error(
-      `❌ Failed to get instrument ID for ${instrumentType}:`,
-      error.message
-    );
-    return null;
+    console.error("❌ Failed to fetch NSE Futures instruments:", error.message);
+    return new Map();
   }
 }
 
@@ -136,7 +113,7 @@ function transformRecordsToDbFormat(
  */
 async function bulkInsertTicksData(records: any[]): Promise<number> {
   try {
-    const result = await prisma.ticksDataNSE.createMany({
+    const result = await prisma.ticksDataNSEFUT.createMany({
       data: records,
       skipDuplicates: true,
     });
@@ -152,9 +129,9 @@ async function bulkInsertTicksData(records: any[]): Promise<number> {
 }
 
 /**
- * Function to fetch historical data for instrument types
+ * Function to fetch historical data for instruments
  */
-async function fetchHistoricalData(instrumentTypes: string[]): Promise<{
+async function fetchHistoricalData(instrumentsMap: Map<string, number>): Promise<{
   successfulInstrumentsCount: number;
   totalRecordsInserted: number;
 }> {
@@ -171,7 +148,7 @@ async function fetchHistoricalData(instrumentTypes: string[]): Promise<{
     now.getMonth(),
     now.getDate(),
     now.getHours(),
-    now.getMinutes() - 2,
+    now.getMinutes() - 15,
     now.getSeconds()
   );
   const todayEvening = new Date(
@@ -225,7 +202,7 @@ async function fetchHistoricalData(instrumentTypes: string[]): Promise<{
   let successfulInstrumentsCount = 0;
   let totalRecordsInserted = 0;
 
-  for (const type of instrumentTypes) {
+  for (const [type, instrumentId] of instrumentsMap) {
     try {
       console.log(`🔄 Fetching data for instrument type: ${type}`);
 
@@ -249,23 +226,17 @@ async function fetchHistoricalData(instrumentTypes: string[]): Promise<{
         console.log(`📊 Data records: ${recordsCount}`);
         // Get instrument ID and insert data into database
         if (recordsCount > 0) {
-          const instrumentId = await getInstrumentId(type);
-
-          if (instrumentId) {
-            const transformedRecords = transformRecordsToDbFormat(
-              response.data.Records,
-              instrumentId
-            );
-            const insertedCount = await bulkInsertTicksData(transformedRecords);
-            totalRecordsInserted += insertedCount;
-            console.log(
-              `💾 Inserted ${insertedCount} records for ${type} (instrumentId: ${instrumentId})`
-            );
-          } else {
-            console.log(
-              `⚠️ Could not find instrument ID for ${type}, skipping database insert`
-            );
-          }
+          // Get only the last record from the response
+          const lastRecord = [response.data.Records[response.data.Records.length - 1]];
+          const transformedRecords = transformRecordsToDbFormat(
+            lastRecord,
+            instrumentId
+          );
+          const insertedCount = await bulkInsertTicksData(transformedRecords);
+          totalRecordsInserted += insertedCount;
+          console.log(
+            `💾 Inserted ${insertedCount} records for ${type} (instrumentId: ${instrumentId})`
+          );
         }
       } else {
         console.log(
@@ -280,7 +251,7 @@ async function fetchHistoricalData(instrumentTypes: string[]): Promise<{
   }
 
   console.log(
-    `📈 Summary: ${successfulInstrumentsCount} out of ${instrumentTypes.length} instruments returned successful data`
+    `📈 Summary: ${successfulInstrumentsCount} out of ${instrumentsMap.size} instruments returned successful data`
   );
   console.log(`💾 Total records inserted: ${totalRecordsInserted}`);
 
@@ -312,10 +283,10 @@ async function sendHourlyJobEmail(
 
     switch (status) {
       case "started":
-        subject = "📊 Hourly NSE ticks Data Job Started";
-        textContent = `Hourly NSE ticks data job started at ${timeString}`;
+        subject = "📊 Hourly NSE Futures ticks Data Job Started";
+        textContent = `Hourly NSE Futures ticks data job started at ${timeString}`;
         htmlContent = `
-          <h2>📊 Hourly NSE ticks Data Job Started</h2>
+          <h2>📊 Hourly NSE Futures ticks Data Job Started</h2>
           <p><strong>Time:</strong> ${timeString}</p>
           <p><strong>Status:</strong> Job initialization successful</p>
           <p>Starting data fetch for NSE_FUT instruments...</p>
@@ -323,13 +294,13 @@ async function sendHourlyJobEmail(
         break;
 
       case "completed":
-        subject = "✅ Hourly NSE ticks Data Job Completed Successfully";
-        textContent = `Hourly NSE ticks data job completed successfully at ${timeString}.
+        subject = "✅ Hourly NSE Futures ticks Data Job Completed Successfully";
+        textContent = `Hourly NSE Futures ticks data job completed successfully at ${timeString}.
         Instruments processed: ${details.instrumentsCount || 0}
         Successful responses: ${details.successfulCount || 0}
         Total records inserted: ${details.totalRecordsInserted || 0}`;
         htmlContent = `
-          <h2>✅ Hourly NSE ticks Data Job Completed</h2>
+          <h2>✅ Hourly NSE Futures ticks Data Job Completed</h2>
           <p><strong>Completion Time:</strong> ${timeString}</p>
           <p><strong>Status:</strong> ✅ Success</p>
           <hr>
@@ -350,10 +321,10 @@ async function sendHourlyJobEmail(
         break;
 
       case "failed":
-        subject = "❌ Hourly NSE ticks Data Job Failed";
-        textContent = `Hourly NSE ticks data job failed at ${timeString}. Error: ${details.errorMessage}`;
+        subject = "❌ Hourly NSE Futures ticks Data Job Failed";
+        textContent = `Hourly NSE Futures ticks data job failed at ${timeString}. Error: ${details.errorMessage}`;
         htmlContent = `
-          <h2>❌ Hourly NSE ticks Data Job Failed</h2>
+          <h2>❌ Hourly NSE Futures ticks Data Job Failed</h2>
           <p><strong>Failure Time:</strong> ${timeString}</p>
           <p><strong>Status:</strong> ❌ Failed</p>
           <hr>
@@ -385,7 +356,7 @@ async function sendHourlyJobEmail(
 async function executeHourlyJob(): Promise<void> {
   try {
     const date = new Date();
-    console.log(`🕐 Starting hourly NSE job at ${date.toISOString()}`);
+    console.log(`🕐 Starting hourly NSE Futures job at ${date.toISOString()}`);
 
     // Send start notification
     await sendHourlyJobEmail("started", {});
@@ -394,25 +365,25 @@ async function executeHourlyJob(): Promise<void> {
     const loginSuccess = await fetchAccessToken();
 
     if (loginSuccess) {
-      // Then fetch NSE instrument types
-      const instrumentTypes = await getNseInstrumentTypes();
+      // Fetch NSE Futures instruments with their IDs
+      const instrumentsMap = await getNseInstruments();
 
-      // Fetch historical data for each instrument type
-      if (instrumentTypes.length > 0) {
-        const result = await fetchHistoricalData(instrumentTypes);
+      // Fetch historical data for each instrument
+      if (instrumentsMap.size > 0) {
+        const result = await fetchHistoricalData(instrumentsMap);
         console.log(
           `🎯 Final Result: ${result.successfulInstrumentsCount} instruments returned successful responses with status="success"`
         );
 
         // Send completion notification
         await sendHourlyJobEmail("completed", {
-          instrumentsCount: instrumentTypes.length,
+          instrumentsCount: instrumentsMap.size,
           successfulCount: result.successfulInstrumentsCount,
           totalRecordsInserted: result.totalRecordsInserted,
         });
       } else {
         console.log(
-          "⚠️ No instrument types found, skipping historical data fetch"
+          "⚠️ No instruments found, skipping historical data fetch"
         );
 
         // Send completion notification with zero results
@@ -432,10 +403,10 @@ async function executeHourlyJob(): Promise<void> {
     }
 
     console.log(
-      `✅ Hourly NSE job completed at ${new Date().toISOString()}`
+      `✅ Hourly NSE Futures job completed at ${new Date().toISOString()}`
     );
   } catch (error: any) {
-    console.error("❌ Error in hourly NSE job:", error.message);
+    console.error("❌ Error in hourly NSE Futures job:", error.message);
 
     // Send failure notification
     await sendHourlyJobEmail("failed", {
@@ -445,22 +416,22 @@ async function executeHourlyJob(): Promise<void> {
 }
 
 /**
- * Initialize the hourly NSE job
+ * Initialize the hourly NSE Futures job
  * Runs every hour from 9 AM to 6 PM, Monday to Friday
  * Cron pattern: "0 9-18 * * 1-5" (at minute 0 of every hour from 9 through 18 on Monday through Friday)
  */
-export function initializeHourlyNseJob(): void {
+export function initializeHourlyTicksNseFutJob(): void {
   // Run immediately when the application starts
   if(process.env.NODE_ENV === "development"){
     executeHourlyJob();
   }
 
   // Schedule to run every hour from 9 AM to 6 PM, Monday to Friday
-  cron.schedule("0 9-18 * * 1-5", executeHourlyJob, {
+  cron.schedule("0 9-15 * * 1-5", executeHourlyJob, {
     timezone: "Asia/Kolkata", // Indian timezone
   });
 
   console.log(
-    "⏰ Hourly NSE job scheduled to run every hour from 9 AM to 6 PM, Monday to Friday (IST)"
+    "⏰ Hourly NSE Futures job scheduled to run every hour from 9 AM to 6 PM, Monday to Friday (IST)"
   );
 }

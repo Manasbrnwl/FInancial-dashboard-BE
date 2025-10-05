@@ -28,6 +28,7 @@ async function insertOptIntoDataBase(date: any) {
         // Prepare data for optimized batch insertion
         const optionsData = [];
         const instrumentsData = [];
+        const symbolsData = [];
 
         for (const data of response.Records) {
           const symbol = parseContract(data[1]);
@@ -36,8 +37,15 @@ async function insertOptIntoDataBase(date: any) {
           }
 
           instrumentsData.push({
-            exchange: "NSE_OPT",
+            exchange: "NSE",
             instrument_type: symbol?.instrument!,
+          });
+
+          symbolsData.push({
+            symbol: symbol?.symbol || data[1],
+            instrument_type: symbol?.instrument!,
+            exchange: "NSE",
+            segment: "OPT",
           });
 
           optionsData.push({
@@ -61,6 +69,12 @@ async function insertOptIntoDataBase(date: any) {
           // Batch upsert instruments efficiently
           await batchInserter.batchUpsertInstruments(instrumentsData);
 
+          // Batch upsert symbols into symbols_list
+          const symbolsResult = await batchInserter.batchUpsertSymbolsList(symbolsData, {
+            chunkSize: 100,
+            logProgress: true,
+          });
+
           // Batch insert options data with chunking and error handling
           const insertResult = await batchInserter.batchInsert(
             "nse_options",
@@ -75,6 +89,7 @@ async function insertOptIntoDataBase(date: any) {
           );
 
           console.log(`📊 Options batch for ${date}: ${insertResult.inserted} inserted, ${insertResult.errors} errors`);
+          console.log(`📋 Symbols batch for ${date}: ${symbolsResult.inserted} inserted, ${symbolsResult.errors} errors`);
         }
         console.log("uploaded all OPT data");
       }

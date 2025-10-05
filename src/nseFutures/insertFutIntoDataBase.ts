@@ -36,6 +36,7 @@ async function insertFutIntoDataBase(date: any) {
         // Prepare data for optimized batch insertion
         const futuresData = [];
         const instrumentsData = [];
+        const symbolsData = [];
 
         for (const data of response.Records) {
           const symbol: symbolData | null = parseContract(data[1]);
@@ -45,8 +46,15 @@ async function insertFutIntoDataBase(date: any) {
 
           // Collect instruments data
           instrumentsData.push({
-            exchange: "NSE_FUT",
+            exchange: "NSE",
             instrument_type: symbol?.instrument!,
+          });
+
+          symbolsData.push({
+            symbol: symbol?.symbol || data[1],
+            instrument_type: symbol?.instrument!,
+            exchange: "NSE",
+            segment: "FUT",
           });
 
           futuresData.push({
@@ -68,6 +76,12 @@ async function insertFutIntoDataBase(date: any) {
           // Batch upsert instruments efficiently
           await batchInserter.batchUpsertInstruments(instrumentsData);
 
+          // Batch upsert symbols into symbols_list
+          const symbolsResult = await batchInserter.batchUpsertSymbolsList(symbolsData, {
+            chunkSize: 100,
+            logProgress: true,
+          });
+
           // Batch insert futures data with chunking and error handling
           const insertResult = await batchInserter.batchInsert(
             "nse_futures",
@@ -82,6 +96,7 @@ async function insertFutIntoDataBase(date: any) {
           );
 
           console.log(`📈 Futures batch for ${date}: ${insertResult.inserted} inserted, ${insertResult.errors} errors`);
+          console.log(`📋 Symbols batch for ${date}: ${symbolsResult.inserted} inserted, ${symbolsResult.errors} errors`);
         }
         console.log("uploaded all FO data");
       }

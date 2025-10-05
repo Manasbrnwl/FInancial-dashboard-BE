@@ -163,6 +163,98 @@ export class BatchInserter {
   }
 
   /**
+   * Batch upsert symbols into symbols_list table
+   */
+  async batchUpsertSymbolsList(
+    symbolsData: Array<{ symbol: string; instrument_type: string; exchange: string; segment?: string }>,
+    options: BatchInsertOptions = {}
+  ): Promise<{ inserted: number; errors: number }> {
+    const { logProgress = true, chunkSize = 50 } = options;
+
+    if (symbolsData.length === 0) {
+      return { inserted: 0, errors: 0 };
+    }
+
+    // Deduplicate symbols by instrument_type and symbol combination
+    const uniqueSymbols = Array.from(
+      new Map(
+        symbolsData.map(item => [`${item.instrument_type}_${item.symbol}`, item])
+      ).values()
+    );
+
+    if (logProgress) {
+      console.log(`📋 Upserting ${uniqueSymbols.length} unique symbols into symbols_list`);
+    }
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Process in chunks
+    const chunks = this.chunk(uniqueSymbols, chunkSize);
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+
+      for (const symbolData of chunk) {
+        try {
+          // First, get the instrument_id from instrument_lists
+          const instrument = await this.prisma.instrument_lists.findFirst({
+            where: {
+              exchange: symbolData.exchange,
+              instrument_type: symbolData.instrument_type,
+            },
+            select: {
+              id: true,
+            },
+          });
+
+          if (!instrument) {
+            if (logProgress && errorCount < 5) {
+              console.warn(`⚠️ Instrument not found for ${symbolData.exchange}:${symbolData.instrument_type}`);
+            }
+            errorCount++;
+            continue;
+          }
+
+          // Upsert symbol into symbols_list
+          await this.prisma.symbols_list.upsert({
+            where: {
+              instrument_id_symbol: {
+                instrument_id: instrument.id,
+                symbol: symbolData.symbol,
+              },
+            },
+            update: {
+              segment: symbolData.segment,
+            },
+            create: {
+              instrument_id: instrument.id,
+              symbol: symbolData.symbol,
+              segment: symbolData.segment,
+            },
+          });
+          successCount++;
+        } catch (error: any) {
+          errorCount++;
+          if (logProgress && errorCount <= 5) {
+            console.error(`❌ Symbol upsert failed for ${symbolData.symbol}:`, error.message);
+          }
+        }
+      }
+
+      if (logProgress && chunks.length > 10 && (i + 1) % 10 === 0) {
+        console.log(`📋 Processed ${i + 1}/${chunks.length} symbol chunks (${successCount} success, ${errorCount} errors)`);
+      }
+    }
+
+    if (logProgress) {
+      console.log(`✅ Symbols upsert completed: ${successCount} success, ${errorCount} errors`);
+    }
+
+    return { inserted: successCount, errors: errorCount };
+  }
+
+  /**
    * Batch insert with transaction and skipDuplicates
    */
   async batchInsertWithTransaction<T>(

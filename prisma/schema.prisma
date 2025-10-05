@@ -112,9 +112,10 @@ model instruments_expiry {
   expiry_date    DateTime?         @db.Date
   created_at     DateTime?         @default(now()) @db.Timestamp(6)
   updated_at     DateTime?         @updatedAt @db.Timestamp(6)
+  segment        String?           @db.VarChar(5)
   instrumentList instrument_lists? @relation(fields: [instrument_id], references: [id])
 
-  @@unique([instrument_id, expiry_date], map: "instruments_expiry_instrument_id_expiry_date_unique")
+  @@unique([instrument_id, expiry_date, segment], map: "instruments_expiry_instrument_id_expiry_date_unique")
   @@index([instrument_id, expiry_date], map: "idx_instruments_expiry_instrument_id_expiry_date")
   @@schema("market_data")
 }
@@ -151,6 +152,7 @@ model symbols_list {
   symbol        String    @db.VarChar(100)
   created_at    DateTime? @default(now()) @db.Timestamp(6)
   updated_at    DateTime? @updatedAt @db.Timestamp(6)
+  segment       String?   @db.VarChar(5)
 
   @@unique([instrument_id, symbol], map: "instrument_symbol_unique")
   @@index([instrument_id, symbol], map: "idx_instrument_symbol")
@@ -195,7 +197,7 @@ model ohlcEQDataBSE {
   @@schema("periodic_market_data")
 }
 
-model ticksDataNSE {
+model ticksDataNSEEQ {
   id           BigInt   @id @default(autoincrement())
   instrumentId Int
   ltp          String
@@ -207,10 +209,50 @@ model ticksDataNSE {
   askqty       String?  @default("0")
   time         DateTime
   createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  updatedAt    DateTime
 
-  @@unique([instrumentId, time], map: "uniq_data_nse_fo")
-  @@index([instrumentId], map: "idx_instrumentId_nse_fo")
-  @@index([time], map: "idx_time_nse_fo")
+  @@unique([instrumentId, time], map: "uniq_data_nse_eq")
+  @@index([instrumentId], map: "idx_instrumentId_nse_eq")
+  @@index([time], map: "idx_time_nse_eq")
+  @@schema("periodic_market_data")
+}
+
+model ticksDataNSEFUT {
+  id           BigInt   @id @default(autoincrement())
+  instrumentId Int
+  ltp          String
+  volume       String?  @default("0")
+  oi           String?  @default("0")
+  bid          String?  @default("0")
+  bidqty       String?  @default("0")
+  ask          String?  @default("0")
+  askqty       String?  @default("0")
+  time         DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime
+
+  @@unique([instrumentId, time], map: "uniq_data_nse_fut")
+  @@index([instrumentId], map: "idx_instrumentId_nse_fut")
+  @@index([time], map: "idx_time_nse_fut")
+  @@schema("periodic_market_data")
+}
+
+model ticksDataNSEOPT {
+  id           BigInt   @id @default(autoincrement())
+  instrumentId Int
+  ltp          String
+  volume       String?  @default("0")
+  oi           String?  @default("0")
+  bid          String?  @default("0")
+  bidqty       String?  @default("0")
+  ask          String?  @default("0")
+  askqty       String?  @default("0")
+  time         DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime
+
+  @@unique([instrumentId, time], map: "uniq_data_nse_opt")
+  @@index([instrumentId], map: "idx_instrumentId_nse_opt")
+  @@index([time], map: "idx_time_nse_opt")
   @@schema("periodic_market_data")
 }

@@ -27,7 +27,7 @@ async function insertEqIntoDataBase(date: any) {
         for (const data of response.Records) {
           // Collect instruments data
           instrumentsData.push({
-            exchange: "NSE_EQ",
+            exchange: "NSE",
             instrument_type: data[1],
           });
 

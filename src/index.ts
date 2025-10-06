@@ -9,6 +9,8 @@ import { initializeDailyNseJob } from "./jobs/dailyNseOhlcJob";
 // import { webSocketService } from "./services/websocketService";
 // import { WebSocketManager } from "./utils/websocketManager";
 import { initializeHourlyTicksNseOptJob } from "./jobs/hourlyTicksNseOptJob";
+import { initializeHourlyTicksNseEqJob } from "./jobs/hourlyTicksNseEqJob";
+import apiRouter from "./routes/api";
 
 dotenv.config();
 loadEnv();
@@ -19,10 +21,11 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 
 // Routes
+app.use("/api", apiRouter);
 // app.use("/api/websocket", websocketRouter);
 
 // Initialize the login job
-initializeLoginJob();
+// initializeLoginJob();
 
 // Initialize the hourly NSE futures job
 initializeHourlyTicksNseFutJob();
@@ -30,8 +33,11 @@ initializeHourlyTicksNseFutJob();
 // Initialize the hourly NSE options job
 initializeHourlyTicksNseOptJob();
 
-// Initialize the hourly NSE options job
-initializeDailyNseJob();
+// Initialize the hourly NSE equity job
+initializeHourlyTicksNseEqJob();
+
+// Initialize the daily NSE options job
+// initializeDailyNseJob();
 
 // Initialize WebSocket service for real-time data
 async function initializeWebSocketService() {

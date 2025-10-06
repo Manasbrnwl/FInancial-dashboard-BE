@@ -5,7 +5,6 @@ import qs from "qs";
 import { loadEnv } from "../config/env";
 import { PrismaClient } from "@prisma/client";
 import { sendEmailNotification } from "../utils/sendEmail";
-import { rateLimiter } from "../utils/rateLimiter";
 
 loadEnv();
 
@@ -26,7 +25,7 @@ async function fetchAccessToken(): Promise<boolean> {
       grant_type: "password",
     };
 
-    console.log("🔑 Fetching access token for hourly NSE Futures job...");
+    console.log("🔑 Fetching access token for hourly NSE EQUITY job...");
 
     const response = await axios.post(
       LOGIN_API_URL,
@@ -58,11 +57,11 @@ async function fetchAccessToken(): Promise<boolean> {
 }
 
 /**
- * Function to get NSE Futures futures instruments with IDs from database
+ * Function to get NSE EQUITY EQUITY instruments with IDs from database
  */
 async function getNseInstruments(): Promise<Map<string, number>> {
   try {
-    console.log("🔍 Fetching NSE Futures instruments from database...");
+    console.log("🔍 Fetching NSE EQUITY instruments from database...");
 
     const instruments = await prisma.$queryRaw<Array<{
       instrumentid: number;
@@ -74,7 +73,7 @@ async function getNseInstruments(): Promise<Map<string, number>> {
       WHERE fut.expiry_date >= CURRENT_DATE
     `;
 
-    console.log(`✅ Found ${instruments.length} NSE Futures futures instruments`);
+    console.log(`✅ Found ${instruments.length} NSE EQUITY EQUITY instruments`);
 
     // Create a Map of instrument_type -> instrumentId
     const instrumentMap = new Map<string, number>();
@@ -84,7 +83,7 @@ async function getNseInstruments(): Promise<Map<string, number>> {
 
     return instrumentMap;
   } catch (error: any) {
-    console.error("❌ Failed to fetch NSE Futures instruments:", error.message);
+    console.error("❌ Failed to fetch NSE EQUITY instruments:", error.message);
     return new Map();
   }
 }
@@ -171,7 +170,16 @@ async function fetchHistoricalData(instrumentsMap: Map<string, number>): Promise
     .padStart(2, "0")}${todayMorning
     .getDate()
     .toString()
-    .padStart(2, "0")}T09:00:00`;
+    .padStart(2, "0")}T${todayMorning
+    .getHours()
+    .toString()
+    .padStart(2, "0")}:${todayMorning
+    .getMinutes()
+    .toString()
+    .padStart(2, "0")}:${todayMorning
+    .getSeconds()
+    .toString()
+    .padStart(2, "0")}`;
   const toDate = `${todayEvening.getFullYear().toString().slice(-2)}${(
     todayEvening.getMonth() + 1
   )
@@ -189,8 +197,8 @@ async function fetchHistoricalData(instrumentsMap: Map<string, number>): Promise
     .getSeconds()
     .toString()
     .padStart(2, "0")}`;
-  // const fromDate = "251006T09:00:00";
-  // const toDate = "251006T15:00:00";
+  // const fromDate = "250926T09:00:00";
+  // const toDate = "250926T15:00:00";
   console.log(`📊 Fetching historical data from ${fromDate} to ${toDate}`);
 
   let successfulInstrumentsCount = 0;
@@ -199,14 +207,6 @@ async function fetchHistoricalData(instrumentsMap: Map<string, number>): Promise
   for (const [type, instrumentId] of instrumentsMap) {
     try {
       console.log(`🔄 Fetching data for instrument type: ${type}`);
-
-      // Wait for rate limiter before making request
-      await rateLimiter.waitForSlot();
-
-      const stats = rateLimiter.getStats();
-      console.log(
-        `📊 Rate limit stats - Second: ${stats.perSecond}/5, Minute: ${stats.perMinute}/300, Hour: ${stats.perHour}/18000`
-      );
 
       const response = await axios.get(
         `https://history.truedata.in/getticks?symbol=${type}&bidask=1&from=${fromDate}&to=${toDate}&response=json`,
@@ -285,10 +285,10 @@ async function sendHourlyJobEmail(
 
     switch (status) {
       case "started":
-        subject = "📊 Hourly NSE Futures ticks Data Job Started";
-        textContent = `Hourly NSE Futures ticks data job started at ${timeString}`;
+        subject = "📊 Hourly NSE EQUITY ticks Data Job Started";
+        textContent = `Hourly NSE EQUITY ticks data job started at ${timeString}`;
         htmlContent = `
-          <h2>📊 Hourly NSE Futures ticks Data Job Started</h2>
+          <h2>📊 Hourly NSE EQUITY ticks Data Job Started</h2>
           <p><strong>Time:</strong> ${timeString}</p>
           <p><strong>Status:</strong> Job initialization successful</p>
           <p>Starting data fetch for NSE_FUT instruments...</p>
@@ -296,13 +296,13 @@ async function sendHourlyJobEmail(
         break;
 
       case "completed":
-        subject = "✅ Hourly NSE Futures ticks Data Job Completed Successfully";
-        textContent = `Hourly NSE Futures ticks data job completed successfully at ${timeString}.
+        subject = "✅ Hourly NSE EQUITY ticks Data Job Completed Successfully";
+        textContent = `Hourly NSE EQUITY ticks data job completed successfully at ${timeString}.
         Instruments processed: ${details.instrumentsCount || 0}
         Successful responses: ${details.successfulCount || 0}
         Total records inserted: ${details.totalRecordsInserted || 0}`;
         htmlContent = `
-          <h2>✅ Hourly NSE Futures ticks Data Job Completed</h2>
+          <h2>✅ Hourly NSE EQUITY ticks Data Job Completed</h2>
           <p><strong>Completion Time:</strong> ${timeString}</p>
           <p><strong>Status:</strong> ✅ Success</p>
           <hr>
@@ -323,10 +323,10 @@ async function sendHourlyJobEmail(
         break;
 
       case "failed":
-        subject = "❌ Hourly NSE Futures ticks Data Job Failed";
-        textContent = `Hourly NSE Futures ticks data job failed at ${timeString}. Error: ${details.errorMessage}`;
+        subject = "❌ Hourly NSE EQUITY ticks Data Job Failed";
+        textContent = `Hourly NSE EQUITY ticks data job failed at ${timeString}. Error: ${details.errorMessage}`;
         htmlContent = `
-          <h2>❌ Hourly NSE Futures ticks Data Job Failed</h2>
+          <h2>❌ Hourly NSE EQUITY ticks Data Job Failed</h2>
           <p><strong>Failure Time:</strong> ${timeString}</p>
           <p><strong>Status:</strong> ❌ Failed</p>
           <hr>
@@ -358,7 +358,7 @@ async function sendHourlyJobEmail(
 async function executeHourlyJob(): Promise<void> {
   try {
     const date = new Date();
-    console.log(`🕐 Starting hourly NSE Futures job at ${date.toISOString()}`);
+    console.log(`🕐 Starting hourly NSE EQUITY job at ${date.toISOString()}`);
 
     // Send start notification
     await sendHourlyJobEmail("started", {});
@@ -367,7 +367,7 @@ async function executeHourlyJob(): Promise<void> {
     const loginSuccess = await fetchAccessToken();
 
     if (loginSuccess) {
-      // Fetch NSE Futures instruments with their IDs
+      // Fetch NSE EQUITY instruments with their IDs
       const instrumentsMap = await getNseInstruments();
 
       // Fetch historical data for each instrument
@@ -405,10 +405,10 @@ async function executeHourlyJob(): Promise<void> {
     }
 
     console.log(
-      `✅ Hourly NSE Futures job completed at ${new Date().toISOString()}`
+      `✅ Hourly NSE EQUITY job completed at ${new Date().toISOString()}`
     );
   } catch (error: any) {
-    console.error("❌ Error in hourly NSE Futures job:", error.message);
+    console.error("❌ Error in hourly NSE EQUITY job:", error.message);
 
     // Send failure notification
     await sendHourlyJobEmail("failed", {
@@ -418,22 +418,22 @@ async function executeHourlyJob(): Promise<void> {
 }
 
 /**
- * Initialize the hourly NSE Futures job
+ * Initialize the hourly NSE EQUITY job
  * Runs every hour from 9 AM to 6 PM, Monday to Friday
  * Cron pattern: "0 9-18 * * 1-5" (at minute 0 of every hour from 9 through 18 on Monday through Friday)
  */
-export function initializeHourlyTicksNseFutJob(): void {
+export function initializeHourlyTicksNseEqtJob(): void {
   // Run immediately when the application starts
   if(process.env.NODE_ENV === "development"){
     executeHourlyJob();
   }
 
   // Schedule to run every hour from 9 AM to 6 PM, Monday to Friday
-  cron.schedule("0 9-15 * * 1-5", executeHourlyJob, {
+  cron.schedule("10 9-15 * * 1-5", executeHourlyJob, {
     timezone: "Asia/Kolkata", // Indian timezone
   });
 
   console.log(
-    "⏰ Hourly NSE Futures job scheduled to run every hour from 9 AM to 6 PM, Monday to Friday (IST)"
+    "⏰ Hourly NSE EQUITY job scheduled to run every hour from 9 AM to 6 PM, Monday to Friday (IST)"
   );
 }

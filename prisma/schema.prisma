@@ -153,6 +153,7 @@ model symbols_list {
   created_at    DateTime? @default(now()) @db.Timestamp(6)
   updated_at    DateTime? @updatedAt @db.Timestamp(6)
   segment       String?   @db.VarChar(5)
+  expiry_date   DateTime? @db.Date
 
   @@unique([instrument_id, symbol], map: "instrument_symbol_unique")
   @@index([instrument_id, symbol], map: "idx_instrument_symbol")

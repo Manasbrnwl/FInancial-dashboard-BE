@@ -5,6 +5,7 @@ import qs from "qs";
 import { loadEnv } from "../config/env";
 import { PrismaClient } from "@prisma/client";
 import { sendEmailNotification } from "../utils/sendEmail";
+import { rateLimiter } from "../utils/rateLimiter";
 
 loadEnv();
 
@@ -99,6 +100,7 @@ function transformRecordsToDbFormat(
   records: any[],
   instrumentId: number
 ): any[] {
+  const now = new Date();
   return records.map((record) => ({
     instrumentId: instrumentId,
     ltp: record[1].toString(),
@@ -109,6 +111,7 @@ function transformRecordsToDbFormat(
     ask: record[6].toString(),
     askqty: record[7].toString(),
     time: new Date(record[0]),
+    updatedAt: now,
   }));
 }
 
@@ -174,16 +177,7 @@ async function fetchHistoricalData(
     .padStart(2, "0")}${todayMorning
     .getDate()
     .toString()
-    .padStart(2, "0")}T${todayMorning
-    .getHours()
-    .toString()
-    .padStart(2, "0")}:${todayMorning
-    .getMinutes()
-    .toString()
-    .padStart(2, "0")}:${todayMorning
-    .getSeconds()
-    .toString()
-    .padStart(2, "0")}`;
+    .padStart(2, "0")}T09:00:00`;
   const toDate = `${todayEvening.getFullYear().toString().slice(-2)}${(
     todayEvening.getMonth() + 1
   )
@@ -201,8 +195,8 @@ async function fetchHistoricalData(
     .getSeconds()
     .toString()
     .padStart(2, "0")}`;
-  // const fromDate = "250926T09:00:00";
-  // const toDate = "250926T14:00:00";
+  // const fromDate = "251006T09:00:00";
+  // const toDate = "251006T15:00:00";
   console.log(`📊 Fetching historical data from ${fromDate} to ${toDate}`);
 
   let successfulInstrumentsCount = 0;
@@ -211,6 +205,14 @@ async function fetchHistoricalData(
   for (const [type, instrumentId] of instrumentsMap) {
     try {
       console.log(`🔄 Fetching data for instrument type: ${type}`);
+
+      // Wait for rate limiter before making request
+      await rateLimiter.waitForSlot();
+
+      const stats = rateLimiter.getStats();
+      console.log(
+        `📊 Rate limit stats - Second: ${stats.perSecond}/5, Minute: ${stats.perMinute}/300, Hour: ${stats.perHour}/18000`
+      );
 
       const response = await axios.get(
         `https://history.truedata.in/getticks?symbol=${type}&bidask=1&from=${fromDate}&to=${toDate}&response=json`,

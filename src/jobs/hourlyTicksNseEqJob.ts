@@ -26,7 +26,7 @@ async function fetchAccessToken(): Promise<boolean> {
       grant_type: "password",
     };
 
-    console.log("🔑 Fetching access token for hourly NSE Futures job...");
+    console.log("🔑 Fetching access token for hourly NSE Equity job...");
 
     const response = await axios.post(
       LOGIN_API_URL,
@@ -53,38 +53,39 @@ async function fetchAccessToken(): Promise<boolean> {
       "❌ Failed to fetch access token for hourly job:",
       error.message
     );
-    return fetchAccessToken()
+    return fetchAccessToken();
   }
 }
 
 /**
- * Function to get NSE Futures futures instruments with IDs from database
+ * Function to get NSE Equity instruments with IDs from database
+ * Gets instruments from instrument_lists table where exchange = NSE
  */
 async function getNseInstruments(): Promise<Map<string, number>> {
   try {
-    console.log("🔍 Fetching NSE Futures instruments from database...");
+    console.log("🔍 Fetching NSE Equity instruments from database...");
 
-    const instruments = await prisma.$queryRaw<Array<{
-      instrumentid: number;
-      instrument_type: string;
-    }>>`
-      SELECT DISTINCT li.id as instrumentId, fut.symbol as instrument_type
-      FROM market_data.nse_futures fut
-      INNER JOIN market_data.symbols_list li ON fut.symbol = li.symbol
-      WHERE fut.expiry_date >= CURRENT_DATE
-    `;
+    const instruments = await prisma.instrument_lists.findMany({
+      where: {
+        exchange: "NSE",
+      },
+      select: {
+        id: true,
+        instrument_type: true,
+      },
+    });
 
-    console.log(`✅ Found ${instruments.length} NSE Futures futures instruments`);
+    console.log(`✅ Found ${instruments.length} NSE Equity instruments`);
 
-    // Create a Map of instrument_type -> instrumentId
+    // Create a Map of instrument_type -> instrumentId (id)
     const instrumentMap = new Map<string, number>();
     instruments.forEach((instrument) => {
-      instrumentMap.set(instrument.instrument_type, instrument.instrumentid);
+      instrumentMap.set(instrument.instrument_type, instrument.id);
     });
 
     return instrumentMap;
   } catch (error: any) {
-    console.error("❌ Failed to fetch NSE Futures instruments:", error.message);
+    console.error("❌ Failed to fetch NSE Equity instruments:", error.message);
     return new Map();
   }
 }
@@ -116,13 +117,13 @@ function transformRecordsToDbFormat(
  */
 async function bulkInsertTicksData(records: any[]): Promise<number> {
   try {
-    const result = await prisma.ticksDataNSEFUT.createMany({
+    const result = await prisma.ticksDataNSEEQ.createMany({
       data: records,
       skipDuplicates: true,
     });
 
     console.log(
-      `✅ Successfully inserted ${result.count} records into ticksDataNSE`
+      `✅ Successfully inserted ${result.count} records into ticksDataNSEEQ`
     );
     return result.count;
   } catch (error: any) {
@@ -285,24 +286,24 @@ async function sendHourlyJobEmail(
 
     switch (status) {
       case "started":
-        subject = "📊 Hourly NSE Futures ticks Data Job Started";
-        textContent = `Hourly NSE Futures ticks data job started at ${timeString}`;
+        subject = "📊 Hourly NSE Equity Ticks Data Job Started";
+        textContent = `Hourly NSE Equity ticks data job started at ${timeString}`;
         htmlContent = `
-          <h2>📊 Hourly NSE Futures ticks Data Job Started</h2>
+          <h2>📊 Hourly NSE Equity Ticks Data Job Started</h2>
           <p><strong>Time:</strong> ${timeString}</p>
           <p><strong>Status:</strong> Job initialization successful</p>
-          <p>Starting data fetch for NSE_FUT instruments...</p>
+          <p>Starting data fetch for NSE Equity instruments...</p>
         `;
         break;
 
       case "completed":
-        subject = "✅ Hourly NSE Futures ticks Data Job Completed Successfully";
-        textContent = `Hourly NSE Futures ticks data job completed successfully at ${timeString}.
+        subject = "✅ Hourly NSE Equity Ticks Data Job Completed Successfully";
+        textContent = `Hourly NSE Equity ticks data job completed successfully at ${timeString}.
         Instruments processed: ${details.instrumentsCount || 0}
         Successful responses: ${details.successfulCount || 0}
         Total records inserted: ${details.totalRecordsInserted || 0}`;
         htmlContent = `
-          <h2>✅ Hourly NSE Futures ticks Data Job Completed</h2>
+          <h2>✅ Hourly NSE Equity Ticks Data Job Completed</h2>
           <p><strong>Completion Time:</strong> ${timeString}</p>
           <p><strong>Status:</strong> ✅ Success</p>
           <hr>
@@ -318,15 +319,15 @@ async function sendHourlyJobEmail(
               details.totalRecordsInserted || 0
             }</li>
           </ul>
-          <p><em>Data successfully stored in ticksFODataNSE table.</em></p>
+          <p><em>Data successfully stored in ticksDataNSEEQ table.</em></p>
         `;
         break;
 
       case "failed":
-        subject = "❌ Hourly NSE Futures ticks Data Job Failed";
-        textContent = `Hourly NSE Futures ticks data job failed at ${timeString}. Error: ${details.errorMessage}`;
+        subject = "❌ Hourly NSE Equity Ticks Data Job Failed";
+        textContent = `Hourly NSE Equity ticks data job failed at ${timeString}. Error: ${details.errorMessage}`;
         htmlContent = `
-          <h2>❌ Hourly NSE Futures ticks Data Job Failed</h2>
+          <h2>❌ Hourly NSE Equity Ticks Data Job Failed</h2>
           <p><strong>Failure Time:</strong> ${timeString}</p>
           <p><strong>Status:</strong> ❌ Failed</p>
           <hr>
@@ -358,7 +359,7 @@ async function sendHourlyJobEmail(
 async function executeHourlyJob(): Promise<void> {
   try {
     const date = new Date();
-    console.log(`🕐 Starting hourly NSE Futures job at ${date.toISOString()}`);
+    console.log(`🕐 Starting hourly NSE Equity job at ${date.toISOString()}`);
 
     // Send start notification
     await sendHourlyJobEmail("started", {});
@@ -367,7 +368,7 @@ async function executeHourlyJob(): Promise<void> {
     const loginSuccess = await fetchAccessToken();
 
     if (loginSuccess) {
-      // Fetch NSE Futures instruments with their IDs
+      // Fetch NSE Equity instruments with their IDs
       const instrumentsMap = await getNseInstruments();
 
       // Fetch historical data for each instrument
@@ -405,10 +406,10 @@ async function executeHourlyJob(): Promise<void> {
     }
 
     console.log(
-      `✅ Hourly NSE Futures job completed at ${new Date().toISOString()}`
+      `✅ Hourly NSE Equity job completed at ${new Date().toISOString()}`
     );
   } catch (error: any) {
-    console.error("❌ Error in hourly NSE Futures job:", error.message);
+    console.error("❌ Error in hourly NSE Equity job:", error.message);
 
     // Send failure notification
     await sendHourlyJobEmail("failed", {
@@ -418,13 +419,13 @@ async function executeHourlyJob(): Promise<void> {
 }
 
 /**
- * Initialize the hourly NSE Futures job
+ * Initialize the hourly NSE Equity job
  * Runs every hour from 9 AM to 6 PM, Monday to Friday
  * Cron pattern: "0 9-18 * * 1-5" (at minute 0 of every hour from 9 through 18 on Monday through Friday)
  */
-export function initializeHourlyTicksNseFutJob(): void {
+export function initializeHourlyTicksNseEqJob(): void {
   // Run immediately when the application starts
-  if(process.env.NODE_ENV === "development"){
+  if (process.env.NODE_ENV === "development") {
     executeHourlyJob();
   }
 
@@ -434,6 +435,6 @@ export function initializeHourlyTicksNseFutJob(): void {
   });
 
   console.log(
-    "⏰ Hourly NSE Futures job scheduled to run every hour from 9 AM to 6 PM, Monday to Friday (IST)"
+    "⏰ Hourly NSE Equity job scheduled to run every hour from 9 AM to 6 PM, Monday to Friday (IST)"
   );
 }

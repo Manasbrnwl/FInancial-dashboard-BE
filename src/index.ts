@@ -25,7 +25,7 @@ app.use("/api", apiRouter);
 // app.use("/api/websocket", websocketRouter);
 
 // Initialize the login job
-// initializeLoginJob();
+initializeLoginJob();
 
 // Initialize the hourly NSE futures job
 initializeHourlyTicksNseFutJob();
@@ -37,7 +37,7 @@ initializeHourlyTicksNseOptJob();
 initializeHourlyTicksNseEqJob();
 
 // Initialize the daily NSE options job
-// initializeDailyNseJob();
+initializeDailyNseJob();
 
 // Initialize WebSocket service for real-time data
 async function initializeWebSocketService() {

@@ -53,6 +53,7 @@ async function insertFutIntoDataBase(date: any) {
           symbolsData.push({
             symbol: symbol?.symbol || data[1],
             instrument_type: symbol?.instrument!,
+            expiry: new Date(symbol?.expiry),
             exchange: "NSE",
             segment: "FUT",
           });

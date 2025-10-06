@@ -56,9 +56,9 @@ async function fetchAccessToken(): Promise<void> {
       insertFutIntoDataBase(date.toISOString().split("T")[0]);
       // insertFutIntoDataBase("2025-09-19");
       insertOptIntoDataBase(date.toISOString().split("T")[0]);
-      // insertOptIntoDataBase("2025-09-22");
+      // insertOptIntoDataBase("2025-09-30");
       insertEqIntoDataBase(date.toISOString().split("T")[0]);
-      // insertEqIntoDataBase("2025-09-22");
+      // insertEqIntoDataBase("2025-10-02");
       // console.log('✅ Access token updated successfully');
     } else {
       console.error("❌ No access token received from API");

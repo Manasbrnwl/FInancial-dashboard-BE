@@ -47,7 +47,9 @@ export class BatchInserter {
     let totalErrors = 0;
 
     if (logProgress) {
-      console.log(`📊 Starting batch insert for ${tableName}: ${data.length} records in ${chunks.length} chunks`);
+      console.log(
+        `📊 Starting batch insert for ${tableName}: ${data.length} records in ${chunks.length} chunks`
+      );
     }
 
     for (let i = 0; i < chunks.length; i++) {
@@ -57,11 +59,16 @@ export class BatchInserter {
         totalInserted += chunk.length;
 
         if (logProgress && (i + 1) % 10 === 0) {
-          console.log(`✅ Processed ${i + 1}/${chunks.length} chunks for ${tableName}`);
+          console.log(
+            `✅ Processed ${i + 1}/${chunks.length} chunks for ${tableName}`
+          );
         }
       } catch (error: any) {
         totalErrors += chunk.length;
-        console.error(`❌ Error in chunk ${i + 1} for ${tableName}:`, error.message);
+        console.error(
+          `❌ Error in chunk ${i + 1} for ${tableName}:`,
+          error.message
+        );
 
         // Try individual inserts for failed chunk to identify problematic records
         await this.retryChunkIndividually(chunk, insertFunction, tableName);
@@ -69,7 +76,9 @@ export class BatchInserter {
     }
 
     if (logProgress) {
-      console.log(`🎯 ${tableName} batch complete: ${totalInserted} inserted, ${totalErrors} errors`);
+      console.log(
+        `🎯 ${tableName} batch complete: ${totalInserted} inserted, ${totalErrors} errors`
+      );
     }
 
     return { inserted: totalInserted, errors: totalErrors };
@@ -83,13 +92,18 @@ export class BatchInserter {
     insertFunction: (data: T[]) => Promise<any>,
     tableName: string
   ): Promise<void> {
-    console.log(`🔄 Retrying ${chunk.length} records individually for ${tableName}`);
+    console.log(
+      `🔄 Retrying ${chunk.length} records individually for ${tableName}`
+    );
 
     for (const record of chunk) {
       try {
         await insertFunction([record]);
       } catch (error: any) {
-        console.error(`❌ Individual record failed for ${tableName}:`, error.message);
+        console.error(
+          `❌ Individual record failed for ${tableName}:`,
+          error.message
+        );
       }
     }
   }
@@ -106,7 +120,10 @@ export class BatchInserter {
     // Deduplicate instruments
     const uniqueInstruments = Array.from(
       new Map(
-        instruments.map(item => [`${item.exchange}_${item.instrument_type}`, item])
+        instruments.map((item) => [
+          `${item.exchange}_${item.instrument_type}`,
+          item,
+        ])
       ).values()
     );
 
@@ -115,7 +132,9 @@ export class BatchInserter {
     }
 
     if (logProgress) {
-      console.log(`📋 Upserting ${uniqueInstruments.length} unique instruments`);
+      console.log(
+        `📋 Upserting ${uniqueInstruments.length} unique instruments`
+      );
     }
 
     let successCount = 0;
@@ -147,18 +166,27 @@ export class BatchInserter {
         } catch (error: any) {
           errorCount++;
           if (logProgress && errorCount <= 5) {
-            console.error(`❌ Instrument upsert failed for ${instrument.exchange}:${instrument.instrument_type}:`, error.message);
+            console.error(
+              `❌ Instrument upsert failed for ${instrument.exchange}:${instrument.instrument_type}:`,
+              error.message
+            );
           }
         }
       }
 
       if (logProgress && chunks.length > 10 && (i + 1) % 10 === 0) {
-        console.log(`📋 Processed ${i + 1}/${chunks.length} instrument chunks (${successCount} success, ${errorCount} errors)`);
+        console.log(
+          `📋 Processed ${i + 1}/${
+            chunks.length
+          } instrument chunks (${successCount} success, ${errorCount} errors)`
+        );
       }
     }
 
     if (logProgress) {
-      console.log(`✅ Instruments upsert completed: ${successCount} success, ${errorCount} errors`);
+      console.log(
+        `✅ Instruments upsert completed: ${successCount} success, ${errorCount} errors`
+      );
     }
   }
 
@@ -166,7 +194,13 @@ export class BatchInserter {
    * Batch upsert symbols into symbols_list table
    */
   async batchUpsertSymbolsList(
-    symbolsData: Array<{ symbol: string; instrument_type: string; exchange: string; segment?: string }>,
+    symbolsData: Array<{
+      symbol: string;
+      instrument_type: string;
+      expiry: Date;
+      exchange: string;
+      segment?: string;
+    }>,
     options: BatchInsertOptions = {}
   ): Promise<{ inserted: number; errors: number }> {
     const { logProgress = true, chunkSize = 50 } = options;
@@ -178,12 +212,17 @@ export class BatchInserter {
     // Deduplicate symbols by instrument_type and symbol combination
     const uniqueSymbols = Array.from(
       new Map(
-        symbolsData.map(item => [`${item.instrument_type}_${item.symbol}`, item])
+        symbolsData.map((item) => [
+          `${item.instrument_type}_${item.symbol}`,
+          item,
+        ])
       ).values()
     );
 
     if (logProgress) {
-      console.log(`📋 Upserting ${uniqueSymbols.length} unique symbols into symbols_list`);
+      console.log(
+        `📋 Upserting ${uniqueSymbols.length} unique symbols into symbols_list`
+      );
     }
 
     let successCount = 0;
@@ -210,7 +249,9 @@ export class BatchInserter {
 
           if (!instrument) {
             if (logProgress && errorCount < 5) {
-              console.warn(`⚠️ Instrument not found for ${symbolData.exchange}:${symbolData.instrument_type}`);
+              console.warn(
+                `⚠️ Instrument not found for ${symbolData.exchange}:${symbolData.instrument_type}`
+              );
             }
             errorCount++;
             continue;
@@ -231,24 +272,34 @@ export class BatchInserter {
               instrument_id: instrument.id,
               symbol: symbolData.symbol,
               segment: symbolData.segment,
+              expiry_date: symbolData.expiry,
             },
           });
           successCount++;
         } catch (error: any) {
           errorCount++;
           if (logProgress && errorCount <= 5) {
-            console.error(`❌ Symbol upsert failed for ${symbolData.symbol}:`, error.message);
+            console.error(
+              `❌ Symbol upsert failed for ${symbolData.symbol}:`,
+              error.message
+            );
           }
         }
       }
 
       if (logProgress && chunks.length > 10 && (i + 1) % 10 === 0) {
-        console.log(`📋 Processed ${i + 1}/${chunks.length} symbol chunks (${successCount} success, ${errorCount} errors)`);
+        console.log(
+          `📋 Processed ${i + 1}/${
+            chunks.length
+          } symbol chunks (${successCount} success, ${errorCount} errors)`
+        );
       }
     }
 
     if (logProgress) {
-      console.log(`✅ Symbols upsert completed: ${successCount} success, ${errorCount} errors`);
+      console.log(
+        `✅ Symbols upsert completed: ${successCount} success, ${errorCount} errors`
+      );
     }
 
     return { inserted: successCount, errors: errorCount };
@@ -273,7 +324,9 @@ export class BatchInserter {
     let totalErrors = 0;
 
     if (logProgress) {
-      console.log(`🔄 Starting transaction-based batch insert: ${chunks.length} chunks`);
+      console.log(
+        `🔄 Starting transaction-based batch insert: ${chunks.length} chunks`
+      );
     }
 
     for (let i = 0; i < chunks.length; i++) {
@@ -285,7 +338,9 @@ export class BatchInserter {
         totalInserted += chunk.length;
 
         if (logProgress && (i + 1) % 5 === 0) {
-          console.log(`⚡ Completed ${i + 1}/${chunks.length} transaction chunks`);
+          console.log(
+            `⚡ Completed ${i + 1}/${chunks.length} transaction chunks`
+          );
         }
       } catch (error: any) {
         totalErrors += chunk.length;

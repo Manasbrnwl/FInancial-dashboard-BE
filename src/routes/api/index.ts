@@ -4,6 +4,7 @@ import bseEquityRouter from "./bseEquity";
 import nseFuturesRouter from "./nseFutures";
 import nseOptionsRouter from "./nseOptions";
 import periodicDataRouter from "./periodicData";
+import arbitrageRouter from "./arbitrage";
 
 const router = Router();
 
@@ -13,6 +14,7 @@ router.use("/bse-equity", bseEquityRouter);
 router.use("/nse-futures", nseFuturesRouter);
 router.use("/nse-options", nseOptionsRouter);
 router.use("/periodic-data", periodicDataRouter);
+router.use("/arbitrage", arbitrageRouter);
 
 // Health check endpoint
 router.get("/health", (req, res) => {

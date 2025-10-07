@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import dotenv from "dotenv";
 // import healthRouter from "./routes/health";
 // import websocketRouter from "./routes/websocket";
@@ -17,6 +18,14 @@ loadEnv();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// CORS configuration - allow requests from frontend
+app.use(cors({
+  origin: ['http://localhost:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 app.use(express.json());
 

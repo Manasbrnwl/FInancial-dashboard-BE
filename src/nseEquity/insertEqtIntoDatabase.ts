@@ -5,7 +5,6 @@ import { getNseEquityHistory } from "./nseEquityHistory";
 import { createBatchInserter } from "../utils/batchInsert";
 
 const prisma = new PrismaClient();
-const batchInserter = createBatchInserter(prisma);
 
 // Delay function to add pause between API calls
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -13,6 +12,8 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function insertEqIntoDataBase(date: any) {
   try {
     const dates = getDatesFromPastToToday(date);
+    const batchInserter = createBatchInserter(prisma);
+
     for (let index = 0; index < dates.length; index++) {
       const date = dates[index];
       console.log("EQT api called ", date);
@@ -20,17 +21,19 @@ async function insertEqIntoDataBase(date: any) {
       if (response == false) {
         console.log("skipped ", date);
       } else {
-        // Prepare data for optimized batch insertion
-        const equityData = [];
-        const instrumentsData = [];
+        // Collect all instruments and equity data
+        const instrumentsToUpsert: Array<{ exchange: string; instrument_type: string }> = [];
+        const equityData: Array<any> = [];
 
+        // Parse and collect all data
         for (const data of response.Records) {
-          // Collect instruments data
-          instrumentsData.push({
+          // Collect instruments for batch upsert
+          instrumentsToUpsert.push({
             exchange: "NSE",
             instrument_type: data[1],
           });
 
+          // Collect equity data
           equityData.push({
             symbol_id: data[0].toString(),
             symbol: data[1],
@@ -45,12 +48,17 @@ async function insertEqIntoDataBase(date: any) {
           });
         }
 
-        if (equityData.length > 0) {
-          // Batch upsert instruments efficiently
-          await batchInserter.batchUpsertInstruments(instrumentsData);
+        // Step 1: Batch upsert instruments
+        if (instrumentsToUpsert.length > 0) {
+          await batchInserter.batchUpsertInstruments(instrumentsToUpsert, {
+            logProgress: true,
+            chunkSize: 10,
+          });
+        }
 
-          // Batch insert equity data with chunking and error handling
-          const insertResult = await batchInserter.batchInsert(
+        // Step 2: Batch insert equity data
+        if (equityData.length > 0) {
+          const result = await batchInserter.batchInsert(
             "nse_equity",
             equityData,
             async (chunk) => {
@@ -59,14 +67,19 @@ async function insertEqIntoDataBase(date: any) {
                 skipDuplicates: true,
               });
             },
-            { chunkSize: 1000, logProgress: true }
+            {
+              chunkSize: 1000,
+              logProgress: true,
+            }
           );
 
-          console.log(`💼 Equity batch for ${date}: ${insertResult.inserted} inserted, ${insertResult.errors} errors`);
+          console.log(
+            `💼 Equity for ${date}: ${result.inserted} processed, ${result.errors} errors`
+          );
         }
-        console.log("uploaded all EQ data");
       }
     }
+    console.log("✅ Completed all EQ data upload");
   } catch (error: any) {
     await sendEmailNotification(
       process.env.RECEIVER_EMAIL || "tech@anfy.in",

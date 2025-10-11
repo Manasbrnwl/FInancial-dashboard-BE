@@ -6,7 +6,6 @@ import { getNseOptionsHistory } from "./nseOptionsHistory";
 import { createBatchInserter } from "../utils/batchInsert";
 
 const prisma = new PrismaClient();
-const batchInserter = createBatchInserter(prisma);
 
 // Delay function to add pause between API calls
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -14,6 +13,8 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function insertOptIntoDataBase(date: any) {
   try {
     const dates = getDatesFromPastToToday(date);
+    const batchInserter = createBatchInserter(prisma);
+
     for (let index = 0; index < dates.length; index++) {
       const date = dates[index];
       console.log("OPT api called ", date);
@@ -21,23 +22,32 @@ async function insertOptIntoDataBase(date: any) {
       if (response == false) {
         console.log("skipped ", date);
       } else {
-        // Prepare data for optimized batch insertion
-        const optionsData = [];
-        const instrumentsData = [];
-        const symbolsData = [];
+        // Collect all instruments, symbols, and options data
+        const instrumentsToUpsert: Array<{ exchange: string; instrument_type: string }> = [];
+        const symbolsToUpsert: Array<{
+          symbol: string;
+          instrument_type: string;
+          expiry: Date;
+          exchange: string;
+          segment: string;
+        }> = [];
+        const optionsData: Array<any> = [];
 
+        // Parse and collect all data
         for (const data of response.Records) {
           const symbol = parseContract(data[1]);
           if (symbol?.type !== "CE" && symbol?.type !== "PE") {
             continue;
           }
 
-          instrumentsData.push({
+          // Collect instruments for batch upsert
+          instrumentsToUpsert.push({
             exchange: "NSE",
             instrument_type: symbol?.instrument!,
           });
 
-          symbolsData.push({
+          // Collect symbols for batch upsert
+          symbolsToUpsert.push({
             symbol: symbol?.symbol || data[1],
             instrument_type: symbol?.instrument!,
             expiry: new Date(symbol!.expiry),
@@ -45,6 +55,7 @@ async function insertOptIntoDataBase(date: any) {
             segment: "OPT",
           });
 
+          // Collect options data
           optionsData.push({
             symbol_id: data[0].toString(),
             symbol: symbol?.symbol || data[1],
@@ -62,18 +73,25 @@ async function insertOptIntoDataBase(date: any) {
           });
         }
 
-        if (optionsData.length > 0) {
-          // Batch upsert instruments efficiently
-          await batchInserter.batchUpsertInstruments(instrumentsData);
-
-          // Batch upsert symbols into symbols_list
-          const symbolsResult = await batchInserter.batchUpsertSymbolsList(symbolsData, {
-            chunkSize: 100,
+        // Step 1: Batch upsert instruments
+        if (instrumentsToUpsert.length > 0) {
+          await batchInserter.batchUpsertInstruments(instrumentsToUpsert, {
             logProgress: true,
+            chunkSize: 10,
           });
+        }
 
-          // Batch insert options data with chunking and error handling
-          const insertResult = await batchInserter.batchInsert(
+        // Step 2: Batch upsert symbols
+        if (symbolsToUpsert.length > 0) {
+          await batchInserter.batchUpsertSymbolsList(symbolsToUpsert, {
+            logProgress: true,
+            chunkSize: 50,
+          });
+        }
+
+        // Step 3: Batch insert options data
+        if (optionsData.length > 0) {
+          const result = await batchInserter.batchInsert(
             "nse_options",
             optionsData,
             async (chunk) => {
@@ -82,15 +100,19 @@ async function insertOptIntoDataBase(date: any) {
                 skipDuplicates: true,
               });
             },
-            { chunkSize: 500, logProgress: true }
+            {
+              chunkSize: 1000,
+              logProgress: true,
+            }
           );
 
-          console.log(`📊 Options batch for ${date}: ${insertResult.inserted} inserted, ${insertResult.errors} errors`);
-          console.log(`📋 Symbols batch for ${date}: ${symbolsResult.inserted} inserted, ${symbolsResult.errors} errors`);
+          console.log(
+            `📊 Options for ${date}: ${result.inserted} processed, ${result.errors} errors`
+          );
         }
-        console.log("uploaded all OPT data");
       }
     }
+    console.log("✅ Completed all OPT data upload");
   } catch (error) {
     console.log("Options : ", error);
     // await sendEmailNotification(

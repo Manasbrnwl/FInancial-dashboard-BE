@@ -6,7 +6,6 @@ import { getNseFuturesHistory } from "./nseFuturesHistory";
 import { createBatchInserter } from "../utils/batchInsert";
 
 const prisma = new PrismaClient();
-const batchInserter = createBatchInserter(prisma);
 
 // Delay function to add pause between API calls
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -21,6 +20,8 @@ interface symbolData {
 async function insertFutIntoDataBase(date: any) {
   try {
     const dates = getDatesFromPastToToday(date);
+    const batchInserter = createBatchInserter(prisma);
+
     for (let index = 0; index < dates.length; index++) {
       const date = dates[index];
       console.log("Fut api called ", date);
@@ -28,24 +29,32 @@ async function insertFutIntoDataBase(date: any) {
       if (response == false) {
         console.log("skipped ", date);
       } else {
-        // Prepare data for optimized batch insertion
-        const futuresData = [];
-        const instrumentsData = [];
-        const symbolsData = [];
+        // Collect all instruments, symbols, and futures data
+        const instrumentsToUpsert: Array<{ exchange: string; instrument_type: string }> = [];
+        const symbolsToUpsert: Array<{
+          symbol: string;
+          instrument_type: string;
+          expiry: Date;
+          exchange: string;
+          segment: string;
+        }> = [];
+        const futuresData: Array<any> = [];
 
+        // Parse and collect all data
         for (const data of response.Records) {
           const symbol: symbolData | null = parseContract(data[1]);
           if (symbol?.type !== "FUT") {
             continue;
           }
 
-          // Collect instruments data
-          instrumentsData.push({
+          // Collect instruments for batch upsert
+          instrumentsToUpsert.push({
             exchange: "NSE",
             instrument_type: symbol?.instrument!,
           });
 
-          symbolsData.push({
+          // Collect symbols for batch upsert
+          symbolsToUpsert.push({
             symbol: symbol?.symbol || data[1],
             instrument_type: symbol?.instrument!,
             expiry: new Date(symbol?.expiry),
@@ -53,6 +62,7 @@ async function insertFutIntoDataBase(date: any) {
             segment: "FUT",
           });
 
+          // Collect futures data
           futuresData.push({
             symbol_id: data[0].toString(),
             symbol: symbol?.symbol || data[1],
@@ -68,18 +78,25 @@ async function insertFutIntoDataBase(date: any) {
           });
         }
 
-        if (futuresData.length > 0) {
-          // Batch upsert instruments efficiently
-          await batchInserter.batchUpsertInstruments(instrumentsData);
-
-          // Batch upsert symbols into symbols_list
-          const symbolsResult = await batchInserter.batchUpsertSymbolsList(symbolsData, {
-            chunkSize: 100,
+        // Step 1: Batch upsert instruments
+        if (instrumentsToUpsert.length > 0) {
+          await batchInserter.batchUpsertInstruments(instrumentsToUpsert, {
             logProgress: true,
+            chunkSize: 10,
           });
+        }
 
-          // Batch insert futures data with chunking and error handling
-          const insertResult = await batchInserter.batchInsert(
+        // Step 2: Batch upsert symbols
+        if (symbolsToUpsert.length > 0) {
+          await batchInserter.batchUpsertSymbolsList(symbolsToUpsert, {
+            logProgress: true,
+            chunkSize: 50,
+          });
+        }
+
+        // Step 3: Batch insert futures data
+        if (futuresData.length > 0) {
+          const result = await batchInserter.batchInsert(
             "nse_futures",
             futuresData,
             async (chunk) => {
@@ -88,15 +105,19 @@ async function insertFutIntoDataBase(date: any) {
                 skipDuplicates: true,
               });
             },
-            { chunkSize: 500, logProgress: true }
+            {
+              chunkSize: 1000,
+              logProgress: true,
+            }
           );
 
-          console.log(`📈 Futures batch for ${date}: ${insertResult.inserted} inserted, ${insertResult.errors} errors`);
-          console.log(`📋 Symbols batch for ${date}: ${symbolsResult.inserted} inserted, ${symbolsResult.errors} errors`);
+          console.log(
+            `📈 Futures for ${date}: ${result.inserted} processed, ${result.errors} errors`
+          );
         }
-        console.log("uploaded all FO data");
       }
     }
+    console.log("✅ Completed all FUT data upload");
   } catch (error: any) {
     console.log("Future :", error);
     // await sendEmailNotification(

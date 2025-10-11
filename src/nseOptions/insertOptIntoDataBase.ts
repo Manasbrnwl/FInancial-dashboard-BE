@@ -18,10 +18,6 @@ async function insertOptIntoDataBase(date: any) {
       const date = dates[index];
       console.log("OPT api called ", date);
       const response = await getNseOptionsHistory(date);
-      // Add delay between API calls (1000ms = 1 second)
-      // if (index < dates.length - 1) {
-      //     await delay(5000);
-      // }
       if (response == false) {
         console.log("skipped ", date);
       } else {

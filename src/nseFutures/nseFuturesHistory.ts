@@ -4,6 +4,9 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+// Delay function to add pause between API calls
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function getNseFuturesHistory(date: string) {
   const accessToken = getAccessToken();
   try {
@@ -29,6 +32,8 @@ async function getNseFuturesHistory(date: string) {
       console.log("Bhavcopy not found");
       return false;
     } else {
+      // Add small delay between status check and actual data fetch
+      await delay(1000);
       const bhavcopy = await axios.get(
         `https://history.truedata.in/getbhavcopy?segment=fo&date=${date}&response=json`,
         {
@@ -40,7 +45,8 @@ async function getNseFuturesHistory(date: string) {
       return bhavcopy.data;
     }
   } catch (error) {
-    console.error(error);
+    console.error("Error fetching NSE Futures history:", error);
+    return false;
   }
 }
 

@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { getDatesFromPastToToday } from "../utils/dateRange";
 import { sendEmailNotification } from "../utils/sendEmail";
-import { getNseOptionsHistory } from "./nseEquityHistory";
+import { getNseEquityHistory } from "./nseEquityHistory";
 import { createBatchInserter } from "../utils/batchInsert";
 
 const prisma = new PrismaClient();
@@ -16,7 +16,7 @@ async function insertEqIntoDataBase(date: any) {
     for (let index = 0; index < dates.length; index++) {
       const date = dates[index];
       console.log("EQT api called ", date);
-      const response = await getNseOptionsHistory(date);
+      const response = await getNseEquityHistory(date);
       if (response == false) {
         console.log("skipped ", date);
       } else {

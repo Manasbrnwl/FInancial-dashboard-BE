@@ -179,16 +179,7 @@ async function fetchHistoricalData(instrumentsMap: Map<string, number>): Promise
     .padStart(2, "0")}${todayEvening
     .getDate()
     .toString()
-    .padStart(2, "0")}T${todayEvening
-    .getHours()
-    .toString()
-    .padStart(2, "0")}:${todayEvening
-    .getMinutes()
-    .toString()
-    .padStart(2, "0")}:${todayEvening
-    .getSeconds()
-    .toString()
-    .padStart(2, "0")}`;
+    .padStart(2, "0")}T15:30:00`;
   // const fromDate = "251006T09:00:00";
   // const toDate = "251006T15:00:00";
   console.log(`📊 Fetching historical data from ${fromDate} to ${toDate}`);

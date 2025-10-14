@@ -1,6 +1,7 @@
 import WebSocket from 'ws';
 import { loadEnv } from '../config/env';
 import { sendEmailNotification } from '../utils/sendEmail';
+import { socketIOService } from './socketioService';
 
 loadEnv();
 
@@ -70,6 +71,10 @@ export class TrueDataWebSocketService {
           this.isConnected = true;
           this.reconnectAttempts = 0;
           this.startHeartbeat();
+
+          // Notify frontend clients about backend connection status
+          socketIOService.broadcastConnectionStatus('connected');
+
           resolve();
         });
 
@@ -81,6 +86,10 @@ export class TrueDataWebSocketService {
           console.log(`⚠️ WebSocket connection closed. Code: ${code}, Reason: ${reason.toString()}`);
           this.isConnected = false;
           this.stopHeartbeat();
+
+          // Notify frontend clients about backend disconnection
+          socketIOService.broadcastConnectionStatus('disconnected');
+
           this.handleReconnection();
         });
 
@@ -142,15 +151,15 @@ export class TrueDataWebSocketService {
         timestamp: data.timestamp || new Date().toISOString()
       });
 
-      // Here you can add logic to:
-      // 1. Store data in database
-      // 2. Apply filters or transformations
-      // 3. Trigger alerts or notifications
-      // 4. Update real-time dashboards
+      // Broadcast to all connected frontend clients via Socket.io
+      socketIOService.broadcastMarketData({
+        ...data,
+        timestamp: data.timestamp || new Date().toISOString()
+      });
 
       // Example: Log significant price movements
       if (data.price && data.symbol) {
-        console.log(`💰 ${data.symbol}: ${data.price}`);
+        console.log(`💰 ${data.symbol}: ₹${data.price} → Broadcasted to ${socketIOService.getConnectedClientsCount()} clients`);
       }
 
     } catch (error: any) {
@@ -242,6 +251,9 @@ export class TrueDataWebSocketService {
 
     this.reconnectAttempts++;
     console.log(`🔄 Attempting to reconnect... (${this.reconnectAttempts}/${this.config.maxReconnectAttempts})`);
+
+    // Notify frontend clients about reconnection attempts
+    socketIOService.broadcastConnectionStatus('reconnecting');
 
     this.reconnectTimer = setTimeout(async () => {
       try {

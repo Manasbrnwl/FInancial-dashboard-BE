@@ -147,7 +147,7 @@ async function fetchHistoricalData(instrumentsMap: Map<string, number>): Promise
   }
 
   const now = new Date();
-  const todayMorning = new Date(
+  const today = new Date(
     now.getFullYear(),
     now.getMonth(),
     now.getDate(),
@@ -155,35 +155,19 @@ async function fetchHistoricalData(instrumentsMap: Map<string, number>): Promise
     now.getMinutes() - 15,
     now.getSeconds()
   );
-  const todayEvening = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    now.getHours(),
-    now.getMinutes() + 2,
-    now.getSeconds()
-  );
 
   // Format dates as YYMMDDTHH:MM:SS
-  const fromDate = `${todayMorning.getFullYear().toString().slice(-2)}${(
-    todayMorning.getMonth() + 1
+  const date = `${today.getFullYear().toString().slice(-2)}${(
+    today.getMonth() + 1
   )
     .toString()
-    .padStart(2, "0")}${todayMorning
+    .padStart(2, "0")}${today
     .getDate()
     .toString()
-    .padStart(2, "0")}T09:00:00`;
-  const toDate = `${todayEvening.getFullYear().toString().slice(-2)}${(
-    todayEvening.getMonth() + 1
-  )
-    .toString()
-    .padStart(2, "0")}${todayEvening
-    .getDate()
-    .toString()
-    .padStart(2, "0")}T15:30:00`;
+    .padStart(2, "0")}`;
   // const fromDate = "251006T09:00:00";
   // const toDate = "251006T15:00:00";
-  console.log(`📊 Fetching historical data from ${fromDate} to ${toDate}`);
+  console.log(`📊 Fetching historical data for ${date}`);
 
   let successfulInstrumentsCount = 0;
   let totalRecordsInserted = 0;
@@ -201,7 +185,7 @@ async function fetchHistoricalData(instrumentsMap: Map<string, number>): Promise
       );
 
       const response = await axios.get(
-        `https://history.truedata.in/getticks?symbol=${type}&bidask=1&from=${fromDate}&to=${toDate}&response=json`,
+        `https://history.truedata.in/getticks?symbol=${type}&bidask=1&from=${date}T09:00:00&to=${date}T15:30:00&response=json`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,

@@ -1,5 +1,6 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
+import { webSocketService } from './websocketService';
 
 interface MarketData {
   symbol?: string;
@@ -19,7 +20,7 @@ export class SocketIOService {
   public initialize(httpServer: HTTPServer): void {
     this.io = new SocketIOServer(httpServer, {
       cors: {
-        origin: ['http://localhost:5173', 'http://localhost:3000'],
+        origin: ['http://localhost:5173', 'http://localhost:3000', 'http://15.207.43.160:3000'],
         credentials: true,
         methods: ['GET', 'POST']
       },
@@ -56,6 +57,10 @@ export class SocketIOService {
           socket.join(`symbol:${symbol}`);
         });
 
+        // Forward subscription to TrueData WebSocket
+        webSocketService.subscribeToSymbols(symbols);
+        // console.log(`✅ Forwarded subscription to TrueData WebSocket:`, symbols);
+
         socket.emit('subscription-confirmed', {
           symbols,
           timestamp: new Date().toISOString()
@@ -69,6 +74,10 @@ export class SocketIOService {
         symbols.forEach(symbol => {
           socket.leave(`symbol:${symbol}`);
         });
+
+        // Forward unsubscription to TrueData WebSocket
+        webSocketService.unsubscribeFromSymbols(symbols);
+        // console.log(`✅ Forwarded unsubscription to TrueData WebSocket:`, symbols);
 
         socket.emit('unsubscription-confirmed', {
           symbols,

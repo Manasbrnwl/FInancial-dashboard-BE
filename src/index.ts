@@ -29,7 +29,7 @@ console.log("🔌 Socket.io server initialized for frontend connections");
 // CORS configuration - allow requests from frontend
 app.use(
   cors({
-    origin: ["http://localhost:5173"],
+    origin: ["http://localhost:5173", 'http://15.207.43.160:8080'],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -57,23 +57,11 @@ initializeHourlyTicksNseEqJob();
 // Initialize the daily NSE options job
 initializeDailyNseJob();
 
-// Initialize WebSocket service for real-time data
+// Initialize WebSocket service for real-time data (arbitrage monitoring)
 async function initializeWebSocketService() {
   try {
     await webSocketService.start();
-
-    // Subscribe to different symbol groups after connection is established
-    setTimeout(() => {
-      console.log("📡 Setting up symbol subscriptions...");
-
-      // Subscribe to top NSE stocks
-      WebSocketManager.subscribeToNseTopSymbols();
-
-      // Subscribe to NSE F&O symbols
-      WebSocketManager.subscribeToNseFOSymbols();
-
-      console.log("✅ Symbol subscriptions configured");
-    }, 3000); // Wait 3 seconds after connection
+    console.log("✅ WebSocket service ready for arbitrage symbol subscriptions");
   } catch (error: any) {
     console.error("❌ Failed to initialize WebSocket service:", error.message);
   }

@@ -28,6 +28,7 @@ export class TrueDataWebSocketService {
   private isConnected: boolean = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
+  private instrumentIdToSymbol: Map<string, string> = new Map(); // Map instrument ID to symbol name
 
   constructor() {
     this.config = {
@@ -119,10 +120,16 @@ export class TrueDataWebSocketService {
   private handleMessage(data: WebSocket.Data): void {
     try {
       const message = data.toString();
-      console.log('📨 Received WebSocket message:', message);
+
+      // Skip heartbeat/ping/pong messages
+      if (message === 'ping' || message === 'pong' || message === 'heartbeat') {
+        return;
+      }
+
+      // console.log('📨 Received WebSocket message:', message);
 
       // Try to parse as JSON
-      let parsedData: MarketData;
+      let parsedData: any;
       try {
         parsedData = JSON.parse(message);
       } catch {
@@ -131,11 +138,223 @@ export class TrueDataWebSocketService {
         return;
       }
 
-      // Process market data
-      this.processMarketData(parsedData);
+      // Skip heartbeat messages in JSON format
+      if (parsedData.type === 'ping' || parsedData.type === 'pong' || parsedData.type === 'heartbeat') {
+        return;
+      }
+
+      // Handle subscription response - store instrument ID to symbol mapping
+      if (parsedData.success && parsedData.symbollist) {
+        this.handleSubscriptionResponse(parsedData.symbollist);
+        return;
+      }
+
+      // Handle trade updates (complete market data - has OHLCV + bid-ask + more)
+      if (parsedData.trade && Array.isArray(parsedData.trade)) {
+        this.handleTradeUpdate(parsedData.trade);
+        return;
+      }
+
+      // Handle bidask updates
+      if (parsedData.bidask && Array.isArray(parsedData.bidask)) {
+        this.handleBidAskUpdate(parsedData.bidask);
+        return;
+      }
+
+      // Handle tick updates (full market data)
+      if (parsedData.tick && Array.isArray(parsedData.tick)) {
+        this.handleTickUpdate(parsedData.tick);
+        return;
+      }
+
+      // Handle other message types if needed
+      // console.log('📝 Unhandled message type:', parsedData);
 
     } catch (error: any) {
       console.error('❌ Error handling WebSocket message:', error.message);
+    }
+  }
+
+  /**
+   * Handle subscription response and store instrument ID mapping
+   */
+  private handleSubscriptionResponse(symbolList: any[]): void {
+    try {
+      symbolList.forEach((symbolData: any[]) => {
+        if (Array.isArray(symbolData) && symbolData.length >= 2) {
+          const symbolName = symbolData[0]; // First element is symbol name
+          const instrumentId = symbolData[1]; // Second element is instrument ID
+
+          this.instrumentIdToSymbol.set(instrumentId, symbolName);
+          // console.log(`✅ Mapped instrument ID ${instrumentId} to symbol ${symbolName}`);
+        }
+      });
+    } catch (error: any) {
+      console.error('❌ Error handling subscription response:', error.message);
+    }
+  }
+
+  /**
+   * Handle trade update messages (complete market data)
+   * trade format: [instrumentId, timestamp, ltp, ltq, atp, totalVolume, open, high, low, prevClose,
+   *                change, changePercent, totalValue, unused, totalTrades, bestBid, bidQty, bestAsk, askQty]
+   */
+  private handleTradeUpdate(tradeData: any[]): void {
+    try {
+      const instrumentId = tradeData[0];
+      const timestamp = tradeData[1];
+      const ltp = parseFloat(tradeData[2]);
+      const ltq = parseInt(tradeData[3]);
+      const atp = parseFloat(tradeData[4]);
+      const totalVolume = parseInt(tradeData[5]);
+      const open = parseFloat(tradeData[6]);
+      const high = parseFloat(tradeData[7]);
+      const low = parseFloat(tradeData[8]);
+      const prevClose = parseFloat(tradeData[9]);
+      const change = parseFloat(tradeData[10]);
+      const changePercent = parseFloat(tradeData[11]);
+      const totalValue = parseFloat(tradeData[12]);
+      const totalTrades = parseInt(tradeData[14]);
+      const bestBid = parseFloat(tradeData[15]);
+      const bidQty = parseInt(tradeData[16]);
+      const bestAsk = parseFloat(tradeData[17]);
+      const askQty = parseInt(tradeData[18]);
+
+      // Get symbol name from mapping
+      const symbol = this.instrumentIdToSymbol.get(instrumentId);
+
+      if (!symbol) {
+        console.warn(`⚠️ Unknown instrument ID: ${instrumentId}`);
+        return;
+      }
+
+      // Process market data with complete information
+      this.processMarketData({
+        symbol,
+        instrumentId,
+        // Price data
+        price: ltp,
+        ltp,
+        ltq,
+        atp,
+        // OHLC data
+        open,
+        high,
+        low,
+        close: prevClose,
+        prevClose,
+        // Change data
+        change,
+        changePercent,
+        // Volume and value
+        volume: totalVolume,
+        totalValue,
+        totalTrades,
+        // Bid-Ask data
+        bid: bestBid,
+        bidQty,
+        ask: bestAsk,
+        askQty,
+        // Timestamp
+        timestamp
+      });
+
+    } catch (error: any) {
+      console.error('❌ Error handling trade update:', error.message);
+    }
+  }
+
+  /**
+   * Handle bid-ask update messages
+   */
+  private handleBidAskUpdate(bidaskData: any[]): void {
+    try {
+      // bidask format: [instrumentId, timestamp, bid, bidQty, ask, askQty]
+      const instrumentId = bidaskData[0];
+      const timestamp = bidaskData[1];
+      const bid = parseFloat(bidaskData[2]);
+      const bidQty = parseInt(bidaskData[3]);
+      const ask = parseFloat(bidaskData[4]);
+      const askQty = parseInt(bidaskData[5]);
+
+      // Get symbol name from mapping
+      const symbol = this.instrumentIdToSymbol.get(instrumentId);
+
+      if (!symbol) {
+        console.warn(`⚠️ Unknown instrument ID: ${instrumentId}`);
+        return;
+      }
+
+      // Calculate mid price from bid-ask
+      const midPrice = (bid + ask) / 2;
+
+      // Process market data with frontend-compatible format
+      this.processMarketData({
+        symbol,
+        instrumentId,
+        // Bid-ask data
+        bid,
+        bidQty,
+        ask,
+        askQty,
+        // Frontend-compatible fields
+        price: midPrice,
+        ltp: bid,
+        close: midPrice,
+        // For bid-ask updates, we don't have OHLCV, so use mid price
+        open: midPrice,
+        high: ask,
+        low: bid,
+        volume: bidQty + askQty,
+        timestamp
+      });
+
+    } catch (error: any) {
+      console.error('❌ Error handling bid-ask update:', error.message);
+    }
+  }
+
+  /**
+   * Handle full tick/market data updates
+   */
+  private handleTickUpdate(tickData: any[]): void {
+    try {
+      // tick format varies, but typically: [instrumentId, timestamp, ltp, volume, open, high, low, close, ...]
+      const instrumentId = tickData[0];
+      const timestamp = tickData[1];
+
+      // Get symbol name from mapping
+      const symbol = this.instrumentIdToSymbol.get(instrumentId);
+
+      if (!symbol) {
+        console.warn(`⚠️ Unknown instrument ID: ${instrumentId}`);
+        return;
+      }
+
+      // Parse tick data (adjust indices based on TrueData's actual format)
+      const ltp = tickData[2] ? parseFloat(tickData[2]) : undefined;
+      const volume = tickData[3] ? parseInt(tickData[3]) : undefined;
+      const open = tickData[4] ? parseFloat(tickData[4]) : undefined;
+      const high = tickData[5] ? parseFloat(tickData[5]) : undefined;
+      const low = tickData[6] ? parseFloat(tickData[6]) : undefined;
+      const close = tickData[7] ? parseFloat(tickData[7]) : ltp;
+
+      // Process market data
+      this.processMarketData({
+        symbol,
+        instrumentId,
+        price: ltp ?? close,
+        ltp,
+        open,
+        high,
+        low,
+        close,
+        volume,
+        timestamp
+      });
+
+    } catch (error: any) {
+      console.error('❌ Error handling tick update:', error.message);
     }
   }
 
@@ -144,23 +363,21 @@ export class TrueDataWebSocketService {
    */
   private processMarketData(data: MarketData): void {
     try {
-      console.log('📊 Processing market data:', {
-        symbol: data.symbol,
-        price: data.price,
-        volume: data.volume,
-        timestamp: data.timestamp || new Date().toISOString()
-      });
-
-      // Broadcast to all connected frontend clients via Socket.io
-      socketIOService.broadcastMarketData({
+      // Prepare formatted data for frontend
+      const formattedData = {
         ...data,
         timestamp: data.timestamp || new Date().toISOString()
-      });
+      };
 
-      // Example: Log significant price movements
-      if (data.price && data.symbol) {
-        console.log(`💰 ${data.symbol}: ₹${data.price} → Broadcasted to ${socketIOService.getConnectedClientsCount()} clients`);
-      }
+      // Broadcast to all connected frontend clients via Socket.io
+      socketIOService.broadcastMarketData(formattedData);
+
+      // Log brief summary
+      // if (data.bid && data.ask) {
+      //   console.log(`💰 ${data.symbol}: Bid ₹${data.bid} | Ask ₹${data.ask} | Mid ₹${data.price?.toFixed(2)} → ${socketIOService.getConnectedClientsCount()} clients`);
+      // } else {
+      //   console.log(`💰 ${data.symbol}: Price ₹${data.price?.toFixed(2)} | Vol ${data.volume} → ${socketIOService.getConnectedClientsCount()} clients`);
+      // }
 
     } catch (error: any) {
       console.error('❌ Error processing market data:', error.message);
@@ -178,12 +395,12 @@ export class TrueDataWebSocketService {
 
     try {
       const subscriptionMessage = {
-        action: 'subscribe',
+        method: 'addsymbol',
         symbols: symbols
       };
 
       this.ws.send(JSON.stringify(subscriptionMessage));
-      console.log('📡 Subscription request sent for symbols:', symbols);
+      // console.log('📡 Subscription request sent for symbols:', symbols);
     } catch (error: any) {
       console.error('❌ Error sending subscription:', error.message);
     }
@@ -200,12 +417,20 @@ export class TrueDataWebSocketService {
 
     try {
       const unsubscriptionMessage = {
-        action: 'unsubscribe',
+        method: 'removesymbol',
         symbols: symbols
       };
 
       this.ws.send(JSON.stringify(unsubscriptionMessage));
-      console.log('📡 Unsubscription request sent for symbols:', symbols);
+      // console.log('📡 Unsubscription request sent for symbols:', symbols);
+
+      // Clean up instrument ID mapping for unsubscribed symbols
+      this.instrumentIdToSymbol.forEach((symbolName, instrumentId) => {
+        if (symbols.includes(symbolName)) {
+          this.instrumentIdToSymbol.delete(instrumentId);
+          // console.log(`🗑️ Removed mapping for ${symbolName} (${instrumentId})`);
+        }
+      });
     } catch (error: any) {
       console.error('❌ Error sending unsubscription:', error.message);
     }
@@ -219,7 +444,7 @@ export class TrueDataWebSocketService {
       if (this.ws && this.isConnected) {
         try {
           this.ws.ping();
-          console.log('💓 Heartbeat sent');
+          // console.log('💓 Heartbeat sent');
         } catch (error: any) {
           console.error('❌ Error sending heartbeat:', error.message);
         }
@@ -279,66 +504,66 @@ export class TrueDataWebSocketService {
         hour12: true,
       });
 
-      let subject: string;
-      let textContent: string;
-      let htmlContent: string;
+      // let subject: string;
+      // let textContent: string;
+      // let htmlContent: string;
 
-      switch (status) {
-        case 'started':
-          subject = '🌐 TrueData WebSocket Service Started';
-          textContent = `TrueData WebSocket service started at ${timeString}`;
-          htmlContent = `
-            <h2>🌐 TrueData WebSocket Service Started</h2>
-            <p><strong>Time:</strong> ${timeString}</p>
-            <p><strong>Status:</strong> Service initialization successful</p>
-            <p>Connecting to real-time market data feed...</p>
-          `;
-          break;
+      // switch (status) {
+      //   case 'started':
+      //     subject = '🌐 TrueData WebSocket Service Started';
+      //     textContent = `TrueData WebSocket service started at ${timeString}`;
+      //     htmlContent = `
+      //       <h2>🌐 TrueData WebSocket Service Started</h2>
+      //       <p><strong>Time:</strong> ${timeString}</p>
+      //       <p><strong>Status:</strong> Service initialization successful</p>
+      //       <p>Connecting to real-time market data feed...</p>
+      //     `;
+      //     break;
 
-        case 'connected':
-          subject = '✅ TrueData WebSocket Connected';
-          textContent = `WebSocket connection established at ${timeString}`;
-          htmlContent = `
-            <h2>✅ TrueData WebSocket Connected</h2>
-            <p><strong>Connection Time:</strong> ${timeString}</p>
-            <p><strong>Status:</strong> ✅ Connected</p>
-            <p>Real-time market data feed is now active.</p>
-          `;
-          break;
+      //   case 'connected':
+      //     subject = '✅ TrueData WebSocket Connected';
+      //     textContent = `WebSocket connection established at ${timeString}`;
+      //     htmlContent = `
+      //       <h2>✅ TrueData WebSocket Connected</h2>
+      //       <p><strong>Connection Time:</strong> ${timeString}</p>
+      //       <p><strong>Status:</strong> ✅ Connected</p>
+      //       <p>Real-time market data feed is now active.</p>
+      //     `;
+      //     break;
 
-        case 'disconnected':
-          subject = '⚠️ TrueData WebSocket Disconnected';
-          textContent = `WebSocket connection lost at ${timeString}. Reconnection attempts: ${details.reconnectAttempts || 0}`;
-          htmlContent = `
-            <h2>⚠️ TrueData WebSocket Disconnected</h2>
-            <p><strong>Disconnection Time:</strong> ${timeString}</p>
-            <p><strong>Status:</strong> ⚠️ Disconnected</p>
-            <p><strong>Reconnection Attempts:</strong> ${details.reconnectAttempts || 0}</p>
-            <p>Attempting to reconnect to market data feed...</p>
-          `;
-          break;
+      //   case 'disconnected':
+      //     subject = '⚠️ TrueData WebSocket Disconnected';
+      //     textContent = `WebSocket connection lost at ${timeString}. Reconnection attempts: ${details.reconnectAttempts || 0}`;
+      //     htmlContent = `
+      //       <h2>⚠️ TrueData WebSocket Disconnected</h2>
+      //       <p><strong>Disconnection Time:</strong> ${timeString}</p>
+      //       <p><strong>Status:</strong> ⚠️ Disconnected</p>
+      //       <p><strong>Reconnection Attempts:</strong> ${details.reconnectAttempts || 0}</p>
+      //       <p>Attempting to reconnect to market data feed...</p>
+      //     `;
+      //     break;
 
-        case 'failed':
-          subject = '❌ TrueData WebSocket Service Failed';
-          textContent = `WebSocket service failed at ${timeString}. Error: ${details.errorMessage}`;
-          htmlContent = `
-            <h2>❌ TrueData WebSocket Service Failed</h2>
-            <p><strong>Failure Time:</strong> ${timeString}</p>
-            <p><strong>Status:</strong> ❌ Failed</p>
-            <hr>
-            <h3>🚨 Error Details:</h3>
-            <p><strong>Error Message:</strong> ${details.errorMessage || 'Unknown error'}</p>
-            <p><em>Please check the application logs for detailed information.</em></p>
-          `;
-          break;
-      }
+      //   case 'failed':
+      //     subject = '❌ TrueData WebSocket Service Failed';
+      //     textContent = `WebSocket service failed at ${timeString}. Error: ${details.errorMessage}`;
+      //     htmlContent = `
+      //       <h2>❌ TrueData WebSocket Service Failed</h2>
+      //       <p><strong>Failure Time:</strong> ${timeString}</p>
+      //       <p><strong>Status:</strong> ❌ Failed</p>
+      //       <hr>
+      //       <h3>🚨 Error Details:</h3>
+      //       <p><strong>Error Message:</strong> ${details.errorMessage || 'Unknown error'}</p>
+      //       <p><em>Please check the application logs for detailed information.</em></p>
+      //     `;
+      //     break;
+      // }
 
-      await sendEmailNotification(
-        process.env.RECEIVER_EMAIL || 'mystmanas@gmail.com',
-        subject,
-        textContent,
-        htmlContent
-      );
+      // await sendEmailNotification(
+      //   process.env.RECEIVER_EMAIL || 'mystmanas@gmail.com',
+      //   subject,
+      //   textContent,
+      //   htmlContent
+      // );
 
       console.log(`📧 Email notification sent: ${status}`);
     } catch (error: any) {

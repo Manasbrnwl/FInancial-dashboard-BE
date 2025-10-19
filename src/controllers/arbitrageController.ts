@@ -49,6 +49,7 @@ export const getArbitrageData = async (req: Request, res: Response) => {
       const symbols = item.symbols || [];
 
       return {
+        instrumentId: item.instrumentid,
         underlyingSymbol: item.instrument_type,
         underlyingPrice: parseFloat(item.price),
         nearFutureSymbol: symbols[0]?.symbol || null,
@@ -82,3 +83,263 @@ export const getArbitrageData = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getNSEOptionsData = async (req: Request, res: Response) => {
+  try {
+    const { instrumentId } = req.query;
+
+    if (!instrumentId) {
+      return res.status(400).json({
+        success: false,
+        error: 'instrumentId query parameter is required',
+      });
+    }
+
+    const instrumentIdNum = parseInt(instrumentId as string);
+
+    if (isNaN(instrumentIdNum)) {
+      return res.status(400).json({
+        success: false,
+        error: 'instrumentId must be a valid number',
+      });
+    }
+
+    const optionsData = await prisma.$queryRaw<
+      Array<{
+        symbol: string;
+        open: number;
+        high: number;
+        low: number;
+        close: number;
+        volume: number;
+        oi: number;
+        expiry_date: Date;
+        option_type: string;
+      }>
+    >`
+      SELECT DISTINCT
+        opt.symbol,
+        opt.open,
+        opt.high,
+        opt.low,
+        opt.close,
+        opt.volume,
+        opt.oi,
+        opt.expiry_date,
+        opt.option_type
+      FROM market_data.nse_options opt
+      INNER JOIN market_data.symbols_list li ON opt.symbol = li.symbol
+      WHERE opt.expiry_date >= CURRENT_DATE
+        AND li.instrument_id = ${instrumentIdNum}
+      ORDER BY opt.expiry_date ASC
+    `;
+
+    res.json({
+      success: true,
+      data: optionsData,
+      count: optionsData.length,
+    });
+  } catch (error: any) {
+    console.error("Error fetching NSE Options data:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch NSE Options data",
+      message: error.message,
+    });
+  }
+}
+
+export const getNSEFuturesData = async (req: Request, res: Response) => {
+  try {
+    const { instrumentId } = req.query;
+
+    if (!instrumentId) {
+      return res.status(400).json({
+        success: false,
+        error: 'instrumentId query parameter is required',
+      });
+    }
+
+    const instrumentIdNum = parseInt(instrumentId as string);
+
+    if (isNaN(instrumentIdNum)) {
+      return res.status(400).json({
+        success: false,
+        error: 'instrumentId must be a valid number',
+      });
+    }
+
+    const futuresData = await prisma.$queryRaw<
+      Array<{
+        symbol: string;
+        open: number;
+        high: number;
+        low: number;
+        close: number;
+        volume: number;
+        oi: number;
+        expiry_date: Date;
+      }>
+    >`
+      SELECT DISTINCT
+        fut.symbol,
+        fut.open,
+        fut.high,
+        fut.low,
+        fut.close,
+        fut.volume,
+        fut.oi,
+        fut.expiry_date
+      FROM market_data.nse_futures fut
+      INNER JOIN market_data.symbols_list li ON fut.symbol = li.symbol
+      WHERE fut.expiry_date >= CURRENT_DATE
+        AND li.instrument_id = ${instrumentIdNum}
+      ORDER BY fut.expiry_date ASC
+    `;
+
+    res.json({
+      success: true,
+      data: futuresData,
+      count: futuresData.length,
+    });
+  } catch (error: any) {
+    console.error("Error fetching NSE Futures data:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch NSE Futures data",
+      message: error.message,
+    });
+  }
+}
+
+export const getNSEFuturesTicksData = async (req: Request, res: Response) => {
+  try {
+    const { instrumentId } = req.query;
+
+    if (!instrumentId) {
+      return res.status(400).json({
+        success: false,
+        error: 'instrumentId query parameter is required',
+      });
+    }
+
+    const instrumentIdNum = parseInt(instrumentId as string);
+
+    if (isNaN(instrumentIdNum)) {
+      return res.status(400).json({
+        success: false,
+        error: 'instrumentId must be a valid number',
+      });
+    }
+
+    const futuresTicksData = await prisma.$queryRaw<
+      Array<{
+        symbol: string;
+        ltp: string;
+        volume: string;
+        oi: string;
+        bid: string;
+        bidqty: string;
+        ask: string;
+        askqty: string;
+        expiry_date: Date;
+      }>
+    >`
+      SELECT DISTINCT
+        li.symbol,
+        fut.ltp,
+        fut.volume,
+        fut.oi,
+        fut.bid,
+        fut.bidqty,
+        fut.ask,
+        fut.askqty,
+        li.expiry_date
+      FROM periodic_market_data."ticksDataNSEFUT" fut
+      INNER JOIN market_data.symbols_list li ON fut."instrumentId" = li.id
+      WHERE li.expiry_date >= CURRENT_DATE
+        AND li.instrument_id = ${instrumentIdNum}
+        AND li.segment = 'FUT'
+      ORDER BY li.expiry_date ASC
+    `;
+
+    res.json({
+      success: true,
+      data: futuresTicksData,
+      count: futuresTicksData.length,
+    });
+  } catch (error: any) {
+    console.error("Error fetching NSE Futures Ticks data:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch NSE Futures Ticks data",
+      message: error.message,
+    });
+  }
+}
+
+export const getNSEOptionsTicksData = async (req: Request, res: Response) => {
+  try {
+    const { instrumentId } = req.query;
+
+    if (!instrumentId) {
+      return res.status(400).json({
+        success: false,
+        error: 'instrumentId query parameter is required',
+      });
+    }
+
+    const instrumentIdNum = parseInt(instrumentId as string);
+
+    if (isNaN(instrumentIdNum)) {
+      return res.status(400).json({
+        success: false,
+        error: 'instrumentId must be a valid number',
+      });
+    }
+
+    const optionsTicksData = await prisma.$queryRaw<
+      Array<{
+        symbol: string;
+        ltp: string;
+        volume: string;
+        oi: string;
+        bid: string;
+        bidqty: string;
+        ask: string;
+        askqty: string;
+        expiry_date: Date;
+      }>
+    >`
+      SELECT DISTINCT
+        li.symbol,
+        opt.ltp,
+        opt.volume,
+        opt.oi,
+        opt.bid,
+        opt.bidqty,
+        opt.ask,
+        opt.askqty,
+        li.expiry_date
+      FROM periodic_market_data."ticksDataNSEOPT" opt
+      INNER JOIN market_data.symbols_list li ON opt."instrumentId" = li.id
+      WHERE li.expiry_date >= CURRENT_DATE
+        AND li.instrument_id = ${instrumentIdNum}
+        AND li.segment = 'OPT'
+      ORDER BY li.expiry_date ASC
+    `;
+
+    res.json({
+      success: true,
+      data: optionsTicksData,
+      count: optionsTicksData.length,
+    });
+  } catch (error: any) {
+    console.error("Error fetching NSE Options Ticks data:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch NSE Options Ticks data",
+      message: error.message,
+    });
+  }
+}

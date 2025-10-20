@@ -29,7 +29,7 @@ console.log("🔌 Socket.io server initialized for frontend connections");
 // CORS configuration - allow requests from frontend
 app.use(
   cors({
-    origin: ["http://localhost:5173", 'http://15.207.43.160:8080'],
+    origin: ["http://localhost:5173", "http://15.207.43.160:8080"],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -61,7 +61,9 @@ initializeDailyNseJob();
 async function initializeWebSocketService() {
   try {
     await webSocketService.start();
-    console.log("✅ WebSocket service ready for arbitrage symbol subscriptions");
+    console.log(
+      "✅ WebSocket service ready for arbitrage symbol subscriptions"
+    );
   } catch (error: any) {
     console.error("❌ Failed to initialize WebSocket service:", error.message);
   }

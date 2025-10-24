@@ -30,6 +30,7 @@ async function insertOptIntoDataBase(date: any) {
           expiry: Date;
           exchange: string;
           segment: string;
+          strike: string;
         }> = [];
         const optionsData: Array<any> = [];
 
@@ -53,6 +54,7 @@ async function insertOptIntoDataBase(date: any) {
             expiry: new Date(symbol!.expiry),
             exchange: "NSE",
             segment: "OPT",
+            strike: symbol?.strike
           });
 
           // Collect options data

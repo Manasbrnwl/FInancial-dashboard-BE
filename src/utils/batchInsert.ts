@@ -200,6 +200,7 @@ export class BatchInserter {
       expiry: Date;
       exchange: string;
       segment?: string;
+      strike?: string;
     }>,
     options: BatchInsertOptions = {}
   ): Promise<{ inserted: number; errors: number }> {
@@ -273,6 +274,7 @@ export class BatchInserter {
               symbol: symbolData.symbol,
               segment: symbolData.segment,
               expiry_date: symbolData.expiry,
+              strike: symbolData.strike || "0",
             },
           });
           successCount++;

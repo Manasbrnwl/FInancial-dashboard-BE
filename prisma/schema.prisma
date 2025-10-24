@@ -90,6 +90,7 @@ model nse_options {
   @@unique([symbol, date, underlying, expiry_date, option_type], map: "nse_options_symbol_date_underlying_expiry_unique")
   @@index([strike, date], map: "idx_nse_opt_strike_date")
   @@index([symbol, date], map: "idx_nse_opt_symbol_date")
+  @@index([expiry_date], map: "idx_nse_options_expiry_date")
   @@schema("market_data")
 }
 
@@ -154,9 +155,12 @@ model symbols_list {
   updated_at    DateTime? @updatedAt @db.Timestamp(6)
   segment       String?   @db.VarChar(5)
   expiry_date   DateTime? @db.Date
+  strike        String?   @default(dbgenerated("0")) @db.VarChar(15)
 
   @@unique([instrument_id, symbol], map: "instrument_symbol_unique")
   @@index([instrument_id, symbol], map: "idx_instrument_symbol")
+  @@index([instrument_id], map: "idx_symbols_list_instrument_id")
+  @@index([segment], map: "idx_symbols_list_segment")
   @@schema("market_data")
 }
 
@@ -215,6 +219,7 @@ model ticksDataNSEEQ {
   @@unique([instrumentId, time], map: "uniq_data_nse_eq")
   @@index([instrumentId], map: "idx_instrumentId_nse_eq")
   @@index([time], map: "idx_time_nse_eq")
+  @@index([instrumentId], map: "idx_ticksdatanseeq_instrumentid")
   @@schema("periodic_market_data")
 }
 
@@ -255,5 +260,6 @@ model ticksDataNSEOPT {
   @@unique([instrumentId, time], map: "uniq_data_nse_opt")
   @@index([instrumentId], map: "idx_instrumentId_nse_opt")
   @@index([time], map: "idx_time_nse_opt")
+  @@index([instrumentId], map: "idx_ticksdatanseopt_instrumentid")
   @@schema("periodic_market_data")
 }

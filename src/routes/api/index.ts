@@ -6,6 +6,7 @@ import nseOptionsRouter from "./nseOptions";
 import periodicDataRouter from "./periodicData";
 import arbitrageRouter from "./arbitrage";
 import coveredCallsRouter from "./coveredCalls";
+import arbitrageDetailsRouter from "./arbitrageDetails";
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.use("/nse-options", nseOptionsRouter);
 router.use("/periodic-data", periodicDataRouter);
 router.use("/arbitrage", arbitrageRouter);
 router.use("/covered-calls", coveredCallsRouter);
+router.use("/arbitrage-details", arbitrageDetailsRouter);
 
 // Health check endpoint
 router.get("/health", (req, res) => {

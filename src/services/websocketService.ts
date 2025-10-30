@@ -28,6 +28,7 @@ export class TrueDataWebSocketService {
   private isConnected: boolean = false;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
+  private marketHoursCheckTimer: NodeJS.Timeout | null = null;
   private instrumentIdToSymbol: Map<string, string> = new Map(); // Map instrument ID to symbol name
 
   constructor() {
@@ -41,12 +42,74 @@ export class TrueDataWebSocketService {
   }
 
   /**
+   * Check if current time is within market hours (9:00 AM - 3:30 PM IST)
+   */
+  private isWithinMarketHours(): boolean {
+    const now = new Date();
+
+    // Convert to IST
+    const istTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const hours = istTime.getHours();
+    const minutes = istTime.getMinutes();
+    const currentTimeInMinutes = hours * 60 + minutes;
+
+    // Market hours: 9:00 AM (540 minutes) to 3:30 PM (930 minutes)
+    const marketOpenMinutes = 9 * 60; // 9:00 AM = 540 minutes
+    const marketCloseMinutes = 15 * 60 + 30; // 3:30 PM = 930 minutes
+
+    const isWithinHours = currentTimeInMinutes >= marketOpenMinutes && currentTimeInMinutes <= marketCloseMinutes;
+
+    // Check if it's a weekday (Monday = 1, Friday = 5)
+    const dayOfWeek = istTime.getDay();
+    const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+
+    return isWithinHours && isWeekday;
+  }
+
+  /**
+   * Start monitoring market hours
+   */
+  private startMarketHoursMonitoring(): void {
+    // Check every minute if we should disconnect due to market hours
+    this.marketHoursCheckTimer = setInterval(() => {
+      if (this.isConnected && !this.isWithinMarketHours()) {
+        console.log('🕐 Market hours ended. Disconnecting WebSocket...');
+        this.stop();
+      }
+    }, 60000); // Check every minute
+  }
+
+  /**
+   * Stop market hours monitoring
+   */
+  private stopMarketHoursMonitoring(): void {
+    if (this.marketHoursCheckTimer) {
+      clearInterval(this.marketHoursCheckTimer);
+      this.marketHoursCheckTimer = null;
+    }
+  }
+
+  /**
    * Initialize and start the WebSocket connection
    */
   public async start(): Promise<void> {
     try {
       console.log('🌐 Starting TrueData WebSocket service...');
+
+      // Check if within market hours
+      if (!this.isWithinMarketHours()) {
+        const now = new Date();
+        const istTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+        console.log('⏰ Outside market hours (9:00 AM - 3:30 PM IST, Monday-Friday)');
+        console.log(`📅 Current IST time: ${istTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`);
+        console.log('💤 WebSocket connection will not be established');
+        return;
+      }
+
       await this.connect();
+
+      // Start monitoring market hours
+      this.startMarketHoursMonitoring();
 
       // Send start notification email
       await this.sendNotificationEmail('started', {});
@@ -466,6 +529,13 @@ export class TrueDataWebSocketService {
    * Handle reconnection logic
    */
   private handleReconnection(): void {
+    // Check if within market hours before attempting reconnection
+    if (!this.isWithinMarketHours()) {
+      console.log('⏰ Outside market hours. Skipping reconnection.');
+      this.stopMarketHoursMonitoring();
+      return;
+    }
+
     if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
       console.error('❌ Max reconnection attempts reached. Stopping reconnection.');
       this.sendNotificationEmail('failed', {
@@ -588,6 +658,7 @@ export class TrueDataWebSocketService {
     console.log('🛑 Stopping TrueData WebSocket service...');
 
     this.stopHeartbeat();
+    this.stopMarketHoursMonitoring();
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);

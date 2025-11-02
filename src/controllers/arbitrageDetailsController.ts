@@ -38,12 +38,7 @@ export const getArbitrageDetails = async (req: Request, res: Response) => {
               substring(sl.symbol from '[0-9]{2}([A-Z]{3})FUT') AS expiry_month,
               sl.symbol,
               tf.ltp,
-              CASE substring(sl.symbol from '[0-9]{2}([A-Z]{3})FUT')
-                  WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3
-                  WHEN 'APR' THEN 4 WHEN 'MAY' THEN 5 WHEN 'JUN' THEN 6
-                  WHEN 'JUL' THEN 7 WHEN 'AUG' THEN 8 WHEN 'SEP' THEN 9
-                  WHEN 'OCT' THEN 10 WHEN 'NOV' THEN 11 WHEN 'DEC' THEN 12
-                  ELSE 13 END AS expiry_order
+              sl.expiry_date as expiry_order
           FROM market_data.symbols_list sl
           INNER JOIN market_data.instrument_lists il
               ON sl.instrument_id = il.id
@@ -209,6 +204,7 @@ export const getFilteredArbitrageData = async (
           SELECT
               il.id AS instrumentid,
               il.instrument_type AS name,
+              tf.time correct_time,
               ${
                 timeRange === "hour"
                   ? "DATE_TRUNC('hour', tf.time)"
@@ -217,12 +213,7 @@ export const getFilteredArbitrageData = async (
               substring(sl.symbol from '[0-9]{2}([A-Z]{3})FUT') AS expiry_month,
               sl.symbol,
               tf.ltp,
-              CASE substring(sl.symbol from '[0-9]{2}([A-Z]{3})FUT')
-                  WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3
-                  WHEN 'APR' THEN 4 WHEN 'MAY' THEN 5 WHEN 'JUN' THEN 6
-                  WHEN 'JUL' THEN 7 WHEN 'AUG' THEN 8 WHEN 'SEP' THEN 9
-                  WHEN 'OCT' THEN 10 WHEN 'NOV' THEN 11 WHEN 'DEC' THEN 12
-                  ELSE 13 END AS expiry_order
+              sl.expiry_date as expiry_order
           FROM market_data.symbols_list sl
           INNER JOIN market_data.instrument_lists il
               ON sl.instrument_id = il.id
@@ -243,12 +234,15 @@ export const getFilteredArbitrageData = async (
               instrumentid,
               name,
               tick_date AS date,
-              MAX(CASE WHEN symbol_rank = 1 THEN symbol END) AS symbol_1,
-              MAX(CASE WHEN symbol_rank = 1 THEN ltp END) AS price_1,
-              MAX(CASE WHEN symbol_rank = 2 THEN symbol END) AS symbol_2,
-              MAX(CASE WHEN symbol_rank = 2 THEN ltp END) AS price_2,
-              MAX(CASE WHEN symbol_rank = 3 THEN symbol END) AS symbol_3,
-              MAX(CASE WHEN symbol_rank = 3 THEN ltp END) AS price_3
+              MAX(CASE WHEN symbol_rank = 1 THEN symbol END) as symbol_1,
+              MAX(CASE WHEN symbol_rank = 1 THEN TO_CHAR(correct_time, 'HH12:MI AM') END) as time_1,
+              MAX(CASE WHEN symbol_rank = 1 THEN ltp END) as price_1,
+              MAX(CASE WHEN symbol_rank = 2 THEN symbol END) as symbol_2,
+              MAX(CASE WHEN symbol_rank = 2 THEN TO_CHAR(correct_time, 'HH12:MI AM') END) as time_2,
+              MAX(CASE WHEN symbol_rank = 2 THEN ltp END) as price_2,
+              MAX(CASE WHEN symbol_rank = 3 THEN symbol END) as symbol_3,
+              MAX(CASE WHEN symbol_rank = 3 THEN TO_CHAR(correct_time, 'HH12:MI AM') END) as time_3,
+              MAX(CASE WHEN symbol_rank = 3 THEN ltp END) as price_3
           FROM ranked_symbols
           GROUP BY instrumentid, name, tick_date
       ),

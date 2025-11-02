@@ -394,7 +394,7 @@ async function executeHourlyJob(): Promise<void> {
 
 /**
  * Initialize the hourly NSE Futures job
- * Runs every hour from 9 AM to 6 PM, Monday to Friday
+ * Runs every every 5 min from 9 AM to 6 PM, Monday to Friday
  * Cron pattern: "0 9-18 * * 1-5" (at minute 0 of every hour from 9 through 18 on Monday through Friday)
  */
 export function initializeHourlyTicksNseFutJob(): void {
@@ -403,8 +403,8 @@ export function initializeHourlyTicksNseFutJob(): void {
     executeHourlyJob();
   }
 
-  // Schedule to run every hour from 9 AM to 6 PM, Monday to Friday
-  cron.schedule("0 9-15 * * 1-5", executeHourlyJob, {
+  // Schedule to run every 5 min from 9 AM to 6 PM, Monday to Friday
+  cron.schedule("*/5 9-15 * * 1-5", executeHourlyJob, {
     timezone: "Asia/Kolkata", // Indian timezone
   });
 

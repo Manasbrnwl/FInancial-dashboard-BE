@@ -10,6 +10,7 @@ export const getArbitrageData = async (req: Request, res: Response) => {
         instrumentid: number;
         instrument_type: string;
         price: string;
+        time:string;
         symbols: any;
       }>
     >`
@@ -24,6 +25,7 @@ export const getArbitrageData = async (req: Request, res: Response) => {
     il.id AS instrumentid,
     il.instrument_type,
     te.ltp AS price,
+    TO_CHAR(te.time, 'yyyy-mm-dd HH12:MI AM') time,
     json_agg(
       json_build_object(
         'expiry_date', sl.expiry_date,
@@ -39,8 +41,8 @@ export const getArbitrageData = async (req: Request, res: Response) => {
     ON sl.id = tf."instrumentId" AND tf.rn = 1
   INNER JOIN latest_tick_eq te
     ON sl.instrument_id = te."instrumentId" AND te.rn = 1
-  WHERE sl.segment = 'FUT'
-  GROUP BY il.id, il.instrument_type, te.ltp
+  WHERE sl.segment = 'FUT' and sl.expiry_date >= CURRENT_DATE
+  GROUP BY il.id, il.instrument_type, te.ltp, te.time
   ORDER BY il.instrument_type
 `;
 
@@ -52,6 +54,7 @@ export const getArbitrageData = async (req: Request, res: Response) => {
         instrumentId: item.instrumentid,
         underlyingSymbol: item.instrument_type,
         underlyingPrice: parseFloat(item.price),
+        time: item.time,
         nearFutureSymbol: symbols[0]?.symbol || null,
         nearFuturePrice: symbols[0]?.ltp ? parseFloat(symbols[0].ltp) : null,
         nearFutureVolume: symbols[0]?.volume

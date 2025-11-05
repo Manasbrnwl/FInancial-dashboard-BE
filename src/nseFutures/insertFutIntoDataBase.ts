@@ -24,7 +24,6 @@ async function insertFutIntoDataBase(date: any) {
 
     for (let index = 0; index < dates.length; index++) {
       const date = dates[index];
-      console.log("Fut api called ", date);
       const response = await getNseFuturesHistory(date);
       if (response == false) {
         console.log("skipped ", date);
@@ -78,27 +77,37 @@ async function insertFutIntoDataBase(date: any) {
           });
         }
 
-        // Step 1: Batch upsert instruments
+        // Step 1: Batch upsert instruments and get ID mappings
+        let instrumentIdMap = new Map<string, number>();
         if (instrumentsToUpsert.length > 0) {
-          await batchInserter.batchUpsertInstruments(instrumentsToUpsert, {
+          instrumentIdMap = await batchInserter.batchUpsertInstruments(instrumentsToUpsert, {
             logProgress: true,
             chunkSize: 10,
           });
         }
 
-        // Step 2: Batch upsert symbols
+        // Step 2: Batch upsert symbols and get ID mappings
+        let symbolIdMap = new Map<string, number>();
         if (symbolsToUpsert.length > 0) {
-          await batchInserter.batchUpsertSymbolsList(symbolsToUpsert, {
+          const result = await batchInserter.batchUpsertSymbolsList(symbolsToUpsert, {
             logProgress: true,
             chunkSize: 50,
           });
+          symbolIdMap = result.symbolIdMap;
         }
 
-        // Step 3: Batch insert futures data
-        if (futuresData.length > 0) {
+        // Step 3: Map the IDs to the futures data
+        const futuresDataWithIds = futuresData.map((fut) => ({
+          ...fut,
+          underlying: instrumentIdMap.get(fut.underlying) || null,
+          symbol: symbolIdMap.get(fut.symbol) || null,
+        }));
+
+        // Step 4: Batch insert futures data with IDs
+        if (futuresDataWithIds.length > 0) {
           const result = await batchInserter.batchInsert(
             "nse_futures",
-            futuresData,
+            futuresDataWithIds,
             async (chunk) => {
               return await prisma.nse_futures.createMany({
                 data: chunk,

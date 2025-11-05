@@ -28,7 +28,7 @@ export const getArbitrageDetails = async (req: Request, res: Response) => {
                   ORDER BY id DESC
               ) rn
           FROM periodic_market_data."ticksDataNSEFUT"
-          ${date ? `WHERE DATE("time") = '${date}'` : ''}
+          ${date ? `WHERE DATE("time") = '${date}'` : ""}
       ),
       filtered AS (
           SELECT
@@ -167,10 +167,7 @@ export const getLiveDataForSymbols = async (req: Request, res: Response) => {
  * Get filtered arbitrage data with pagination
  * Supports day-wise and hour-wise queries with gap filtering
  */
-export const getFilteredArbitrageData = async (
-  req: Request,
-  res: Response
-) => {
+export const getFilteredArbitrageData = async (req: Request, res: Response) => {
   try {
     const { instrumentId } = req.params;
     const {
@@ -180,6 +177,8 @@ export const getFilteredArbitrageData = async (
       gapFilter = "both",
       minGap,
       maxGap,
+      startDate,
+      endDate,
     } = req.query;
 
     const pageNum = parseInt(page as string);
@@ -187,15 +186,66 @@ export const getFilteredArbitrageData = async (
     const offset = (pageNum - 1) * limitNum;
 
     // Build the query based on timeRange
-    const baseQuery = `
+    const baseQuerydaily = `WITH latest_tick_fut AS (
+          SELECT *,
+              ROW_NUMBER() OVER (
+                  PARTITION BY underlying, symbol, date
+                  ORDER BY id DESC
+              ) rn
+          FROM market_data.nse_futures
+      ),
+      filtered AS (
+          SELECT
+              il.id AS instrumentid,
+              il.instrument_type AS name,
+              tf.date correct_time,
+              DATE(tf.date) AS tick_date,
+              substring(sl.symbol from '[0-9]{2}([A-Z]{3})FUT') AS expiry_month,
+              sl.symbol,
+              tf.close ltp,
+              sl.expiry_date as expiry_order
+          FROM market_data.symbols_list sl
+          INNER JOIN market_data.instrument_lists il
+              ON sl.instrument_id = il.id
+          INNER JOIN latest_tick_fut tf
+              ON sl.id = tf.symbol::numeric AND tf.rn = 1
+          WHERE sl.segment = 'FUT' AND il.id = ${instrumentId}
+      ),
+ranked_symbols AS (
+    SELECT *,
+        ROW_NUMBER() OVER (
+            PARTITION BY instrumentid, tick_date 
+            ORDER BY expiry_order
+        ) as symbol_rank
+    FROM filtered
+),
+arbitrage_data AS (
+SELECT
+    instrumentid,
+    name,
+    tick_date AS date,
+    MAX(CASE WHEN symbol_rank = 1 THEN symbol END) as symbol_1,
+    MAX(CASE WHEN symbol_rank = 1 THEN ltp END) as price_1,
+    MAX(CASE WHEN symbol_rank = 2 THEN symbol END) as symbol_2,
+    MAX(CASE WHEN symbol_rank = 2 THEN ltp END) as price_2,
+    MAX(CASE WHEN symbol_rank = 3 THEN symbol END) as symbol_3,
+    MAX(CASE WHEN symbol_rank = 3 THEN ltp END) as price_3
+FROM ranked_symbols
+GROUP BY instrumentid, name, tick_date
+  ),
+      with_gaps AS (
+          SELECT *,
+              (price_1::numeric - price_2::numeric) AS gap_1,
+              (price_2::numeric - price_3::numeric) AS gap_2
+          FROM arbitrage_data
+      )
+      SELECT * FROM with_gaps
+      WHERE 1=1`;
+    const baseQueryhourly = `
       WITH latest_tick_fut AS (
           SELECT *,
               ROW_NUMBER() OVER (
-                  PARTITION BY "instrumentId", ${
-                    timeRange === "hour"
-                      ? "DATE_TRUNC('hour', \"time\")"
-                      : "DATE(\"time\")"
-                  }
+                  PARTITION BY "instrumentId", DATE_TRUNC('hour', \"time\")
                   ORDER BY id DESC
               ) rn
           FROM periodic_market_data."ticksDataNSEFUT"
@@ -205,11 +255,7 @@ export const getFilteredArbitrageData = async (
               il.id AS instrumentid,
               il.instrument_type AS name,
               tf.time correct_time,
-              ${
-                timeRange === "hour"
-                  ? "DATE_TRUNC('hour', tf.time)"
-                  : "DATE(tf.time)"
-              } AS tick_date,
+              DATE_TRUNC('hour', tf.time) AS tick_date,
               substring(sl.symbol from '[0-9]{2}([A-Z]{3})FUT') AS expiry_month,
               sl.symbol,
               tf.ltp,
@@ -272,9 +318,25 @@ export const getFilteredArbitrageData = async (
       filterConditions += ` AND (gap_1 <= ${maxGap} OR gap_2 <= ${maxGap})`;
     }
 
-    const countQuery = baseQuery + filterConditions;
+    // Add date range filtering
+    if (startDate) {
+      if (timeRange === "hour") {
+        filterConditions += ` AND date >= '${startDate}'::timestamp`;
+      } else {
+        filterConditions += ` AND date >= '${startDate}'::date`;
+      }
+    }
+    if (endDate) {
+      if (timeRange === "hour") {
+        filterConditions += ` AND date <= '${endDate}'::timestamp + interval '1 day'`;
+      } else {
+        filterConditions += ` AND date <= '${endDate}'::date`;
+      }
+    }
+
+    const countQuery = (timeRange == "hour" ? baseQueryhourly : baseQuerydaily) + filterConditions;
     const dataQuery =
-      baseQuery +
+      (timeRange == "hour" ? baseQueryhourly : baseQuerydaily) +
       filterConditions +
       `
       ORDER BY date DESC

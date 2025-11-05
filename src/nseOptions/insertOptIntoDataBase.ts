@@ -75,27 +75,37 @@ async function insertOptIntoDataBase(date: any) {
           });
         }
 
-        // Step 1: Batch upsert instruments
+        // Step 1: Batch upsert instruments and get ID mappings
+        let instrumentIdMap = new Map<string, number>();
         if (instrumentsToUpsert.length > 0) {
-          await batchInserter.batchUpsertInstruments(instrumentsToUpsert, {
+          instrumentIdMap = await batchInserter.batchUpsertInstruments(instrumentsToUpsert, {
             logProgress: true,
             chunkSize: 10,
           });
         }
 
-        // Step 2: Batch upsert symbols
+        // Step 2: Batch upsert symbols and get ID mappings
+        let symbolIdMap = new Map<string, number>();
         if (symbolsToUpsert.length > 0) {
-          await batchInserter.batchUpsertSymbolsList(symbolsToUpsert, {
+          const result = await batchInserter.batchUpsertSymbolsList(symbolsToUpsert, {
             logProgress: true,
             chunkSize: 50,
           });
+          symbolIdMap = result.symbolIdMap;
         }
 
-        // Step 3: Batch insert options data
-        if (optionsData.length > 0) {
+        // Step 3: Map the IDs to the options data
+        const optionsDataWithIds = optionsData.map((opt) => ({
+          ...opt,
+          underlying: instrumentIdMap.get(opt.underlying) || null,
+          symbol: symbolIdMap.get(opt.symbol) || null,
+        }));
+
+        // Step 4: Batch insert options data with IDs
+        if (optionsDataWithIds.length > 0) {
           const result = await batchInserter.batchInsert(
             "nse_options",
-            optionsData,
+            optionsDataWithIds,
             async (chunk) => {
               return await prisma.nse_options.createMany({
                 data: chunk,

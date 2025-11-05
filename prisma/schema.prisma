@@ -104,6 +104,8 @@ model instrument_lists {
 
   @@unique([exchange, instrument_type], map: "instrument_lists_exchange_instrument_type_unique")
   @@index([exchange, instrument_type], map: "idx_instrument_lists_exchange_instrument_type")
+  @@index([id, instrument_type], map: "idx_instrument_lists_id")
+  @@index([id, instrument_type], map: "idx_instrument_lists_id_type")
   @@schema("market_data")
 }
 
@@ -220,6 +222,8 @@ model ticksDataNSEEQ {
   @@index([instrumentId], map: "idx_instrumentId_nse_eq")
   @@index([time], map: "idx_time_nse_eq")
   @@index([instrumentId], map: "idx_ticksdatanseeq_instrumentid")
+  @@index([instrumentId, id(sort: Desc), ltp], map: "idx_cover_ticks_nseeq")
+  @@index([instrumentId, id(sort: Desc)], map: "idx_ticks_nseeq_instrument_id_desc")
   @@schema("periodic_market_data")
 }
 
@@ -261,5 +265,7 @@ model ticksDataNSEOPT {
   @@index([instrumentId], map: "idx_instrumentId_nse_opt")
   @@index([time], map: "idx_time_nse_opt")
   @@index([instrumentId], map: "idx_ticksdatanseopt_instrumentid")
+  @@index([instrumentId, id(sort: Desc), ltp, volume], map: "idx_cover_ticks_nseopt")
+  @@index([instrumentId, id(sort: Desc)], map: "idx_ticks_nseopt_instrument_id_desc")
   @@schema("periodic_market_data")
 }

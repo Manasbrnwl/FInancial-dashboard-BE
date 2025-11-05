@@ -110,11 +110,12 @@ export class BatchInserter {
 
   /**
    * Batch upsert instruments with deduplication and controlled concurrency
+   * Returns a map of instrument_type to their database IDs
    */
   async batchUpsertInstruments(
     instruments: Array<{ exchange: string; instrument_type: string }>,
     options: BatchInsertOptions = {}
-  ): Promise<void> {
+  ): Promise<Map<string, number>> {
     const { logProgress = true, chunkSize = 10 } = options;
 
     // Deduplicate instruments
@@ -127,8 +128,10 @@ export class BatchInserter {
       ).values()
     );
 
+    const instrumentIdMap = new Map<string, number>();
+
     if (uniqueInstruments.length === 0) {
-      return;
+      return instrumentIdMap;
     }
 
     if (logProgress) {
@@ -149,7 +152,7 @@ export class BatchInserter {
       // Process chunk sequentially to control database connections
       for (const instrument of chunk) {
         try {
-          await this.prisma.instrument_lists.upsert({
+          const result = await this.prisma.instrument_lists.upsert({
             where: {
               exchange_instrument_type: {
                 exchange: instrument.exchange,
@@ -161,7 +164,13 @@ export class BatchInserter {
               exchange: instrument.exchange,
               instrument_type: instrument.instrument_type,
             },
+            select: {
+              id: true,
+            },
           });
+
+          // Store the mapping: instrument_type -> id
+          instrumentIdMap.set(instrument.instrument_type, result.id);
           successCount++;
         } catch (error: any) {
           errorCount++;
@@ -188,10 +197,13 @@ export class BatchInserter {
         `✅ Instruments upsert completed: ${successCount} success, ${errorCount} errors`
       );
     }
+
+    return instrumentIdMap;
   }
 
   /**
    * Batch upsert symbols into symbols_list table
+   * Returns a map of symbol names to their database IDs
    */
   async batchUpsertSymbolsList(
     symbolsData: Array<{
@@ -203,11 +215,13 @@ export class BatchInserter {
       strike?: string;
     }>,
     options: BatchInsertOptions = {}
-  ): Promise<{ inserted: number; errors: number }> {
+  ): Promise<{ inserted: number; errors: number; symbolIdMap: Map<string, number> }> {
     const { logProgress = true, chunkSize = 50 } = options;
 
+    const symbolIdMap = new Map<string, number>();
+
     if (symbolsData.length === 0) {
-      return { inserted: 0, errors: 0 };
+      return { inserted: 0, errors: 0, symbolIdMap };
     }
 
     // Deduplicate symbols by instrument_type and symbol combination
@@ -259,7 +273,7 @@ export class BatchInserter {
           }
 
           // Upsert symbol into symbols_list
-          await this.prisma.symbols_list.upsert({
+          const result = await this.prisma.symbols_list.upsert({
             where: {
               instrument_id_symbol: {
                 instrument_id: instrument.id,
@@ -276,7 +290,13 @@ export class BatchInserter {
               expiry_date: symbolData.expiry,
               strike: symbolData.strike || "0",
             },
+            select: {
+              id: true,
+            },
           });
+
+          // Store the mapping: symbol -> id
+          symbolIdMap.set(symbolData.symbol, result.id);
           successCount++;
         } catch (error: any) {
           errorCount++;
@@ -304,7 +324,7 @@ export class BatchInserter {
       );
     }
 
-    return { inserted: successCount, errors: errorCount };
+    return { inserted: successCount, errors: errorCount, symbolIdMap };
   }
 
   /**

@@ -81,8 +81,8 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
             o.volume,
             se.strike,
             se.option_type,
-            ABS(ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2)) AS otm,
-            ABS(ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2)) AS premium_percentage
+            ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) AS otm,
+            ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage
         FROM market_data.instrument_lists i
         JOIN strike_extraction se ON i.id = se.instrument_id
         JOIN latest_tick_opt o ON se.id = o."instrumentId"
@@ -142,8 +142,8 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
             o.volume,
             se.strike,
             se.option_type,
-            ABS(ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2)) AS otm,
-            ABS(ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2)) AS premium_percentage
+            ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) AS otm,
+            ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage
         FROM market_data.instrument_lists i
         JOIN strike_extraction se ON i.id = se.instrument_id
         JOIN latest_tick_opt o ON se.id = o."instrumentId"
@@ -165,7 +165,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     LIMIT ${limit}
     OFFSET ${offset}
     `;
-    // console.log(coveredCallsData)
+    
     // Transform the data to proper format with type conversions
     const transformedData = coveredCallsData.map((item) => ({
       underlyingSymbol: item.underlying,

@@ -10,7 +10,7 @@ export const getArbitrageData = async (req: Request, res: Response) => {
         instrumentid: number;
         instrument_type: string;
         price: string;
-        time:string;
+        time: string;
         symbols: any;
       }>
     >`
@@ -31,7 +31,8 @@ export const getArbitrageData = async (req: Request, res: Response) => {
         'expiry_date', sl.expiry_date,
         'symbol', sl.symbol,
         'ltp', tf.ltp,
-        'volume', tf.volume
+        'volume', tf.volume,
+        'time', TO_CHAR(tf.time, 'yyyy-mm-dd HH12:MI AM')
       ) ORDER BY sl.expiry_date
     ) AS symbols
   FROM market_data.symbols_list sl
@@ -60,16 +61,19 @@ export const getArbitrageData = async (req: Request, res: Response) => {
         nearFutureVolume: symbols[0]?.volume
           ? parseInt(symbols[0].volume)
           : null,
+        nearFutureTime: symbols[0]?.time,
         nextFutureSymbol: symbols[1]?.symbol || null,
         nextFuturePrice: symbols[1]?.ltp ? parseFloat(symbols[1].ltp) : null,
         nextFutureVolume: symbols[1]?.volume
           ? parseInt(symbols[1].volume)
           : null,
+        nextFutureTime: symbols[1]?.time,
         farFutureSymbol: symbols[2]?.symbol || null,
         farFuturePrice: symbols[2]?.ltp ? parseFloat(symbols[2].ltp) : null,
         farFutureVolume: symbols[2]?.volume
           ? parseInt(symbols[2].volume)
           : null,
+        farFutureTime: symbols[2]?.time,
       };
     });
 
@@ -94,7 +98,7 @@ export const getNSEOptionsData = async (req: Request, res: Response) => {
     if (!instrumentId) {
       return res.status(400).json({
         success: false,
-        error: 'instrumentId query parameter is required',
+        error: "instrumentId query parameter is required",
       });
     }
 
@@ -103,7 +107,7 @@ export const getNSEOptionsData = async (req: Request, res: Response) => {
     if (isNaN(instrumentIdNum)) {
       return res.status(400).json({
         success: false,
-        error: 'instrumentId must be a valid number',
+        error: "instrumentId must be a valid number",
       });
     }
 
@@ -150,7 +154,7 @@ export const getNSEOptionsData = async (req: Request, res: Response) => {
       message: error.message,
     });
   }
-}
+};
 
 export const getNSEFuturesData = async (req: Request, res: Response) => {
   try {
@@ -159,7 +163,7 @@ export const getNSEFuturesData = async (req: Request, res: Response) => {
     if (!instrumentId) {
       return res.status(400).json({
         success: false,
-        error: 'instrumentId query parameter is required',
+        error: "instrumentId query parameter is required",
       });
     }
 
@@ -168,7 +172,7 @@ export const getNSEFuturesData = async (req: Request, res: Response) => {
     if (isNaN(instrumentIdNum)) {
       return res.status(400).json({
         success: false,
-        error: 'instrumentId must be a valid number',
+        error: "instrumentId must be a valid number",
       });
     }
 
@@ -213,7 +217,7 @@ export const getNSEFuturesData = async (req: Request, res: Response) => {
       message: error.message,
     });
   }
-}
+};
 
 export const getNSEFuturesTicksData = async (req: Request, res: Response) => {
   try {
@@ -222,7 +226,7 @@ export const getNSEFuturesTicksData = async (req: Request, res: Response) => {
     if (!instrumentId) {
       return res.status(400).json({
         success: false,
-        error: 'instrumentId query parameter is required',
+        error: "instrumentId query parameter is required",
       });
     }
 
@@ -231,7 +235,7 @@ export const getNSEFuturesTicksData = async (req: Request, res: Response) => {
     if (isNaN(instrumentIdNum)) {
       return res.status(400).json({
         success: false,
-        error: 'instrumentId must be a valid number',
+        error: "instrumentId must be a valid number",
       });
     }
 
@@ -279,7 +283,7 @@ export const getNSEFuturesTicksData = async (req: Request, res: Response) => {
       message: error.message,
     });
   }
-}
+};
 
 export const getNSEOptionsTicksData = async (req: Request, res: Response) => {
   try {
@@ -288,7 +292,7 @@ export const getNSEOptionsTicksData = async (req: Request, res: Response) => {
     if (!instrumentId) {
       return res.status(400).json({
         success: false,
-        error: 'instrumentId query parameter is required',
+        error: "instrumentId query parameter is required",
       });
     }
 
@@ -297,7 +301,7 @@ export const getNSEOptionsTicksData = async (req: Request, res: Response) => {
     if (isNaN(instrumentIdNum)) {
       return res.status(400).json({
         success: false,
-        error: 'instrumentId must be a valid number',
+        error: "instrumentId must be a valid number",
       });
     }
 
@@ -345,4 +349,4 @@ export const getNSEOptionsTicksData = async (req: Request, res: Response) => {
       message: error.message,
     });
   }
-}
+};

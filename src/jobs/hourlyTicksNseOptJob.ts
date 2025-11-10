@@ -410,7 +410,7 @@ export function initializeHourlyTicksNseOptJob(): void {
   }
 
   // Schedule to run every hour from 9 AM to 6 PM, Monday to Friday
-  cron.schedule("30 9,11,13,15 * * 1-5", executeHourlyJob, {
+  cron.schedule("0 18 * * 1-5", executeHourlyJob, {
     timezone: "Asia/Kolkata", // Indian timezone
   });
 

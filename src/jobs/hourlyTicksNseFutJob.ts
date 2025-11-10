@@ -68,10 +68,7 @@ async function getNseInstruments(): Promise<Map<string, number>> {
       instrumentid: number;
       instrument_type: string;
     }>>`
-      SELECT DISTINCT li.id as instrumentId, fut.symbol as instrument_type
-      FROM market_data.nse_futures fut
-      INNER JOIN market_data.symbols_list li ON fut.symbol = li.symbol
-      WHERE fut.expiry_date >= CURRENT_DATE
+      select id as instrumentId, symbol as instrument_type from market_data.symbols_list where expiry_date >= CURRENT_DATE and segment = 'FUT'
     `;
 
     console.log(`✅ Found ${instruments.length} NSE Futures futures instruments`);
@@ -178,10 +175,10 @@ async function fetchHistoricalData(instrumentsMap: Map<string, number>): Promise
       // Wait for rate limiter before making request
       await rateLimiter.waitForSlot();
 
-      const stats = rateLimiter.getStats();
-      console.log(
-        `📊 Rate limit stats - Second: ${stats.perSecond}/5, Minute: ${stats.perMinute}/300, Hour: ${stats.perHour}/18000`
-      );
+      // const stats = rateLimiter.getStats();
+      // console.log(
+      //   `📊 Rate limit stats - Second: ${stats.perSecond}/5, Minute: ${stats.perMinute}/300, Hour: ${stats.perHour}/18000`
+      // );
 
       const response = await axios.get(
         `https://history.truedata.in/getticks?symbol=${type}&bidask=1&from=${date}T09:00:00&to=${date}T15:30:00&response=json`,

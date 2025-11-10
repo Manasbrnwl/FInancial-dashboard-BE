@@ -60,7 +60,7 @@ async function insertOptIntoDataBase(date: any) {
           // Collect options data
           optionsData.push({
             symbol_id: data[0].toString(),
-            symbol: symbol?.symbol || data[1],
+            symbol: symbol?.symbol.toString() || data[1].toString(),
             expiry_date: new Date(symbol!.expiry),
             open: data[3],
             high: data[4],
@@ -68,7 +68,7 @@ async function insertOptIntoDataBase(date: any) {
             close: data[6],
             volume: data[7].toString(),
             oi: data[8]?.toString(),
-            underlying: symbol?.instrument,
+            underlying: symbol?.instrument.toString(),
             date: new Date(data[2]),
             strike: symbol?.strike,
             option_type: symbol?.type,
@@ -97,8 +97,8 @@ async function insertOptIntoDataBase(date: any) {
         // Step 3: Map the IDs to the options data
         const optionsDataWithIds = optionsData.map((opt) => ({
           ...opt,
-          underlying: instrumentIdMap.get(opt.underlying) || null,
-          symbol: symbolIdMap.get(opt.symbol) || null,
+          underlying: instrumentIdMap.get(opt.underlying)?.toString() || opt.underlying,
+          symbol: symbolIdMap.get(opt.symbol)?.toString() || opt.symbol,
         }));
 
         // Step 4: Batch insert options data with IDs

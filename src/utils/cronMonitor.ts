@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-const parser = require('cron-parser');
+import { CronExpressionParser } from 'cron-parser';
 
 const HISTORY_FILE = path.join(__dirname, '../../history.json');
 
@@ -47,7 +47,7 @@ export function saveHistory(history: CronHistory): void {
  */
 export function getNextCronRun(cronExpression: string): string {
   try {
-    const interval = parser.parseExpression(cronExpression);
+    const interval = CronExpressionParser.parse(cronExpression);
     return interval.next().toDate().toISOString();
   } catch (error) {
     console.error('Error calculating next cron run:', error);

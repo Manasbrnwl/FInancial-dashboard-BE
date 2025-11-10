@@ -64,7 +64,7 @@ async function insertFutIntoDataBase(date: any) {
           // Collect futures data
           futuresData.push({
             symbol_id: data[0].toString(),
-            symbol: symbol?.symbol || data[1],
+            symbol: symbol?.symbol.toString() || data[1].toString(),
             expiry_date: new Date(symbol?.expiry),
             open: data[3],
             high: data[4],
@@ -72,7 +72,7 @@ async function insertFutIntoDataBase(date: any) {
             close: data[6],
             volume: data[7].toString(),
             oi: data[8].toString(),
-            underlying: symbol?.instrument,
+            underlying: symbol?.instrument.toString(),
             date: new Date(data[2]),
           });
         }
@@ -99,8 +99,8 @@ async function insertFutIntoDataBase(date: any) {
         // Step 3: Map the IDs to the futures data
         const futuresDataWithIds = futuresData.map((fut) => ({
           ...fut,
-          underlying: instrumentIdMap.get(fut.underlying) || null,
-          symbol: symbolIdMap.get(fut.symbol) || null,
+          underlying: instrumentIdMap.get(fut.underlying)?.toString() || fut.underlying,
+          symbol: symbolIdMap.get(fut.symbol)?.toString() || fut.symbol,
         }));
 
         // Step 4: Batch insert futures data with IDs

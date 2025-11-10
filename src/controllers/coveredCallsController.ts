@@ -81,7 +81,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
             o.volume,
             se.strike,
             se.option_type,
-            ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) AS otm,
+            ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) * -1 AS otm,
             ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage
         FROM market_data.instrument_lists i
         JOIN strike_extraction se ON i.id = se.instrument_id
@@ -102,6 +102,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         underlying: string;
         underlying_price: number;
         option_symbol: string;
+        time: string;
         premium: number;
         volume: number;
         strike: number;
@@ -112,7 +113,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     >`
     WITH latest_tick_opt AS (
         SELECT DISTINCT ON ("instrumentId")
-            "instrumentId", ltp, volume
+            "instrumentId", ltp, volume, time
         FROM periodic_market_data."ticksDataNSEOPT"
         ORDER BY "instrumentId", id DESC
     ),
@@ -138,11 +139,12 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
             i.instrument_type AS underlying,
             se.symbol AS option_symbol,
             e.ltp::numeric AS underlying_price,
+            TO_CHAR(o.time, 'yyyy-mm-dd HH12:MI AM') as time,
             o.ltp::numeric AS premium,
             o.volume,
             se.strike,
             se.option_type,
-            ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) AS otm,
+            ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) * -1 AS otm,
             ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage
         FROM market_data.instrument_lists i
         JOIN strike_extraction se ON i.id = se.instrument_id
@@ -152,6 +154,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     SELECT
         underlying,
         option_symbol,
+        time,
         underlying_price,
         premium,
         volume,
@@ -171,6 +174,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
       underlyingSymbol: item.underlying,
       underlyingPrice: item.underlying_price || null,
       optionSymbol: item.option_symbol,
+      time: item.time,
       premium: item.premium || null,
       volume: item.volume || null,
       strikePrice: item.strike || null,
@@ -220,6 +224,7 @@ export const getCoveredCallsByUnderlying = async (
         underlying: string;
         underlying_price: string;
         option_symbol: string;
+        time: string;
         premium: string;
         volume: string;
         strike: string;

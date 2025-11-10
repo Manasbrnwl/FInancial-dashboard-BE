@@ -6,10 +6,12 @@ import { loadEnv } from "../config/env";
 import { PrismaClient } from "@prisma/client";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { rateLimiter } from "../utils/rateLimiter";
+import { updateJobStatus, initializeJobStatus } from "../utils/cronMonitor";
 
 loadEnv();
 
 const prisma = new PrismaClient();
+const CRON_EXPRESSION = "*/5 9-15 * * 1-5"; // Every 5 min, 9 AM to 3 PM, Mon-Fri
 
 // API endpoint for login
 const LOGIN_API_URL =
@@ -328,7 +330,11 @@ async function sendHourlyJobEmail(
  * Main function to execute the hourly job
  */
 async function executeHourlyJob(): Promise<void> {
+  const startTime = Date.now();
+
   try {
+    updateJobStatus('hourlyTicksNseFutJob', 'running', CRON_EXPRESSION);
+
     const date = new Date();
     console.log(`🕐 Starting hourly NSE Futures job at ${date.toISOString()}`);
 
@@ -355,6 +361,9 @@ async function executeHourlyJob(): Promise<void> {
           successfulCount: result.successfulInstrumentsCount,
           totalRecordsInserted: result.totalRecordsInserted,
         });
+
+        const duration = Date.now() - startTime;
+        updateJobStatus('hourlyTicksNseFutJob', 'success', CRON_EXPRESSION, duration);
       } else {
         console.log(
           "⚠️ No instruments found, skipping historical data fetch"
@@ -366,6 +375,9 @@ async function executeHourlyJob(): Promise<void> {
           successfulCount: 0,
           totalRecordsInserted: 0,
         });
+
+        const duration = Date.now() - startTime;
+        updateJobStatus('hourlyTicksNseFutJob', 'success', CRON_EXPRESSION, duration);
       }
     } else {
       console.error("❌ Skipping instrument query due to login failure");
@@ -374,6 +386,9 @@ async function executeHourlyJob(): Promise<void> {
       await sendHourlyJobEmail("failed", {
         errorMessage: "Failed to fetch access token",
       });
+
+      const duration = Date.now() - startTime;
+      updateJobStatus('hourlyTicksNseFutJob', 'failed', CRON_EXPRESSION, duration, 'Failed to fetch access token');
     }
 
     console.log(
@@ -386,26 +401,32 @@ async function executeHourlyJob(): Promise<void> {
     await sendHourlyJobEmail("failed", {
       errorMessage: error.message,
     });
+
+    const duration = Date.now() - startTime;
+    updateJobStatus('hourlyTicksNseFutJob', 'failed', CRON_EXPRESSION, duration, error.message);
   }
 }
 
 /**
  * Initialize the hourly NSE Futures job
- * Runs every every 5 min from 9 AM to 6 PM, Monday to Friday
- * Cron pattern: "0 9-18 * * 1-5" (at minute 0 of every hour from 9 through 18 on Monday through Friday)
+ * Runs every every 5 min from 9 AM to 3 PM, Monday to Friday
+ * Cron pattern: "*"/5 9-15 * * 1-5" (every 5 minutes from 9 through 15 on Monday through Friday)
  */
 export function initializeHourlyTicksNseFutJob(): void {
+  // Initialize job status in history
+  initializeJobStatus('hourlyTicksNseFutJob', CRON_EXPRESSION);
+
   // Run immediately when the application starts
   if(process.env.NODE_ENV === "development"){
     executeHourlyJob();
   }
 
-  // Schedule to run every 5 min from 9 AM to 6 PM, Monday to Friday
-  cron.schedule("*/5 9-15 * * 1-5", executeHourlyJob, {
+  // Schedule to run every 5 min from 9 AM to 3 PM, Monday to Friday
+  cron.schedule(CRON_EXPRESSION, executeHourlyJob, {
     timezone: "Asia/Kolkata", // Indian timezone
   });
 
   console.log(
-    "⏰ Hourly NSE Futures job scheduled to run every hour from 9 AM to 6 PM, Monday to Friday (IST)"
+    "⏰ Hourly NSE Futures job scheduled to run every 5 minutes from 9 AM to 3 PM, Monday to Friday (IST)"
   );
 }

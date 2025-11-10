@@ -70,10 +70,7 @@ async function getNseInstruments(): Promise<Map<string, number>> {
         instrument_type: string;
       }>
     >`
-      select DISTINCT li.id as instrumentId, opt.symbol as instrument_type 
-      from market_data.nse_options opt
-      inner join market_data.symbols_list li on opt.symbol = li.symbol
-      where opt.expiry_date >= CURRENT_DATE
+      select id as instrumentId, symbol as instrument_type from market_data.symbols_list where expiry_date >= CURRENT_DATE and segment = 'OPT'
     `;
 
     console.log(
@@ -162,16 +159,16 @@ async function fetchHistoricalData(
   );
 
   // Format dates as YYMMDDTHH:MM:SS
-  const date = `${today.getFullYear().toString().slice(-2)}${(
-    today.getMonth() + 1
-  )
-    .toString()
-    .padStart(2, "0")}${today
-    .getDate()
-    .toString()
-    .padStart(2, "0")}`;
+  // const date = `${today.getFullYear().toString().slice(-2)}${(
+  //   today.getMonth() + 1
+  // )
+  //   .toString()
+  //   .padStart(2, "0")}${today
+  //   .getDate()
+  //   .toString()
+  //   .padStart(2, "0")}`;
   // const fromDate = "251006T09:00:00";
-  // const toDate = "251006T15:00:00";
+  const date = "251104";
   console.log(`📊 Fetching historical data for ${date}`);
 
   let successfulInstrumentsCount = 0;

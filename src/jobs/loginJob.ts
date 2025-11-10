@@ -8,7 +8,10 @@ import { insertOptIntoDataBase } from "../nseOptions/insertOptIntoDataBase";
 import { insertEqIntoDataBase } from "../nseEquity/insertEqtIntoDatabase";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { getBseEquityHistory } from "../bseEquity/bseEquityHistory";
+import { updateJobStatus, initializeJobStatus } from "../utils/cronMonitor";
 loadEnv();
+
+const CRON_EXPRESSION = "0 20 * * 1-5"; // 8 PM, Monday-Friday
 
 // API endpoint for login
 const LOGIN_API_URL =
@@ -18,7 +21,11 @@ const LOGIN_API_URL =
  * Function to fetch access token from the login API
  */
 async function fetchAccessToken(): Promise<void> {
+  const startTime = Date.now();
+
   try {
+    updateJobStatus('loginJob', 'running', CRON_EXPRESSION);
+
     // Replace with actual login credentials from environment variables
     const credentials = {
       username: process.env.API_USERNAME || "FYERS2317",
@@ -60,12 +67,19 @@ async function fetchAccessToken(): Promise<void> {
       insertEqIntoDataBase(date.toISOString().split("T")[0]);
       // insertEqIntoDataBase("2025-10-02");
       // console.log('✅ Access token updated successfully');
+
+      const duration = Date.now() - startTime;
+      updateJobStatus('loginJob', 'success', CRON_EXPRESSION, duration);
     } else {
       console.error("❌ No access token received from API");
+      const duration = Date.now() - startTime;
+      updateJobStatus('loginJob', 'failed', CRON_EXPRESSION, duration, 'No access token received from API');
       fetchAccessToken();
     }
   } catch (error: any) {
     console.error("❌ Failed to fetch access token:", error.message);
+    const duration = Date.now() - startTime;
+    updateJobStatus('loginJob', 'failed', CRON_EXPRESSION, duration, error.message);
     fetchAccessToken();
   }
 }
@@ -76,15 +90,18 @@ async function fetchAccessToken(): Promise<void> {
  * Cron pattern: "0 20 * * 1-5" (at minute 0 of every day at 20 on Monday through Friday)
  */
 export function initializeLoginJob(): void {
+  // Initialize job status in history
+  initializeJobStatus('loginJob', CRON_EXPRESSION);
+
   // Run immediately when the application starts
   if(process.env.NODE_ENV === "development"){
     fetchAccessToken();
   }
 
   // Schedule to run every day at 8:00 PM
-  cron.schedule("0 20 * * 1-5", fetchAccessToken, {
+  cron.schedule(CRON_EXPRESSION, fetchAccessToken, {
     timezone: "Asia/Kolkata", // Indian timezone
   });
 
-  // console.log('⏰ Login job scheduled to run every day at 9:00 PM');
+  console.log('⏰ Login job scheduled to run every day at 8:00 PM (Mon-Fri)');
 }

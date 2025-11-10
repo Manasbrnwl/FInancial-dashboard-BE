@@ -1,0 +1,14 @@
+{
+  "loginJob": {
+    "lastRun": null,
+    "nextRun": null,
+    "status": "idle",
+    "lastDuration": null
+  },
+  "hourlyTicksNseFutJob": {
+    "lastRun": null,
+    "nextRun": null,
+    "status": "idle",
+    "lastDuration": null
+  }
+}

@@ -4,3 +4,6 @@ dist/
 .env
 /src/generated/prisma
 *.md
+
+# Cron job history (temporary data)
+history.json

@@ -7,6 +7,7 @@ import periodicDataRouter from "./periodicData";
 import arbitrageRouter from "./arbitrage";
 import coveredCallsRouter from "./coveredCalls";
 import arbitrageDetailsRouter from "./arbitrageDetails";
+import cronStatusRouter from "./cronStatus";
 
 const router = Router();
 
@@ -19,6 +20,7 @@ router.use("/periodic-data", periodicDataRouter);
 router.use("/arbitrage", arbitrageRouter);
 router.use("/covered-calls", coveredCallsRouter);
 router.use("/arbitrage-details", arbitrageDetailsRouter);
+router.use("/cron-status", cronStatusRouter);
 
 // Health check endpoint
 router.get("/health", (req, res) => {

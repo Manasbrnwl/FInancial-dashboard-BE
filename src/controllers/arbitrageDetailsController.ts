@@ -34,7 +34,7 @@ export const getArbitrageDetails = async (req: Request, res: Response) => {
           SELECT
               il.id AS instrumentid,
               il.instrument_type AS name,
-              DATE(tf.time) AS tick_date,
+              ${date ? `DATE(tf.time)` : "tf.time"} AS tick_date,
               substring(sl.symbol from '[0-9]{2}([A-Z]{3})FUT') AS expiry_month,
               sl.symbol,
               tf.ltp,
@@ -245,7 +245,7 @@ GROUP BY instrumentid, name, tick_date
       WITH latest_tick_fut AS (
           SELECT *,
               ROW_NUMBER() OVER (
-                  PARTITION BY "instrumentId", DATE_TRUNC('hour', \"time\")
+                  PARTITION BY "instrumentId", DATE_TRUNC('minute', time)
                   ORDER BY id DESC
               ) rn
           FROM periodic_market_data."ticksDataNSEFUT"
@@ -255,7 +255,7 @@ GROUP BY instrumentid, name, tick_date
               il.id AS instrumentid,
               il.instrument_type AS name,
               tf.time correct_time,
-              DATE_TRUNC('hour', tf.time) AS tick_date,
+              DATE_TRUNC('minute', tf.time) AS tick_date,
               substring(sl.symbol from '[0-9]{2}([A-Z]{3})FUT') AS expiry_month,
               sl.symbol,
               tf.ltp,
@@ -312,10 +312,10 @@ GROUP BY instrumentid, name, tick_date
 
     // Add gap range filtering
     if (minGap) {
-      filterConditions += ` AND (gap_1 >= ${minGap} OR gap_2 >= ${minGap})`;
+      filterConditions += ` AND (gap_1 >= ${minGap} OR gap_2 >= ${minGap} OR gap_1 is null OR gap_2 is null)`;
     }
     if (maxGap) {
-      filterConditions += ` AND (gap_1 <= ${maxGap} OR gap_2 <= ${maxGap})`;
+      filterConditions += ` AND (gap_1 <= ${maxGap} OR gap_2 <= ${maxGap} OR gap_1 is null OR gap_2 is null)`;
     }
 
     // Add date range filtering

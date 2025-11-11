@@ -65,15 +65,14 @@ async function getNseInstruments(): Promise<Map<string, number>> {
   try {
     console.log("🔍 Fetching NSE Equity instruments from database...");
 
-    const instruments = await prisma.instrument_lists.findMany({
-      where: {
-        exchange: "NSE",
-      },
-      select: {
-        id: true,
-        instrument_type: true,
-      },
-    });
+    const instruments = await prisma.$queryRaw<
+      Array<{
+        id: number;
+        instrument_type: string;
+      }>
+    >`
+      select distinct il.id as id, il.instrument_type as instrument_type from market_data.instrument_lists il inner join market_data.symbols_list sl on il.id = sl.instrument_id where il.exchange = 'NSE'
+    `;
 
     console.log(`✅ Found ${instruments.length} NSE Equity instruments`);
 
@@ -135,7 +134,9 @@ async function bulkInsertTicksData(records: any[]): Promise<number> {
 /**
  * Function to fetch historical data for instruments
  */
-async function fetchHistoricalData(instrumentsMap: Map<string, number>): Promise<{
+async function fetchHistoricalData(
+  instrumentsMap: Map<string, number>
+): Promise<{
   successfulInstrumentsCount: number;
   totalRecordsInserted: number;
 }> {
@@ -161,10 +162,7 @@ async function fetchHistoricalData(instrumentsMap: Map<string, number>): Promise
     today.getMonth() + 1
   )
     .toString()
-    .padStart(2, "0")}${today
-    .getDate()
-    .toString()
-    .padStart(2, "0")}`;
+    .padStart(2, "0")}${today.getDate().toString().padStart(2, "0")}`;
   // const fromDate = "251006T09:00:00";
   // const toDate = "251006T15:00:00";
   console.log(`📊 Fetching historical data for ${date}`);
@@ -205,7 +203,9 @@ async function fetchHistoricalData(instrumentsMap: Map<string, number>): Promise
         // Get instrument ID and insert data into database
         if (recordsCount > 0) {
           // Get only the last record from the response
-          const lastRecord = [response.data.Records[response.data.Records.length - 1]];
+          const lastRecord = [
+            response.data.Records[response.data.Records.length - 1],
+          ];
           const transformedRecords = transformRecordsToDbFormat(
             lastRecord,
             instrumentId
@@ -360,9 +360,7 @@ async function executeHourlyJob(): Promise<void> {
           totalRecordsInserted: result.totalRecordsInserted,
         });
       } else {
-        console.log(
-          "⚠️ No instruments found, skipping historical data fetch"
-        );
+        console.log("⚠️ No instruments found, skipping historical data fetch");
 
         // Send completion notification with zero results
         await sendHourlyJobEmail("completed", {
@@ -405,7 +403,7 @@ export function initializeHourlyTicksNseEqJob(): void {
   }
 
   // Schedule to run every hour from 9 AM to 6 PM, Monday to Friday
-  cron.schedule("0 9-15 * * 1-5", executeHourlyJob, {
+  cron.schedule("*/5 9-15 * * 1-5", executeHourlyJob, {
     timezone: "Asia/Kolkata", // Indian timezone
   });
 

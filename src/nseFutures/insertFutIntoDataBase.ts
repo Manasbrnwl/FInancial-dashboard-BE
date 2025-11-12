@@ -99,8 +99,8 @@ async function insertFutIntoDataBase(date: any) {
         // Step 3: Map the IDs to the futures data
         const futuresDataWithIds = futuresData.map((fut) => ({
           ...fut,
-          underlying: instrumentIdMap.get(fut.underlying)?.toString() || fut.underlying,
-          symbol: symbolIdMap.get(fut.symbol)?.toString() || fut.symbol,
+          underlying: instrumentIdMap.get(fut.underlying) || fut.underlying,
+          symbol: symbolIdMap.get(fut.symbol) || fut.symbol,
         }));
 
         // Step 4: Batch insert futures data with IDs

@@ -59,19 +59,19 @@ async function insertOptIntoDataBase(date: any) {
 
           // Collect options data
           optionsData.push({
-            symbol_id: data[0].toString(),
-            symbol: symbol?.symbol.toString() || data[1].toString(),
+            symbol_id: data[0]?.toString() || null,
+            symbol: symbol?.symbol || data[1],
             expiry_date: new Date(symbol!.expiry),
             open: data[3],
             high: data[4],
             low: data[5],
             close: data[6],
-            volume: data[7].toString(),
-            oi: data[8]?.toString(),
-            underlying: symbol?.instrument.toString(),
+            volume: data[7]?.toString() || null,
+            oi: data[8]?.toString() || null,
+            underlying: symbol?.instrument || null,
             date: new Date(data[2]),
-            strike: symbol?.strike,
-            option_type: symbol?.type,
+            strike: symbol?.strike?.toString() || null,
+            option_type: symbol?.type || null,
           });
         }
 
@@ -95,11 +95,16 @@ async function insertOptIntoDataBase(date: any) {
         }
 
         // Step 3: Map the IDs to the options data
-        const optionsDataWithIds = optionsData.map((opt) => ({
-          ...opt,
-          underlying: instrumentIdMap.get(opt.underlying)?.toString() || opt.underlying,
-          symbol: symbolIdMap.get(opt.symbol)?.toString() || opt.symbol,
-        }));
+        const optionsDataWithIds = optionsData.map((opt) => {
+          const underlyingId = instrumentIdMap.get(opt.underlying);
+          const symbolId = symbolIdMap.get(opt.symbol);
+
+          return {
+            ...opt,
+            underlying: underlyingId !== undefined ? underlyingId : (opt.underlying || null),
+            symbol: symbolId !== undefined ? symbolId : (opt.symbol || null),
+          };
+        });
 
         // Step 4: Batch insert options data with IDs
         if (optionsDataWithIds.length > 0) {

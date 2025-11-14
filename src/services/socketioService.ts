@@ -28,7 +28,7 @@ export class SocketIOService {
     });
 
     this.setupEventHandlers();
-    console.log('🔌 Socket.io server initialized');
+    // console.log('🔌 Socket.io server initialized');
   }
 
   /**

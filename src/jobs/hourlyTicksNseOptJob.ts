@@ -26,7 +26,7 @@ async function fetchAccessToken(): Promise<boolean> {
       grant_type: "password",
     };
 
-    console.log("🔑 Fetching access token for hourly NSE Options job...");
+    // console.log("🔑 Fetching access token for hourly NSE Options job...");
 
     const response = await axios.post(
       LOGIN_API_URL,
@@ -42,7 +42,7 @@ async function fetchAccessToken(): Promise<boolean> {
 
     if (accessToken) {
       setAccessToken(accessToken);
-      console.log("✅ Access token updated successfully for hourly job");
+      // console.log("✅ Access token updated successfully for hourly job");
       return true;
     } else {
       console.error("❌ No access token received from API");
@@ -73,9 +73,9 @@ async function getNseInstruments(): Promise<Map<string, number>> {
       select id as instrumentId, symbol as instrument_type from market_data.symbols_list where expiry_date >= CURRENT_DATE and segment = 'OPT'
     `;
 
-    console.log(
-      `✅ Found ${instruments.length} NSE Options futures instruments`
-    );
+    // console.log(
+    //   `✅ Found ${instruments.length} NSE Options futures instruments`
+    // );
 
     // Create a Map of instrument_type -> instrumentId
     const instrumentMap = new Map<string, number>();
@@ -113,6 +113,29 @@ function transformRecordsToDbFormat(
 }
 
 /**
+ * Pick a random sample of records and return them ordered by time (ascending)
+ */
+function pickRandomOrdered(records: any[], count: number): any[] {
+  if (!Array.isArray(records) || records.length === 0) return [];
+  const target = Math.min(count, records.length);
+
+  // Sample without replacement
+  const indices = new Set<number>();
+  while (indices.size < target) {
+    indices.add(Math.floor(Math.random() * records.length));
+  }
+
+  const picked = Array.from(indices).map((i) => records[i]);
+
+  // Sort by timestamp (record[0]) ascending to preserve order
+  picked.sort(
+    (a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime()
+  );
+
+  return picked;
+}
+
+/**
  * Function to bulk insert ticks data into database
  */
 async function bulkInsertTicksData(records: any[]): Promise<number> {
@@ -122,9 +145,9 @@ async function bulkInsertTicksData(records: any[]): Promise<number> {
       skipDuplicates: true,
     });
 
-    console.log(
-      `✅ Successfully inserted ${result.count} records into ticksDataNSE`
-    );
+    // console.log(
+    //   `✅ Successfully inserted ${result.count} records into ticksDataNSE`
+    // );
     return result.count;
   } catch (error: any) {
     console.error(`❌ Failed to bulk insert ticks data:`, error.message);
@@ -159,24 +182,24 @@ async function fetchHistoricalData(
   );
 
   // Format dates as YYMMDDTHH:MM:SS
-  // const date = `${today.getFullYear().toString().slice(-2)}${(
-  //   today.getMonth() + 1
-  // )
-  //   .toString()
-  //   .padStart(2, "0")}${today
-  //   .getDate()
-  //   .toString()
-  //   .padStart(2, "0")}`;
+  const date = `${today.getFullYear().toString().slice(-2)}${(
+    today.getMonth() + 1
+  )
+    .toString()
+    .padStart(2, "0")}${today
+    .getDate()
+    .toString()
+    .padStart(2, "0")}`;
   // const fromDate = "251006T09:00:00";
-  const date = "251104";
-  console.log(`📊 Fetching historical data for ${date}`);
+  // const date = "251113";
+  // console.log(`📊 Fetching historical data for ${date}`);
 
   let successfulInstrumentsCount = 0;
   let totalRecordsInserted = 0;
 
   for (const [type, instrumentId] of instrumentsMap) {
     try {
-      console.log(`🔄 Fetching data for instrument type: ${type}`);
+      // console.log(`🔄 Fetching data for instrument type: ${type}`);
 
       // Wait for rate limiter before making request
       await rateLimiter.waitForSlot();
@@ -200,25 +223,23 @@ async function fetchHistoricalData(
         const recordsCount = response.data.Records
           ? response.data.Records.length
           : 0;
-        console.log(
-          `✅ Successfully fetched data for ${type} (Status: ${response.data.status})`
-        );
+        // console.log(
+        //   `✅ Successfully fetched data for ${type} (Status: ${response.data.status})`
+        // );
         console.log(`📊 Data records: ${recordsCount}`);
         // Get instrument ID and insert data into database
         if (recordsCount > 0) {
-          // Get only the last record from the response
-          const lastRecord = [
-            response.data.Records[response.data.Records.length - 1],
-          ];
+          // Pick up to 15 random records, ordered by time, then insert
+          const sampledOrdered = pickRandomOrdered(response.data.Records, 15);
           const transformedRecords = transformRecordsToDbFormat(
-            lastRecord,
+            sampledOrdered,
             instrumentId
           );
           const insertedCount = await bulkInsertTicksData(transformedRecords);
           totalRecordsInserted += insertedCount;
-          console.log(
-            `💾 Inserted ${insertedCount} records for ${type} (instrumentId: ${instrumentId})`
-          );
+          // console.log(
+          //   `💾 Inserted ${insertedCount} records for ${type} (instrumentId: ${instrumentId})`
+          // );
         }
       } else {
         console.log(
@@ -232,10 +253,10 @@ async function fetchHistoricalData(
     }
   }
 
-  console.log(
-    `📈 Summary: ${successfulInstrumentsCount} out of ${instrumentsMap.size} instruments returned successful data`
-  );
-  console.log(`💾 Total records inserted: ${totalRecordsInserted}`);
+  // console.log(
+  //   `📈 Summary: ${successfulInstrumentsCount} out of ${instrumentsMap.size} instruments returned successful data`
+  // );
+  // console.log(`💾 Total records inserted: ${totalRecordsInserted}`);
 
   return { successfulInstrumentsCount, totalRecordsInserted };
 }
@@ -353,9 +374,9 @@ async function executeHourlyJob(): Promise<void> {
       // Fetch historical data for each instrument
       if (instrumentsMap.size > 0) {
         const result = await fetchHistoricalData(instrumentsMap);
-        console.log(
-          `🎯 Final Result: ${result.successfulInstrumentsCount} instruments returned successful responses with status="success"`
-        );
+        // console.log(
+        //   `🎯 Final Result: ${result.successfulInstrumentsCount} instruments returned successful responses with status="success"`
+        // );
 
         // Send completion notification
         await sendHourlyJobEmail("completed", {
@@ -382,9 +403,9 @@ async function executeHourlyJob(): Promise<void> {
       });
     }
 
-    console.log(
-      `✅ Hourly NSE Options job completed at ${new Date().toISOString()}`
-    );
+    // console.log(
+    //   `✅ Hourly NSE Options job completed at ${new Date().toISOString()}`
+    // );
   } catch (error: any) {
     console.error("❌ Error in hourly NSE Options job:", error.message);
 

@@ -94,15 +94,15 @@ export class TrueDataWebSocketService {
    */
   public async start(): Promise<void> {
     try {
-      console.log('🌐 Starting TrueData WebSocket service...');
+      // console.log('🌐 Starting TrueData WebSocket service...');
 
       // Check if within market hours
       if (!this.isWithinMarketHours()) {
         const now = new Date();
         const istTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-        console.log('⏰ Outside market hours (9:00 AM - 3:30 PM IST, Monday-Friday)');
+        // console.log('⏰ Outside market hours (9:00 AM - 3:30 PM IST, Monday-Friday)');
         console.log(`📅 Current IST time: ${istTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`);
-        console.log('💤 WebSocket connection will not be established');
+        // console.log('💤 WebSocket connection will not be established');
         return;
       }
 
@@ -125,13 +125,13 @@ export class TrueDataWebSocketService {
   private async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        console.log('🔗 Connecting to TrueData WebSocket...');
-        console.log(`📡 URL: ${this.config.url}`);
+        // console.log('🔗 Connecting to TrueData WebSocket...');
+        // console.log(`📡 URL: ${this.config.url}`);
 
         this.ws = new WebSocket(this.config.url);
 
         this.ws.on('open', () => {
-          console.log('✅ WebSocket connection established');
+          // console.log('✅ WebSocket connection established');
           this.isConnected = true;
           this.reconnectAttempts = 0;
           this.startHeartbeat();

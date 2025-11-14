@@ -214,7 +214,7 @@ model ticksDataNSEEQ {
   bidqty       String?  @default("0")
   ask          String?  @default("0")
   askqty       String?  @default("0")
-  time         DateTime
+  time         DateTime @db.Timestamptz(6)
   createdAt    DateTime @default(now())
   updatedAt    DateTime
 
@@ -237,7 +237,7 @@ model ticksDataNSEFUT {
   bidqty       String?  @default("0")
   ask          String?  @default("0")
   askqty       String?  @default("0")
-  time         DateTime
+  time         DateTime @db.Timestamptz(6)
   createdAt    DateTime @default(now())
   updatedAt    DateTime
 
@@ -257,7 +257,7 @@ model ticksDataNSEOPT {
   bidqty       String?  @default("0")
   ask          String?  @default("0")
   askqty       String?  @default("0")
-  time         DateTime
+  time         DateTime @db.Timestamptz(6)
   createdAt    DateTime @default(now())
   updatedAt    DateTime
 

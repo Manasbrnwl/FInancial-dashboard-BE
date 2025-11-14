@@ -99,6 +99,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     // Get paginated and filtered data
     const coveredCallsData = await prisma.$queryRaw<
       Array<{
+        id: number;
         underlying: string;
         underlying_price: number;
         option_symbol: string;
@@ -136,6 +137,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     ),
     with_calcs AS (
         SELECT
+            i.id as id,
             i.instrument_type AS underlying,
             se.symbol AS option_symbol,
             e.ltp::numeric AS underlying_price,
@@ -152,6 +154,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         JOIN latest_tick_eq e ON i.id = e."instrumentId"
     )
     SELECT
+        id,
         underlying,
         option_symbol,
         time,
@@ -171,6 +174,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     
     // Transform the data to proper format with type conversions
     const transformedData = coveredCallsData.map((item) => ({
+      id: item.id,
       underlyingSymbol: item.underlying,
       underlyingPrice: item.underlying_price || null,
       optionSymbol: item.option_symbol,
@@ -293,5 +297,277 @@ export const getCoveredCallsByUnderlying = async (
       error: "Failed to fetch Covered Calls data",
       message: error.message,
     });
+  }
+};
+
+/**
+ * Get symbols and expiry dates for a specific instrument (for filter dropdowns)
+ */
+export const getCoveredCallsSymbolsExpiry = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { instrumentId } = req.params;
+
+    if (!instrumentId) {
+      return res.status(400).json({
+        success: false,
+        message: "instrumentId is required",
+      });
+    }
+
+    const query = `
+      SELECT DISTINCT sl.symbol, sl.expiry_date, sl.strike
+      FROM market_data.symbols_list sl
+      WHERE sl.instrument_id = ${instrumentId}
+        AND sl.segment = 'OPT'
+        AND sl.expiry_date >= CURRENT_DATE
+      ORDER BY sl.expiry_date, sl.symbol;
+    `;
+
+    const result = await prisma.$queryRawUnsafe(query);
+
+    return res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error fetching symbols and expiry dates:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
+/**
+ * Get filtered covered calls details for a specific instrument with pagination
+ * Supports filtering by option type, expiry date, and symbol
+ */
+export const getFilteredCoveredCallsDetails = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { instrumentId } = req.params;
+    const {
+      page = "1",
+      limit = "360",
+      optionType,
+      expiryDate,
+      symbol,
+    } = req.query;
+
+    if (!instrumentId) {
+      return res.status(400).json({
+        success: false,
+        message: "instrumentId is required",
+      });
+    }
+
+    const pageNum = parseInt(page as string);
+    const limitNum = parseInt(limit as string);
+    const offset = (pageNum - 1) * limitNum;
+
+    // Build filter conditions
+    let filterConditions = "";
+
+    if (optionType && optionType !== "ALL") {
+      filterConditions += ` AND option_type = '${optionType}'`;
+    }
+
+    if (expiryDate) {
+      filterConditions += ` AND expiry_date = '${expiryDate}'`;
+    }
+
+    if (symbol) {
+      filterConditions += ` AND option_symbol ILIKE '%${symbol}%'`;
+    }
+
+    // Base query with all CTEs
+    const baseQuery = `
+      WITH latest_tick_opt AS (
+          SELECT DISTINCT
+              op.id, "instrumentId", ltp, volume, time
+          FROM periodic_market_data."ticksDataNSEOPT" op
+          INNER JOIN market_data.symbols_list sl ON sl.id = op."instrumentId"
+          WHERE sl.instrument_id = ${instrumentId}
+          ORDER BY "instrumentId", op.id DESC
+      ),
+      latest_tick_eq AS (
+          SELECT DISTINCT ON ("instrumentId")
+              "instrumentId", ltp
+          FROM periodic_market_data."ticksDataNSEEQ"
+          ORDER BY "instrumentId", id DESC
+      ),
+      strike_extraction AS (
+          SELECT
+              s.id,
+              s.instrument_id,
+              s.symbol,
+              s.strike::numeric strike,
+              (REGEXP_MATCHES(s.symbol, '(CE|PE)$'))[1] AS option_type,
+              s.expiry_date
+          FROM market_data.symbols_list s
+          WHERE s.segment = 'OPT'
+      ),
+      with_calcs AS (
+          SELECT
+              i.id AS id,
+              i.instrument_type AS underlying,
+              se.symbol AS option_symbol,
+              e.ltp::numeric AS underlying_price,
+              TO_CHAR(o.time, 'yyyy-mm-dd HH12:MI AM') AS time,
+              o.ltp::numeric AS premium,
+              o.volume,
+              se.strike,
+              se.option_type,
+              se.expiry_date,
+              ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) * -1 AS otm,
+              ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage
+          FROM market_data.instrument_lists i
+          JOIN strike_extraction se ON i.id = se.instrument_id
+          JOIN latest_tick_opt o ON se.id = o."instrumentId"
+          JOIN latest_tick_eq e ON i.id = e."instrumentId"
+      )
+      SELECT
+          id,
+          underlying,
+          option_symbol,
+          time,
+          underlying_price,
+          premium,
+          volume,
+          strike,
+          option_type,
+          otm,
+          premium_percentage,
+          expiry_date
+      FROM with_calcs
+      WHERE 1=1 ${filterConditions}
+    `;
+
+    // Count query
+    const countQuery = baseQuery;
+
+    // Data query with pagination
+    const dataQuery = baseQuery + `
+      ORDER BY underlying, time DESC, strike
+      LIMIT ${limitNum}
+      OFFSET ${offset}
+    `;
+
+    // Execute both queries
+    const [data, countResult] = await Promise.all([
+      prisma.$queryRawUnsafe(dataQuery),
+      prisma.$queryRawUnsafe(countQuery),
+    ]);
+
+    const totalCount = Array.isArray(countResult) ? countResult.length : 0;
+    const totalPages = Math.ceil(totalCount / limitNum);
+
+    // Calculate summary statistics
+    const ceCount = Array.isArray(countResult)
+      ? countResult.filter((row: any) => row.option_type === "CE").length
+      : 0;
+
+    const peCount = Array.isArray(countResult)
+      ? countResult.filter((row: any) => row.option_type === "PE").length
+      : 0;
+
+    const avgPremiumPercentage = Array.isArray(countResult) && countResult.length > 0
+      ? countResult.reduce((sum: number, row: any) => sum + (parseFloat(row.premium_percentage) || 0), 0) / countResult.length
+      : 0;
+
+    return res.status(200).json({
+      success: true,
+      data,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalCount,
+        totalPages,
+        hasMore: pageNum < totalPages,
+      },
+      summary: {
+        ceCount,
+        peCount,
+        totalCount,
+        avgPremiumPercentage: Math.round(avgPremiumPercentage * 100) / 100,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching filtered covered calls details:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
+/**
+ * Latest options ticks by instrument (historical fallback for Covered Calls Details)
+ */
+export const getLatestOptionsTicksByInstrument = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { instrumentId } = req.params;
+    if (!instrumentId) {
+      return res.status(400).json({ success: false, message: "instrumentId is required" });
+    }
+
+    const query = `
+      WITH latest_opt_ticks AS (
+        SELECT
+          tdn.ltp,
+          tdn.oi,
+          tdn.volume,
+          tdn.bid,
+          tdn.bidqty,
+          tdn.ask,
+          tdn.askqty,
+          sl.symbol,
+          sl.strike,
+          ROW_NUMBER() OVER (
+            PARTITION BY tdn."instrumentId"
+            ORDER BY tdn."time" DESC
+          ) AS rn,
+          tdn."time" AS time,
+          DATE(tdn."time") AS date,
+          sl.expiry_date
+        FROM periodic_market_data."ticksDataNSEOPT" tdn
+        INNER JOIN market_data.symbols_list sl
+          ON tdn."instrumentId" = sl.id
+        INNER JOIN market_data.instrument_lists il
+          ON sl.instrument_id = il.id
+        WHERE il.id = ${instrumentId}
+          AND sl.expiry_date >= NOW()
+      )
+      SELECT *
+      FROM latest_opt_ticks
+      WHERE rn = 1
+      ORDER BY strike;
+    `;
+
+    const result = await prisma.$queryRawUnsafe(query);
+    // Convert any BigInt fields to strings to avoid JSON serialization errors
+    const safe = Array.isArray(result)
+      ? (result as any[]).map((r) =>
+          JSON.parse(
+            JSON.stringify(r, (_key, value) =>
+              typeof value === "bigint" ? value.toString() : value
+            )
+          )
+        )
+      : result;
+    return res.status(200).json({ success: true, data: safe });
+  } catch (error: any) {
+    console.error("Error fetching latest options ticks:", error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };

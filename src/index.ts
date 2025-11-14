@@ -24,7 +24,7 @@ const PORT = process.env.PORT || 3000;
 
 // Initialize Socket.io server for frontend connections
 socketIOService.initialize(httpServer);
-console.log("🔌 Socket.io server initialized for frontend connections");
+// console.log("🔌 Socket.io server initialized for frontend connections");
 
 // CORS configuration - allow requests from frontend
 app.use(
@@ -61,9 +61,6 @@ initializeDailyNseJob();
 async function initializeWebSocketService() {
   try {
     await webSocketService.start();
-    console.log(
-      "✅ WebSocket service ready for arbitrage symbol subscriptions"
-    );
   } catch (error: any) {
     console.error("❌ Failed to initialize WebSocket service:", error.message);
   }
@@ -87,7 +84,4 @@ process.on("SIGINT", () => {
 
 httpServer.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(
-    `🔌 Socket.io ready for client connections on http://localhost:${PORT}`
-  );
 });

@@ -3,6 +3,7 @@ import {
   getNseFuturesData,
   getNseFuturesUnderlyings,
   getNseFuturesExpiries,
+  getFuturesDateRangeController,
 } from "../../controllers/nseFuturesController";
 
 const router = Router();
@@ -15,5 +16,8 @@ router.get("/underlyings", getNseFuturesUnderlyings);
 
 // GET /api/nse-futures/expiries - Get all expiry dates (optionally filtered by underlying)
 router.get("/expiries", getNseFuturesExpiries);
+
+// GET /api/nse-futures/date-range?instrumentId=null|ID
+router.get("/date-range", getFuturesDateRangeController);
 
 export default router;

@@ -111,18 +111,18 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         otm: number;
         premium_percentage: number;
       }>
-    >`
-    WITH latest_tick_opt AS (
+    >`WITH latest_tick_opt AS (
         SELECT DISTINCT ON ("instrumentId")
             "instrumentId", ltp, volume, time
         FROM periodic_market_data."ticksDataNSEOPT"
         ORDER BY "instrumentId", id DESC
     ),
     latest_tick_eq AS (
-        SELECT DISTINCT ON ("instrumentId")
-            "instrumentId", ltp
-        FROM periodic_market_data."ticksDataNSEEQ"
-        ORDER BY "instrumentId", id DESC
+        SELECT DISTINCT ON ("instrumentId", time_bucket)
+       		"instrumentId", ltp, time
+		FROM (
+    		SELECT *, date_trunc('hour', time) + floor(EXTRACT(minute FROM time)::int / 5) * interval '5 minutes' AS time_bucket FROM periodic_market_data."ticksDataNSEEQ"
+		) t ORDER BY "instrumentId", time_bucket, time DESC
     ),
     strike_extraction AS (
         SELECT
@@ -147,12 +147,16 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
             se.strike,
             se.option_type,
             ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) * -1 AS otm,
-            ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage
+            ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage,
+            dense_rank() over (partition by i.instrument_type order by date(o.time) desc) rn
         FROM market_data.instrument_lists i
         JOIN strike_extraction se ON i.id = se.instrument_id
-        JOIN latest_tick_opt o ON se.id = o."instrumentId"
-        JOIN latest_tick_eq e ON i.id = e."instrumentId"
-    )
+        JOIN latest_tick_opt o ON se.id = o."instrumentId"       
+		JOIN LATERAL (SELECT * FROM latest_tick_eq e
+    		WHERE e."instrumentId" = i.id ORDER BY ABS(EXTRACT(EPOCH FROM (e.time - o.time)))
+    		LIMIT 1
+		) e ON true
+ 	)
     SELECT
         id,
         underlying,
@@ -164,9 +168,10 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         strike,
         option_type,
         otm,
-        premium_percentage
+        premium_percentage,
+        dense_rank() over (partition by underlying order by date(time) desc) rn
     FROM with_calcs
-    WHERE 1=1 ${Prisma.raw(filterCondition)}
+    WHERE rn=1 ${Prisma.raw(filterCondition)}
     ORDER BY underlying, strike
     LIMIT ${limit}
     OFFSET ${offset}

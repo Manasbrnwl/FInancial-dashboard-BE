@@ -3,6 +3,7 @@ import {
   getNseEquityData,
   getNseEquitySymbols,
   getNseEquityLatest,
+  getEquityDateRangeController,
 } from "../../controllers/nseEquityController";
 
 const router = Router();
@@ -15,5 +16,8 @@ router.get("/symbols", getNseEquitySymbols);
 
 // GET /api/nse-equity/:symbol/latest - Get latest data for a symbol
 router.get("/:symbol/latest", getNseEquityLatest);
+
+// GET /api/nse-equity/date-range?symbol=null|SYM
+router.get("/date-range", getEquityDateRangeController);
 
 export default router;

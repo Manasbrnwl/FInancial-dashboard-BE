@@ -25,14 +25,14 @@ export const getArbitrageData = async (req: Request, res: Response) => {
     il.id AS instrumentid,
     il.instrument_type,
     te.ltp AS price,
-    TO_CHAR(te.time, 'yyyy-mm-dd HH12:MI AM') time,
+    TO_CHAR(te.time, 'DD Mon, YYYY HH12:MI AM') time,
     json_agg(
       json_build_object(
         'expiry_date', sl.expiry_date,
         'symbol', sl.symbol,
         'ltp', tf.ltp,
         'volume', tf.volume,
-        'time', TO_CHAR(tf.time, 'yyyy-mm-dd HH12:MI AM')
+        'time', TO_CHAR(tf.time, 'DD Mon, YYYY HH12:MI AM')
       ) ORDER BY sl.expiry_date
     ) AS symbols
   FROM market_data.symbols_list sl

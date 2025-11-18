@@ -102,7 +102,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         id: number;
         underlying: string;
         underlying_price: number;
-        option_symbol: string;
+        expiry_month: string;
         time: string;
         premium: number;
         volume: number;
@@ -130,7 +130,8 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
             s.instrument_id,
             s.symbol,
             s.strike::numeric strike,
-            (REGEXP_MATCHES(s.symbol, '(CE|PE)$'))[1] AS option_type
+            (REGEXP_MATCHES(s.symbol, '(CE|PE)$'))[1] AS option_type,
+            TO_CHAR(s.expiry_date, 'Month') expiry_month
         FROM market_data.symbols_list s
         WHERE s.segment = 'OPT'
         AND s.expiry_date >= CURRENT_DATE
@@ -139,9 +140,9 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         SELECT
             i.id as id,
             i.instrument_type AS underlying,
-            se.symbol AS option_symbol,
+            se.expiry_month AS expiry_month,
             e.ltp::numeric AS underlying_price,
-            TO_CHAR(o.time, 'yyyy-mm-dd HH12:MI AM') as time,
+            TO_CHAR(o.time, 'DD Mon, YYYY HH12:MI AM') as time,
             o.ltp::numeric AS premium,
             o.volume,
             se.strike,
@@ -160,7 +161,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     SELECT
         id,
         underlying,
-        option_symbol,
+        expiry_month,
         time,
         underlying_price,
         premium,
@@ -168,11 +169,10 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         strike,
         option_type,
         otm,
-        premium_percentage,
-        dense_rank() over (partition by underlying order by date(time) desc) rn
+        premium_percentage
     FROM with_calcs
     WHERE rn=1 ${Prisma.raw(filterCondition)}
-    ORDER BY underlying, strike
+    ORDER BY otm, premium_percentage, underlying, strike
     LIMIT ${limit}
     OFFSET ${offset}
     `;
@@ -182,7 +182,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
       id: item.id,
       underlyingSymbol: item.underlying,
       underlyingPrice: item.underlying_price || null,
-      optionSymbol: item.option_symbol,
+      expiryMonth: item.expiry_month,
       time: item.time,
       premium: item.premium || null,
       volume: item.volume || null,
@@ -424,7 +424,7 @@ export const getFilteredCoveredCallsDetails = async (
               i.instrument_type AS underlying,
               se.symbol AS option_symbol,
               e.ltp::numeric AS underlying_price,
-              TO_CHAR(o.time, 'yyyy-mm-dd HH12:MI AM') AS time,
+              TO_CHAR(o.time, 'DD Mon, YYYY HH12:MI AM') AS time,
               o.ltp::numeric AS premium,
               o.volume,
               se.strike,
@@ -522,8 +522,19 @@ export const getLatestOptionsTicksByInstrument = async (
 ) => {
   try {
     const { instrumentId } = req.params;
+    const { expiryDate } = req.query as { expiryDate?: string };
     if (!instrumentId) {
       return res.status(400).json({ success: false, message: "instrumentId is required" });
+    }
+
+    // Build expiry filter: either specific expiry (from UI) or default to nearest/future
+    let expiryFilter = "AND sl.expiry_date >= NOW()";
+    if (expiryDate) {
+      // Basic safeguarding – keep only date-like characters to avoid SQL injection
+      const safeExpiry = expiryDate.split("T")[0];
+      if (safeExpiry) {
+        expiryFilter = `AND sl.expiry_date = '${safeExpiry}'`;
+      }
     }
 
     const query = `
@@ -551,7 +562,7 @@ export const getLatestOptionsTicksByInstrument = async (
         INNER JOIN market_data.instrument_lists il
           ON sl.instrument_id = il.id
         WHERE il.id = ${instrumentId}
-          AND sl.expiry_date >= NOW()
+          ${expiryFilter}
       )
       SELECT *
       FROM latest_opt_ticks

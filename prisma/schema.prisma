@@ -163,6 +163,7 @@ model symbols_list {
   @@index([instrument_id, symbol], map: "idx_instrument_symbol")
   @@index([instrument_id], map: "idx_symbols_list_instrument_id")
   @@index([segment], map: "idx_symbols_list_segment")
+  @@index([instrument_id, expiry_date(sort: Desc)], map: "idx_symbols_expiry")
   @@schema("market_data")
 }
 
@@ -204,6 +205,7 @@ model ohlcEQDataBSE {
   @@schema("periodic_market_data")
 }
 
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model ticksDataNSEEQ {
   id           BigInt   @id @default(autoincrement())
   instrumentId Int
@@ -214,7 +216,7 @@ model ticksDataNSEEQ {
   bidqty       String?  @default("0")
   ask          String?  @default("0")
   askqty       String?  @default("0")
-  time         DateTime @db.Timestamptz(6)
+  time         DateTime
   createdAt    DateTime @default(now())
   updatedAt    DateTime
 
@@ -224,6 +226,7 @@ model ticksDataNSEEQ {
   @@index([instrumentId], map: "idx_ticksdatanseeq_instrumentid")
   @@index([instrumentId, id(sort: Desc), ltp], map: "idx_cover_ticks_nseeq")
   @@index([instrumentId, id(sort: Desc)], map: "idx_ticks_nseeq_instrument_id_desc")
+  @@index([instrumentId, time(sort: Desc)], map: "idx_eq_time")
   @@schema("periodic_market_data")
 }
 
@@ -237,7 +240,7 @@ model ticksDataNSEFUT {
   bidqty       String?  @default("0")
   ask          String?  @default("0")
   askqty       String?  @default("0")
-  time         DateTime @db.Timestamptz(6)
+  time         DateTime
   createdAt    DateTime @default(now())
   updatedAt    DateTime
 
@@ -257,7 +260,7 @@ model ticksDataNSEOPT {
   bidqty       String?  @default("0")
   ask          String?  @default("0")
   askqty       String?  @default("0")
-  time         DateTime @db.Timestamptz(6)
+  time         DateTime
   createdAt    DateTime @default(now())
   updatedAt    DateTime
 
@@ -267,5 +270,6 @@ model ticksDataNSEOPT {
   @@index([instrumentId], map: "idx_ticksdatanseopt_instrumentid")
   @@index([instrumentId, id(sort: Desc), ltp, volume], map: "idx_cover_ticks_nseopt")
   @@index([instrumentId, id(sort: Desc)], map: "idx_ticks_nseopt_instrument_id_desc")
+  @@index([instrumentId, id(sort: Desc)], map: "idx_opt_latest")
   @@schema("periodic_market_data")
 }

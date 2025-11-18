@@ -172,7 +172,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         premium_percentage
     FROM with_calcs
     WHERE rn=1 ${Prisma.raw(filterCondition)}
-    ORDER BY otm, premium_percentage, underlying, strike
+    ORDER BY underlying, strike
     LIMIT ${limit}
     OFFSET ${offset}
     `;

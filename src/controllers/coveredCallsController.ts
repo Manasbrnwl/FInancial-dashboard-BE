@@ -119,7 +119,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     ),
     latest_tick_eq AS (
         SELECT DISTINCT ON ("instrumentId", time_bucket)
-       		"instrumentId", ltp, time
+       		"instrumentId", ltp, time, time_bucket
 		FROM (
     		SELECT *, date_trunc('hour', time) + floor(EXTRACT(minute FROM time)::int / 5) * interval '5 minutes' AS time_bucket FROM periodic_market_data."ticksDataNSEEQ"
 		) t ORDER BY "instrumentId", time_bucket, time DESC
@@ -153,8 +153,14 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         FROM market_data.instrument_lists i
         JOIN strike_extraction se ON i.id = se.instrument_id
         JOIN latest_tick_opt o ON se.id = o."instrumentId"       
-		JOIN LATERAL (SELECT * FROM latest_tick_eq e
-    		WHERE e."instrumentId" = i.id ORDER BY ABS(EXTRACT(EPOCH FROM (e.time - o.time)))
+		JOIN LATERAL (
+        SELECT * FROM latest_tick_eq e
+    		WHERE e."instrumentId" = i.id 
+        AND e.time_bucket IN (
+              date_trunc('hour', o.time) + floor(EXTRACT(minute FROM o.time)::int / 5) * interval '5 minutes',
+              date_trunc('hour', o.time) + (floor(EXTRACT(minute FROM o.time)::int / 5) + 4) * interval '5 minutes'
+          )
+        ORDER BY ABS(EXTRACT(EPOCH FROM (e.time - o.time)))
     		LIMIT 1
 		) e ON true
  	)
@@ -585,5 +591,370 @@ export const getLatestOptionsTicksByInstrument = async (
   } catch (error: any) {
     console.error("Error fetching latest options ticks:", error);
     return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Daily options trend for a covered-calls instrument
+ * Filters: expiry (YYYY-MM), optionType (CE/PE), strike, page
+ */
+export const getCoveredCallsTrendDaily = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { instrumentId } = req.params;
+    const {
+      page = "1",
+      optionType,
+      minOtm,
+      maxOtm,
+      minPremium,
+      maxPremium,
+      startDate,
+      endDate,
+    } = req.query as {
+      page?: string;
+      optionType?: string;
+      minOtm?: string;
+      maxOtm?: string;
+      minPremium?: string;
+      maxPremium?: string;
+      startDate?: string;
+      endDate?: string;
+    };
+
+    if (!instrumentId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "instrumentId is required" });
+    }
+
+    const pageNum = parseInt(page || "1", 10) || 1;
+    const limitNum = 360;
+    const offset = (pageNum - 1) * limitNum;
+
+    let filterConditions = "";
+
+    if (optionType && optionType !== "ALL") {
+      filterConditions += ` AND no2.option_type = '${optionType}'`;
+    }
+
+    if (minOtm) {
+      const v = Number(minOtm);
+      if (!Number.isNaN(v)) {
+        filterConditions += ` AND ROUND(((no2.strike::numeric / ne."close"::numeric) - 1) * 100, 2) * -1 >= ${v}`;
+      }
+    }
+
+    if (maxOtm) {
+      const v = Number(maxOtm);
+      if (!Number.isNaN(v)) {
+        filterConditions += ` AND ROUND(((no2.strike::numeric / ne."close"::numeric) - 1) * 100, 2) * -1 <= ${v}`;
+      }
+    }
+
+    if (minPremium) {
+      const v = Number(minPremium);
+      if (!Number.isNaN(v)) {
+        filterConditions += ` AND ROUND((no2."close"::numeric / ne."close"::numeric) * 100, 2) >= ${v}`;
+      }
+    }
+
+    if (maxPremium) {
+      const v = Number(maxPremium);
+      if (!Number.isNaN(v)) {
+        filterConditions += ` AND ROUND((no2."close"::numeric / ne."close"::numeric) * 100, 2) <= ${v}`;
+      }
+    }
+
+    if (startDate) {
+      filterConditions += ` AND no2."date" >= '${startDate}'::date`;
+    }
+
+    if (endDate) {
+      filterConditions += ` AND no2."date" <= '${endDate}'::date`;
+    }
+
+    const baseQuery = `
+      SELECT 
+        ne.symbol AS underlying, 
+        TO_CHAR(ne."date", 'yyyy-mm-dd') AS time, 
+        ne."close"::numeric AS underlying_price, 
+        no2.strike,
+        TO_CHAR(no2.expiry_date, 'Month') AS expiry_month, 
+        no2.option_type, 
+        no2."close"::numeric AS premium,
+        no2.volume,
+        ROUND(((no2.strike::numeric / ne."close"::numeric) - 1) * 100, 2) * -1 AS otm,
+        ROUND((no2."close"::numeric / ne."close"::numeric) * 100, 2) AS premium_percentage
+      FROM market_data.nse_options no2
+      INNER JOIN market_data.instrument_lists il 
+        ON no2.underlying = il.id  
+      INNER JOIN market_data.nse_equity ne 
+        ON ne.symbol = il.instrument_type 
+        AND no2."date" = ne."date"
+      WHERE no2.underlying = ${instrumentId}
+      ${filterConditions}
+    `;
+
+    const dataQuery = `
+      ${baseQuery}
+      ORDER BY ne."date" DESC
+      LIMIT ${limitNum} OFFSET ${offset}
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*) AS count
+      FROM (${baseQuery}) t
+    `;
+
+    const [rows, countResult] = await Promise.all([
+      prisma.$queryRawUnsafe<any[]>(dataQuery),
+      prisma.$queryRawUnsafe<Array<{ count: bigint }>>(countQuery),
+    ]);
+
+    const totalCount = Number(countResult?.[0]?.count || 0);
+    const totalPages = Math.ceil(totalCount / limitNum) || 1;
+
+    return res.status(200).json({
+      success: true,
+      data: rows,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalCount,
+        totalPages,
+        hasMore: pageNum < totalPages,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching covered calls daily trend:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Hourly options trend for a covered-calls instrument
+ * Filters: expiry (YYYY-MM), optionType (CE/PE), strike, page
+ */
+export const getCoveredCallsTrendHourly = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { instrumentId } = req.params;
+    const {
+      page = "1",
+      optionType,
+      minOtm,
+      maxOtm,
+      minPremium,
+      maxPremium,
+      startDate,
+      endDate,
+    } = req.query as {
+      page?: string;
+      optionType?: string;
+      minOtm?: string;
+      maxOtm?: string;
+      minPremium?: string;
+      maxPremium?: string;
+      startDate?: string;
+      endDate?: string;
+    };
+
+    if (!instrumentId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "instrumentId is required" });
+    }
+
+    const pageNum = parseInt(page || "1", 10) || 1;
+    const limitNum = 360;
+    const offset = (pageNum - 1) * limitNum;
+
+    let filterConditions = "";
+
+    if (optionType && optionType !== "ALL") {
+      filterConditions += ` AND option_type = '${optionType}'`;
+    }
+
+    if (minOtm) {
+      const v = Number(minOtm);
+      if (!Number.isNaN(v)) {
+        filterConditions += ` AND otm >= ${v}`;
+      }
+    }
+
+    if (maxOtm) {
+      const v = Number(maxOtm);
+      if (!Number.isNaN(v)) {
+        filterConditions += ` AND otm <= ${v}`;
+      }
+    }
+
+    if (minPremium) {
+      const v = Number(minPremium);
+      if (!Number.isNaN(v)) {
+        filterConditions += ` AND premium_percentage >= ${v}`;
+      }
+    }
+
+    if (maxPremium) {
+      const v = Number(maxPremium);
+      if (!Number.isNaN(v)) {
+        filterConditions += ` AND premium_percentage <= ${v}`;
+      }
+    }
+
+    if (startDate) {
+      filterConditions += ` AND to_timestamp(time, 'yyyy-mm-dd HH12:MI AM')::date >= '${startDate}'::date`;
+    }
+
+    if (endDate) {
+      filterConditions += ` AND to_timestamp(time, 'yyyy-mm-dd HH12:MI AM')::date <= '${endDate}'::date`;
+    }
+
+    const baseQuery = `
+      WITH latest_tick_opt AS (
+          SELECT DISTINCT
+              op.id,
+              op."instrumentId",
+              op.ltp,
+              op.volume,
+              op.time
+          FROM periodic_market_data."ticksDataNSEOPT" op
+          INNER JOIN market_data.symbols_list sl ON sl.id = op."instrumentId"
+          WHERE sl.instrument_id = ${instrumentId}
+          ORDER BY op."instrumentId", op.id DESC
+      ),
+      latest_tick_eq AS (
+          SELECT DISTINCT ON ("instrumentId", time_bucket)
+              "instrumentId",
+              ltp,
+              time,
+              time_bucket
+          FROM (
+              SELECT *,
+                  date_trunc('hour', time) +
+                  floor(EXTRACT(minute FROM time)::int / 5) * interval '5 minutes' AS time_bucket
+              FROM periodic_market_data."ticksDataNSEEQ"
+          ) t
+          ORDER BY "instrumentId", time_bucket, time DESC
+      ),
+      strike_extraction AS (
+          SELECT
+              s.id,
+              s.instrument_id,
+              s.symbol,
+              s.strike::numeric strike,
+              (REGEXP_MATCHES(s.symbol, '(CE|PE)$'))[1] AS option_type,
+              TO_CHAR(s.expiry_date, 'Month') AS expiry_month,
+              s.expiry_date
+          FROM market_data.symbols_list s
+          WHERE s.segment = 'OPT'
+      ),
+      with_calcs AS (
+          SELECT
+              i.id AS id,
+              i.instrument_type AS underlying,
+              se.expiry_month AS expiry_month,
+              se.expiry_date AS expiry_date,
+              e.ltp::numeric AS underlying_price,
+              TO_CHAR(o.time, 'yyyy-mm-dd HH12:MI AM') AS time,
+              o.ltp::numeric AS premium,
+              o.volume,
+              se.strike,
+              se.option_type,
+              ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) * -1 AS otm,
+              ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage
+          FROM market_data.instrument_lists i
+          JOIN strike_extraction se ON i.id = se.instrument_id
+          JOIN latest_tick_opt o ON se.id = o."instrumentId"
+          JOIN LATERAL (
+              SELECT *
+              FROM latest_tick_eq e
+              WHERE e."instrumentId" = i.id
+              AND e.time_bucket IN (
+                  date_trunc('hour', o.time) + floor(EXTRACT(minute FROM o.time)::int / 5) * interval '5 minutes',
+                  date_trunc('hour', o.time) + (floor(EXTRACT(minute FROM o.time)::int / 5) + 4) * interval '5 minutes'
+              )
+              ORDER BY ABS(EXTRACT(EPOCH FROM (e.time - o.time)))
+              LIMIT 1
+          ) e ON true
+      )
+      SELECT
+          id,
+          underlying,
+          expiry_month,
+          time,
+          underlying_price,
+          premium,
+          volume,
+          strike,
+          option_type,
+          otm,
+          premium_percentage,
+          expiry_date
+      FROM with_calcs
+      WHERE id = ${instrumentId}
+      ${filterConditions}
+    `;
+
+    const dataQuery = `${baseQuery}
+      ORDER BY time DESC
+      LIMIT ${limitNum} OFFSET ${offset}
+    `;
+
+    const countQuery = `
+      SELECT COUNT(*) AS count
+      FROM (${baseQuery}) t
+    `;
+
+    const [rowsRaw, countResult] = await Promise.all([
+      prisma.$queryRawUnsafe<any[]>(dataQuery),
+      prisma.$queryRawUnsafe<Array<{ count: bigint }>>(countQuery),
+    ]);
+
+    const totalCount = Number(countResult?.[0]?.count || 0);
+    const totalPages = Math.ceil(totalCount / limitNum) || 1;
+
+    // Drop expiry_date from response to match daily trend shape
+    const rows = rowsRaw.map((r) => ({
+      underlying: r.underlying,
+      expiry_month: r.expiry_month,
+      time: r.time,
+      underlying_price: r.underlying_price,
+      premium: r.premium,
+      volume: r.volume,
+      strike: r.strike,
+      option_type: r.option_type,
+      otm: r.otm,
+      premium_percentage: r.premium_percentage,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      data: rows,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: totalCount,
+        totalPages,
+        hasMore: pageNum < totalPages,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching covered calls hourly trend:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
   }
 };

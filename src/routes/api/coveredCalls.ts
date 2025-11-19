@@ -5,6 +5,8 @@ import {
   getCoveredCallsSymbolsExpiry,
   getFilteredCoveredCallsDetails,
   getLatestOptionsTicksByInstrument,
+  getCoveredCallsTrendDaily,
+  getCoveredCallsTrendHourly,
 } from "../../controllers/coveredCallsController";
 
 const router = Router();
@@ -23,5 +25,11 @@ router.get("/:instrumentId/filtered", getFilteredCoveredCallsDetails);
 
 // GET /api/covered-calls/:instrumentId/latest - latest options ticks per symbol (historical fallback)
 router.get("/:instrumentId/latest", getLatestOptionsTicksByInstrument);
+
+// GET /api/covered-calls/:instrumentId/trend/daily - daily trend data for options
+router.get("/:instrumentId/trend/daily", getCoveredCallsTrendDaily);
+
+// GET /api/covered-calls/:instrumentId/trend/hourly - hourly trend data for options
+router.get("/:instrumentId/trend/hourly", getCoveredCallsTrendHourly);
 
 export default router;

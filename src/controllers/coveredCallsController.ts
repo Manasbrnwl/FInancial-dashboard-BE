@@ -142,7 +142,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
             i.instrument_type AS underlying,
             se.expiry_month AS expiry_month,
             e.ltp::numeric AS underlying_price,
-            TO_CHAR(o.time, 'DD Mon, YYYY HH12:MI AM') as time,
+            TO_CHAR(o.time, 'yyyy-mm-dd HH12:MI AM') AS time,
             o.ltp::numeric AS premium,
             o.volume,
             se.strike,

@@ -223,7 +223,7 @@ arbitrage_data AS (
 SELECT
     instrumentid,
     name,
-    tick_date AS date,
+    TO_CHAR(tick_date, 'yyyy-mm-dd HH12:MI AM') AS date,
     MAX(CASE WHEN symbol_rank = 1 THEN symbol END) as symbol_1,
     MAX(CASE WHEN symbol_rank = 1 THEN ltp END) as price_1,
     MAX(CASE WHEN symbol_rank = 2 THEN symbol END) as symbol_2,
@@ -299,7 +299,7 @@ ranked_symbols AS (
           SELECT
               instrumentid,
               name,
-              DATE_TRUNC('minute', tick_date) - ((EXTRACT(MINUTE FROM tick_date)::int % 5) * INTERVAL '1 minute') AS date,
+              TO_CHAR(DATE_TRUNC('minute', tick_date) - ((EXTRACT(MINUTE FROM tick_date)::int % 5) * INTERVAL '1 minute'), 'yyyy-mm-dd HH12:MI AM') AS date,
               MAX(CASE WHEN symbol_rank = 1 THEN symbol END) as symbol_1,
               MAX(CASE WHEN symbol_rank = 1 THEN TO_CHAR(correct_time, 'HH12:MI AM') END) as time_1,
               MAX(CASE WHEN symbol_rank = 1 THEN ltp END) as price_1,

@@ -120,7 +120,7 @@ export const getEquityDateRangeController = async (
     const rows = await prisma.$queryRaw<
       { min_date: Date | null; max_date: Date | null }[]
     >`
-      SELECT MIN(date) AS min_date, MAX(date) AS max_date
+      SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
       FROM market_data.nse_equity ne
       WHERE ne.symbol = COALESCE(${param}, ne.symbol)
     `;
@@ -128,7 +128,7 @@ export const getEquityDateRangeController = async (
     const hourly_rows = await prisma.$queryRaw<
       { min_date: Date | null; max_date: Date | null }[]
     >`
-      SELECT MIN(time) min_date, MAX(time) max_date 
+      SELECT TO_CHAR(MIN(time), 'yyyy-mm-dd HH12:MI AM') AS min_date, TO_CHAR(MAX(time), 'yyyy-mm-dd HH12:MI AM') AS max_date 
       FROM periodic_market_data."ticksDataNSEEQ" ne 
       INNER JOIN market_data.instrument_lists il ON ne."instrumentId" = il.id 
       WHERE il.instrument_type = COALESCE(${param}, il.instrument_type)`;
@@ -137,23 +137,17 @@ export const getEquityDateRangeController = async (
     const hourly_row = hourly_rows[0] || { min_date: null, max_date: null };
     res.json({
       success: true,
-      min_date: row.min_date ? row.min_date.toISOString().slice(0, 10) : null,
-      max_date: row.max_date ? row.max_date.toISOString().slice(0, 10) : null,
-      hourly_min_date: hourly_row.min_date
-        ? hourly_row.min_date.toISOString()
-        : null,
-      hourly_max_date: hourly_row.max_date
-        ? hourly_row.max_date.toISOString()
-        : null,
+      min_date: row.min_date && row.min_date,
+      max_date: row.max_date && row.max_date,
+      hourly_min_date: hourly_row.min_date && hourly_row.min_date,
+      hourly_max_date: hourly_row.max_date && hourly_row.max_date,
     });
   } catch (error: any) {
     console.error("Error fetching equity date range:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        error: "Failed to fetch equity date range",
-        message: error.message,
-      });
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch equity date range",
+      message: error.message,
+    });
   }
 };

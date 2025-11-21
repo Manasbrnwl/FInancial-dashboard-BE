@@ -8,6 +8,7 @@ import arbitrageRouter from "./arbitrage";
 import coveredCallsRouter from "./coveredCalls";
 import arbitrageDetailsRouter from "./arbitrageDetails";
 import cronStatusRouter from "./cronStatus";
+import gapAlertsRouter from "./gapAlerts";
 
 const router = Router();
 
@@ -21,6 +22,7 @@ router.use("/arbitrage", arbitrageRouter);
 router.use("/covered-calls", coveredCallsRouter);
 router.use("/arbitrage-details", arbitrageDetailsRouter);
 router.use("/cron-status", cronStatusRouter);
+router.use("/gap-alerts", gapAlertsRouter);
 
 // Health check endpoint
 router.get("/health", (req, res) => {

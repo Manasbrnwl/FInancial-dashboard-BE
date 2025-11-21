@@ -12,6 +12,8 @@ import { webSocketService } from "./services/websocketService";
 import { WebSocketManager } from "./utils/websocketManager";
 import { initializeHourlyTicksNseOptJob } from "./jobs/hourlyTicksNseOptJob";
 import { initializeHourlyTicksNseEqJob } from "./jobs/hourlyTicksNseEqJob";
+import { initializeGapAverageLoader } from "./jobs/gapAverageLoader";
+import { initializeGapHistoryCleanupJob } from "./jobs/gapHistoryCleanup";
 import apiRouter from "./routes/api";
 import { socketIOService } from "./services/socketioService";
 
@@ -29,7 +31,7 @@ socketIOService.initialize(httpServer);
 // CORS configuration - allow requests from frontend
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://15.207.43.160:8080"],
+    origin: ["http://localhost:5173", "http://15.207.43.160:8080", "http://anfy.in:8080", "http://anfy.in", "https://anfy.in"],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -56,6 +58,10 @@ initializeHourlyTicksNseEqJob();
 
 // Initialize the daily NSE options job
 initializeDailyNseJob();
+
+// Initialize gap baseline loader and cleanup jobs
+initializeGapAverageLoader();
+initializeGapHistoryCleanupJob();
 
 // Initialize WebSocket service for real-time data (arbitrage monitoring)
 async function initializeWebSocketService() {

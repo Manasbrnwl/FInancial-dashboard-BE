@@ -271,20 +271,21 @@ model ticksDataNSEOPT {
   @@index([instrumentId, id(sort: Desc), ltp, volume], map: "idx_cover_ticks_nseopt")
   @@index([instrumentId, id(sort: Desc)], map: "idx_ticks_nseopt_instrument_id_desc")
   @@index([instrumentId, id(sort: Desc)], map: "idx_opt_latest")
+  @@index([instrumentId, id(sort: Desc)], map: "idx_opt_instrumentid_id_desc")
   @@schema("periodic_market_data")
 }
 
 model gap_time_series {
-  id            BigInt    @id @default(autoincrement())
+  id            BigInt   @id @default(autoincrement())
   instrument_id Int
-  date          DateTime  @db.Date
-  time_slot     String    @db.VarChar(5) // "09:15", "09:20"
+  date          DateTime @db.Date
+  time_slot     String   @db.VarChar(5)
   gap_1         Float
   gap_2         Float
   price_1       Float?
   price_2       Float?
   price_3       Float?
-  created_at    DateTime  @default(now()) @db.Timestamp(6)
+  created_at    DateTime @default(now()) @db.Timestamp(6)
 
   @@unique([instrument_id, date, time_slot], map: "gap_time_series_instrument_date_slot_unique")
   @@index([instrument_id, time_slot, date(sort: Desc)], map: "idx_gap_time_series_instrument_slot_date")
@@ -296,7 +297,7 @@ model gap_alerts {
   instrument_id     Int
   instrument_name   String
   time_slot         String   @db.VarChar(5)
-  alert_type        String   @db.VarChar(10) // gap_1 | gap_2
+  alert_type        String   @db.VarChar(10)
   current_value     Float
   avg_value         Float
   deviation_percent Float
@@ -308,17 +309,16 @@ model gap_alerts {
 }
 
 model gap_alert_config {
-  id                Int       @id @default(autoincrement())
-  instrument_id     Int?
-  percent_threshold Float     @default(15)
-  comparison_days   Int       @default(15)
-  cooldown_minutes  Int       @default(30)
-  baseline_days_min Int       @default(10)
-  baseline_days_max Int       @default(20)
-  is_active         Boolean   @default(true)
-  created_at        DateTime  @default(now()) @db.Timestamp(6)
-  updated_at        DateTime  @updatedAt @db.Timestamp(6)
+  id                Int      @id @default(autoincrement())
+  instrument_id     Int?     @unique(map: "gap_alert_config_instrument_unique")
+  percent_threshold Float    @default(15)
+  comparison_days   Int      @default(15)
+  cooldown_minutes  Int      @default(30)
+  baseline_days_min Int      @default(10)
+  baseline_days_max Int      @default(20)
+  is_active         Boolean  @default(true)
+  created_at        DateTime @default(now()) @db.Timestamp(6)
+  updated_at        DateTime @updatedAt @db.Timestamp(6)
 
-  @@unique([instrument_id], map: "gap_alert_config_instrument_unique")
   @@schema("market_data")
 }

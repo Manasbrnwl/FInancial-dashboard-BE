@@ -5,5 +5,7 @@ dist/
 /src/generated/prisma
 *.md
 
+market-dashboard/
+
 # Cron job history (temporary data)
 history.json

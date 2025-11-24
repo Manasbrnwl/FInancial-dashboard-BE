@@ -13,6 +13,23 @@ interface MarketData {
 export class SocketIOService {
   private io: SocketIOServer | null = null;
   private connectedClients: Set<string> = new Set();
+  private allowedOrigins: string[];
+
+  constructor() {
+    const envOrigins = process.env.SOCKET_IO_ALLOWED_ORIGINS
+      ? process.env.SOCKET_IO_ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()).filter(Boolean)
+      : [];
+
+    this.allowedOrigins = Array.from(new Set([
+      "https://anfy.in",
+      "https://www.anfy.in",
+      "https://api.anfy.in",
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "http://15.207.43.160:8080",
+      ...envOrigins,
+    ]));
+  }
 
   /**
    * Initialize Socket.io server
@@ -20,11 +37,17 @@ export class SocketIOService {
   public initialize(httpServer: HTTPServer): void {
     this.io = new SocketIOServer(httpServer, {
       cors: {
-        origin: ["https://anfy.in", "https://www.anfy.in", "anfy.in", "www.anfy.in", "http://localhost:5173"],
+        origin: this.allowedOrigins,
         credentials: true,
         methods: ['GET', 'POST']
       },
       transports: ['websocket', 'polling']
+    });
+
+    this.io.engine.on('connection_error', (error: any) => {
+      console.error(`❌ Socket.io handshake failed (${error?.code}): ${error?.message}`, {
+        origin: error?.req?.headers?.origin
+      });
     });
 
     this.setupEventHandlers();

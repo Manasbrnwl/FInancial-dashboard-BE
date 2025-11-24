@@ -62,7 +62,7 @@ export async function loadGapBaselines(): Promise<void> {
       baselineDate: row.baseline_date,
     });
   });
-console.log(gapBaselines)
+
   console.log(
     `?? Loaded gap baselines for ${gapBaselines.size} instruments (window ${maxDays}-${minDays} days)`
   );
@@ -72,7 +72,7 @@ export function getGapBaseline(
   instrumentId: number,
   timeSlot: string
 ): GapBaseline | undefined {
-  return gapBaselines.get(instrumentId)?.get("13:15");
+  return gapBaselines.get(instrumentId)?.get(timeSlot);
 }
 
 export function clearGapBaselines(): void {

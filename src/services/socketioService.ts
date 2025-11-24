@@ -20,7 +20,7 @@ export class SocketIOService {
   public initialize(httpServer: HTTPServer): void {
     this.io = new SocketIOServer(httpServer, {
       cors: {
-        origin: ['http://localhost:5173', 'http://localhost:3000', 'http://15.207.43.160:8080'],
+        origin: ["https://anfy.in", "https://www.anfy.in", "anfy.in", "www.anfy.in", "http://localhost:5173"],
         credentials: true,
         methods: ['GET', 'POST']
       },

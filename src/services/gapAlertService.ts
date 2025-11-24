@@ -79,7 +79,10 @@ function getTimestampDate(timestamp?: string | Date): Date {
   return timestamp instanceof Date ? timestamp : new Date(timestamp);
 }
 
-function computeDeviationPercent(current: number, baseline: number | null): number {
+function computeDeviationPercent(
+  current: number,
+  baseline: number | null
+): number {
   if (baseline === null || baseline === 0) return 0;
   return Math.abs((current - baseline) / baseline) * 100;
 }
@@ -97,8 +100,10 @@ async function getAlertConfig(instrumentId?: number): Promise<AlertConfig> {
     });
 
     globalConfig = {
-      percentThreshold: dbGlobal?.percent_threshold ?? DEFAULT_CONFIG.percentThreshold,
-      cooldownMinutes: dbGlobal?.cooldown_minutes ?? DEFAULT_CONFIG.cooldownMinutes,
+      percentThreshold:
+        dbGlobal?.percent_threshold ?? DEFAULT_CONFIG.percentThreshold,
+      cooldownMinutes:
+        dbGlobal?.cooldown_minutes ?? DEFAULT_CONFIG.cooldownMinutes,
     };
 
     configCache.set("global", globalConfig);
@@ -112,8 +117,10 @@ async function getAlertConfig(instrumentId?: number): Promise<AlertConfig> {
 
   const finalConfig = specificConfig
     ? {
-        percentThreshold: specificConfig.percent_threshold ?? globalConfig.percentThreshold,
-        cooldownMinutes: specificConfig.cooldown_minutes ?? globalConfig.cooldownMinutes,
+        percentThreshold:
+          specificConfig.percent_threshold ?? globalConfig.percentThreshold,
+        cooldownMinutes:
+          specificConfig.cooldown_minutes ?? globalConfig.cooldownMinutes,
       }
     : globalConfig;
 
@@ -201,7 +208,9 @@ Baseline date: ${baselineDate?.toISOString().slice(0, 10) ?? "n/a"}`;
       <li><strong>Current:</strong> ${currentValue}</li>
       <li><strong>Baseline:</strong> ${baselineValue ?? "n/a"}</li>
       <li><strong>Deviation:</strong> ${payload.deviationPercent}%</li>
-      <li><strong>Baseline date:</strong> ${baselineDate?.toISOString().slice(0, 10) ?? "n/a"}</li>
+      <li><strong>Baseline date:</strong> ${
+        baselineDate?.toISOString().slice(0, 10) ?? "n/a"
+      }</li>
     </ul>
     <p>Triggered at ${payload.triggeredAt}</p>
   `;
@@ -230,7 +239,11 @@ Baseline date: ${baselineDate?.toISOString().slice(0, 10) ?? "n/a"}`;
   }
 }
 
-async function storeGapPoint(gap: GapData, timeSlot: string, dateOnly: Date): Promise<void> {
+async function storeGapPoint(
+  gap: GapData,
+  timeSlot: string,
+  dateOnly: Date
+): Promise<void> {
   await prisma.gap_time_series.upsert({
     where: {
       instrument_id_date_time_slot: {
@@ -284,9 +297,16 @@ export async function processGapData(
         continue;
       }
 
-      const percentThreshold = percentThresholdOverride ?? config.percentThreshold;
-      const deviation1 = computeDeviationPercent(gap.gap_1, baseline.baselineGap1);
-      const deviation2 = computeDeviationPercent(gap.gap_2, baseline.baselineGap2);
+      const percentThreshold =
+        percentThresholdOverride ?? config.percentThreshold;
+      const deviation1 = computeDeviationPercent(
+        gap.gap_1,
+        baseline.baselineGap1
+      );
+      const deviation2 = computeDeviationPercent(
+        gap.gap_2,
+        baseline.baselineGap2
+      );
 
       if (deviation1 >= percentThreshold) {
         await triggerAlert({
@@ -314,14 +334,17 @@ export async function processGapData(
         });
       }
 
-      if (cooldownOverride !== undefined) {
+      if (cooldownOverride ?? config.cooldownMinutes !== undefined) {
         configCache.set(gap.instrumentId, {
           ...config,
-          cooldownMinutes: cooldownOverride,
+          cooldownMinutes: cooldownOverride ?? config.cooldownMinutes,
         });
       }
     } catch (error: any) {
-      console.error(`? Failed to process gap data for ${gap.instrumentName}:`, error.message);
+      console.error(
+        `? Failed to process gap data for ${gap.instrumentName}:`,
+        error.message
+      );
     }
   }
 }

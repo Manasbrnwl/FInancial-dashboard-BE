@@ -44,8 +44,8 @@ export async function loadGapBaselines(): Promise<void> {
       AVG(gap_2) AS baseline_gap_2,
       MAX(date) AS baseline_date
     FROM market_data.gap_time_series
-    WHERE date BETWEEN CURRENT_DATE - (${maxDays} * INTERVAL '1 day')
-                AND CURRENT_DATE - (${minDays} * INTERVAL '1 day')
+    WHERE date BETWEEN CURRENT_DATE - (20 * INTERVAL '1 day')
+                AND CURRENT_DATE - (0 * INTERVAL '1 day')
     GROUP BY instrument_id, time_slot
   `);
 
@@ -62,7 +62,7 @@ export async function loadGapBaselines(): Promise<void> {
       baselineDate: row.baseline_date,
     });
   });
-
+console.log(gapBaselines)
   console.log(
     `?? Loaded gap baselines for ${gapBaselines.size} instruments (window ${maxDays}-${minDays} days)`
   );
@@ -72,7 +72,7 @@ export function getGapBaseline(
   instrumentId: number,
   timeSlot: string
 ): GapBaseline | undefined {
-  return gapBaselines.get(instrumentId)?.get(timeSlot);
+  return gapBaselines.get(instrumentId)?.get("13:15");
 }
 
 export function clearGapBaselines(): void {

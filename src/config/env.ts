@@ -6,6 +6,9 @@ export const loadEnv = () => {
   // Required environment variables
   const requiredEnvVars = [
     "PORT",
+    "AUTH_USERNAME",
+    "AUTH_PASSWORD",
+    "JWT_SECRET",
     "API_USERNAME",
     "API_PASSWORD",
     "LOGIN_API_URL",

@@ -9,8 +9,12 @@ import coveredCallsRouter from "./coveredCalls";
 import arbitrageDetailsRouter from "./arbitrageDetails";
 import cronStatusRouter from "./cronStatus";
 import gapAlertsRouter from "./gapAlerts";
+import { authenticateRequest } from "../../middleware/authMiddleware";
 
 const router = Router();
+
+// Protect all API routes with JWT authentication
+router.use(authenticateRequest);
 
 // Mount individual route modules
 router.use("/nse-equity", nseEquityRouter);

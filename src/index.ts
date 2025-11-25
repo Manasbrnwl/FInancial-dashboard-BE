@@ -16,6 +16,8 @@ import { initializeGapAverageLoader } from "./jobs/gapAverageLoader";
 import { initializeGapHistoryCleanupJob } from "./jobs/gapHistoryCleanup";
 import apiRouter from "./routes/api";
 import { socketIOService } from "./services/socketioService";
+import authRouter from "./routes/auth";
+import { authenticateRequest } from "./middleware/authMiddleware";
 
 dotenv.config();
 loadEnv();
@@ -41,8 +43,9 @@ app.use(
 app.use(express.json());
 
 // Routes
+app.use("/api/auth", authRouter);
+app.use("/api/websocket", authenticateRequest, websocketRouter);
 app.use("/api", apiRouter);
-app.use("/api/websocket", websocketRouter);
 
 // Initialize the login job
 initializeLoginJob();

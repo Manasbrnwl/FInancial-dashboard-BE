@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { createServer } from "http";
+import morgan from "morgan";
 // import healthRouter from "./routes/health";
 import websocketRouter from "./routes/websocket";
 import { loadEnv } from "./config/env";
@@ -41,30 +42,30 @@ app.use(
 );
 
 app.use(express.json());
-
+app.use(morgan("dev"))
 // Routes
 app.use("/api/auth", authRouter);
 app.use("/api/websocket", authenticateRequest, websocketRouter);
 app.use("/api", apiRouter);
 
 // Initialize the login job
-initializeLoginJob();
+// initializeLoginJob();
 
 // Initialize the hourly NSE futures job
-initializeHourlyTicksNseFutJob();
+// initializeHourlyTicksNseFutJob();
 
 // Initialize the hourly NSE options job
-initializeHourlyTicksNseOptJob();
+// initializeHourlyTicksNseOptJob();
 
 // Initialize the hourly NSE equity job
-initializeHourlyTicksNseEqJob();
+// initializeHourlyTicksNseEqJob();
 
 // Initialize the daily NSE options job
-initializeDailyNseJob();
+// initializeDailyNseJob();
 
 // Initialize gap baseline loader and cleanup jobs
-initializeGapAverageLoader();
-initializeGapHistoryCleanupJob();
+// initializeGapAverageLoader();
+// initializeGapHistoryCleanupJob();
 
 // Initialize WebSocket service for real-time data (arbitrage monitoring)
 async function initializeWebSocketService() {
@@ -76,7 +77,7 @@ async function initializeWebSocketService() {
 }
 
 // Start WebSocket service
-initializeWebSocketService();
+// initializeWebSocketService();
 
 // Graceful shutdown handling
 process.on("SIGTERM", () => {

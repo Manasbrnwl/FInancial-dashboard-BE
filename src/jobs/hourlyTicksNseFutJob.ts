@@ -93,7 +93,7 @@ async function getNseInstruments(): Promise<SymbolInstruments[]> {
              symbol as instrument_type,
              expiry_date
       from market_data.symbols_list
-      where expiry_date >= CURRENT_DATE and segment = 'FUT' and instrument_id = 6811
+      where expiry_date >= CURRENT_DATE and segment = 'FUT'
       order by symbolId asc, expiry_date asc
     `;
 

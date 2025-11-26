@@ -23,6 +23,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     const maxPremium = req.query.maxPremium
       ? parseFloat(req.query.maxPremium as string)
       : null;
+    const expiryMonth = req.query.expiryMonth as string;
 
     // Build filter conditions
     let filterCondition = "";
@@ -47,71 +48,9 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
 
     // Get total count with filters
     const countResult = await prisma.$queryRaw<
-      Array<{ count: bigint; avg_premium: string }>
+      Array<{ count: bigint; avg_premium: string; expiry_month: string[] }>
     >`
     WITH latest_tick_opt AS (
-        SELECT DISTINCT ON ("instrumentId")
-            "instrumentId", ltp, volume
-        FROM periodic_market_data."ticksDataNSEOPT"
-        ORDER BY "instrumentId", id DESC
-    ),
-    latest_tick_eq AS (
-        SELECT DISTINCT ON ("instrumentId")
-            "instrumentId", ltp
-        FROM periodic_market_data."ticksDataNSEEQ"
-        ORDER BY "instrumentId", id DESC
-    ),
-    strike_extraction AS (
-        SELECT
-            s.id,
-            s.symbol,
-            s.instrument_id,
-            s.strike::numeric strike,
-            (REGEXP_MATCHES(s.symbol, '(CE|PE)$'))[1] AS option_type
-        FROM market_data.symbols_list s
-        WHERE s.segment = 'OPT'
-        AND s.expiry_date >= CURRENT_DATE
-    ),
-    with_calcs AS (
-        SELECT
-            i.instrument_type AS underlying,
-            se.symbol AS option_symbol,
-            e.ltp::numeric AS underlying_price,
-            o.ltp::numeric AS premium,
-            o.volume,
-            se.strike,
-            se.option_type,
-            ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) * -1 AS otm,
-            ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage
-        FROM market_data.instrument_lists i
-        JOIN strike_extraction se ON i.id = se.instrument_id
-        JOIN latest_tick_opt o ON se.id = o."instrumentId"
-        JOIN latest_tick_eq e ON i.id = e."instrumentId"
-    )
-    SELECT COUNT(*) as count, round(avg(premium_percentage),2) as avg_premium
-    FROM with_calcs
-    WHERE 1=1 ${Prisma.raw(filterCondition)}
-    `;
-
-    const totalCount = Number(countResult[0]?.count || 0);
-    const avg_premium = Number(countResult[0]?.avg_premium || 0.00)
-
-    // Get paginated and filtered data
-    const coveredCallsData = await prisma.$queryRaw<
-      Array<{
-        id: number;
-        underlying: string;
-        underlying_price: number;
-        expiry_month: string;
-        time: string;
-        premium: number;
-        volume: number;
-        strike: number;
-        option_type: string;
-        otm: number;
-        premium_percentage: number;
-      }>
-    >`WITH latest_tick_opt AS (
         SELECT DISTINCT ON ("instrumentId")
             "instrumentId", ltp, volume, time
         FROM periodic_market_data."ticksDataNSEOPT"
@@ -121,7 +60,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         SELECT DISTINCT ON ("instrumentId", time_bucket)
        		"instrumentId", ltp, time, time_bucket
 		FROM (
-    		SELECT *, date_trunc('hour', time) + floor(EXTRACT(minute FROM time)::int / 5) * interval '5 minutes' AS time_bucket FROM periodic_market_data."ticksDataNSEEQ"
+    		SELECT * FROM periodic_market_data."ticksDataNSEEQ"
 		) t ORDER BY "instrumentId", time_bucket, time DESC
     ),
     strike_extraction AS (
@@ -130,8 +69,9 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
             s.instrument_id,
             s.symbol,
             s.strike::numeric strike,
-            (REGEXP_MATCHES(s.symbol, '(CE|PE)$'))[1] AS option_type,
-            TO_CHAR(s.expiry_date, 'Month') expiry_month
+            s.option_type,
+            s.expiry_month,
+            s.expiry_date
         FROM market_data.symbols_list s
         WHERE s.segment = 'OPT'
         AND s.expiry_date >= CURRENT_DATE
@@ -149,6 +89,89 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
             se.option_type,
             ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) * -1 AS otm,
             ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage,
+            COALESCE(ROUND((((o.ltp::numeric / e.ltp::numeric) * 100) * 30)/NULLIF((se.expiry_date - date(o.time)), 0),2),0) AS monthly_premium,
+            dense_rank() over (partition by i.instrument_type order by date(o.time) desc) rn
+        FROM market_data.instrument_lists i
+        JOIN strike_extraction se ON i.id = se.instrument_id
+        JOIN latest_tick_opt o ON se.id = o."instrumentId"       
+		JOIN LATERAL (
+        SELECT * FROM latest_tick_eq e
+    		WHERE e."instrumentId" = i.id 
+        AND e.time_bucket IN (
+              date_trunc('hour', o.time) + floor(EXTRACT(minute FROM o.time)::int / 5) * interval '5 minutes',
+              date_trunc('hour', o.time) + (floor(EXTRACT(minute FROM o.time)::int / 5) + 4) * interval '5 minutes'
+          )
+        ORDER BY ABS(EXTRACT(EPOCH FROM (e.time - o.time)))
+    		LIMIT 1
+		) e ON true
+ 	)
+    SELECT COUNT(*) as count, round(avg(premium_percentage),2) as avg_premium, json_agg(distinct expiry_month) expiry_month
+    FROM with_calcs
+    WHERE 1=1 ${Prisma.raw(filterCondition)}
+    `;
+
+    const totalCount = Number(countResult[0]?.count || 0);
+    const avg_premium = Number(countResult[0]?.avg_premium || 0.0);
+    const expiry_month = Array.isArray(countResult[0]?.expiry_month)
+      ? countResult[0]?.expiry_month
+      : [];
+
+    // Get paginated and filtered data
+    const coveredCallsData = await prisma.$queryRaw<
+      Array<{
+        id: number;
+        underlying: string;
+        underlying_price: number;
+        expiry_month: string;
+        time: string;
+        premium: number;
+        volume: number;
+        strike: number;
+        option_type: string;
+        otm: number;
+        premium_percentage: number;
+        monthly_premium: number;
+      }>
+    >`WITH latest_tick_opt AS (
+        SELECT DISTINCT ON ("instrumentId")
+            "instrumentId", ltp, volume, time
+        FROM periodic_market_data."ticksDataNSEOPT"
+        ORDER BY "instrumentId", id DESC
+    ),
+    latest_tick_eq AS (
+        SELECT DISTINCT ON ("instrumentId", time_bucket)
+       		"instrumentId", ltp, time, time_bucket
+		FROM (
+    		SELECT * FROM periodic_market_data."ticksDataNSEEQ"
+		) t ORDER BY "instrumentId", time_bucket, time DESC
+    ),
+    strike_extraction AS (
+        SELECT
+            s.id,
+            s.instrument_id,
+            s.symbol,
+            s.strike::numeric strike,
+            s.option_type,
+            s.expiry_month,
+            s.expiry_date
+        FROM market_data.symbols_list s
+        WHERE s.segment = 'OPT'
+        AND s.expiry_date >= CURRENT_DATE
+    ),
+    with_calcs AS (
+        SELECT
+            i.id as id,
+            i.instrument_type AS underlying,
+            se.expiry_month AS expiry_month,
+            e.ltp::numeric AS underlying_price,
+            TO_CHAR(o.time, 'yyyy-mm-dd HH12:MI AM') AS time,
+            o.ltp::numeric AS premium,
+            o.volume,
+            se.strike,
+            se.option_type,
+            ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) * -1 AS otm,
+            ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage,
+            COALESCE(ROUND((((o.ltp::numeric / e.ltp::numeric) * 100) * 30)/NULLIF((se.expiry_date - date(o.time)), 0),2),0) AS monthly_premium,
             dense_rank() over (partition by i.instrument_type order by date(o.time) desc) rn
         FROM market_data.instrument_lists i
         JOIN strike_extraction se ON i.id = se.instrument_id
@@ -175,14 +198,22 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         strike,
         option_type,
         otm,
-        premium_percentage
+        premium_percentage,
+        monthly_premium
     FROM with_calcs
-    WHERE rn=1 ${Prisma.raw(filterCondition)}
+    WHERE rn=1 ${Prisma.raw(filterCondition)} ${
+      Prisma.raw(expiryMonth !== null &&
+      expiryMonth !== undefined &&
+      expiryMonth !== "" &&
+      expiryMonth !== "ALL"
+        ? ` AND trim(expiry_month) = '${expiryMonth}'`
+        : " AND 1 = 1")
+    }
     ORDER BY underlying, strike
     LIMIT ${limit}
     OFFSET ${offset}
     `;
-    
+
     // Transform the data to proper format with type conversions
     const transformedData = coveredCallsData.map((item) => ({
       id: item.id,
@@ -196,6 +227,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
       optionType: item.option_type,
       otm: item.otm || null,
       premiumPercent: item.premium_percentage || null,
+      monthlyPercent: item.monthly_premium || null,
     }));
 
     res.json({
@@ -203,6 +235,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
       data: transformedData,
       count: transformedData.length,
       avg_premium,
+      expiry_month,
       total: totalCount,
       page,
       limit,
@@ -320,6 +353,7 @@ export const getCoveredCallsSymbolsExpiry = async (
 ) => {
   try {
     const { instrumentId } = req.params;
+    const { option_type } = req.query;
 
     if (!instrumentId) {
       return res.status(400).json({
@@ -329,11 +363,15 @@ export const getCoveredCallsSymbolsExpiry = async (
     }
 
     const query = `
-      SELECT DISTINCT sl.symbol, sl.expiry_date, sl.strike
+      SELECT DISTINCT sl.symbol, sl.expiry_date, sl.strike, TO_CHAR(sl.expiry_date, 'Month') expiry_month
       FROM market_data.symbols_list sl
       WHERE sl.instrument_id = ${instrumentId}
-        AND sl.segment = 'OPT'
         AND sl.expiry_date >= CURRENT_DATE
+        AND sl.segment = 'OPT' ${
+          option_type && option_type !== "ALL"
+            ? `AND option_type = '${option_type}'`
+            : "AND 1=1"
+        }
       ORDER BY sl.expiry_date, sl.symbol;
     `;
 
@@ -419,7 +457,7 @@ export const getFilteredCoveredCallsDetails = async (
               s.instrument_id,
               s.symbol,
               s.strike::numeric strike,
-              (REGEXP_MATCHES(s.symbol, '(CE|PE)$'))[1] AS option_type,
+              option_type,
               s.expiry_date
           FROM market_data.symbols_list s
           WHERE s.segment = 'OPT'
@@ -437,7 +475,8 @@ export const getFilteredCoveredCallsDetails = async (
               se.option_type,
               se.expiry_date,
               ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) * -1 AS otm,
-              ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage
+              ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage,
+              COALESCE(ROUND((((o.ltp::numeric / e.ltp::numeric) * 100) * 30)/NULLIF((se.expiry_date - date(o.time)), 0),2),0) AS monthly_premium
           FROM market_data.instrument_lists i
           JOIN strike_extraction se ON i.id = se.instrument_id
           JOIN latest_tick_opt o ON se.id = o."instrumentId"
@@ -455,6 +494,7 @@ export const getFilteredCoveredCallsDetails = async (
           option_type,
           otm,
           premium_percentage,
+          monthly_premium,
           expiry_date
       FROM with_calcs
       WHERE 1=1 ${filterConditions}
@@ -464,7 +504,9 @@ export const getFilteredCoveredCallsDetails = async (
     const countQuery = baseQuery;
 
     // Data query with pagination
-    const dataQuery = baseQuery + `
+    const dataQuery =
+      baseQuery +
+      `
       ORDER BY underlying, time DESC, strike
       LIMIT ${limitNum}
       OFFSET ${offset}
@@ -488,9 +530,14 @@ export const getFilteredCoveredCallsDetails = async (
       ? countResult.filter((row: any) => row.option_type === "PE").length
       : 0;
 
-    const avgPremiumPercentage = Array.isArray(countResult) && countResult.length > 0
-      ? countResult.reduce((sum: number, row: any) => sum + (parseFloat(row.premium_percentage) || 0), 0) / countResult.length
-      : 0;
+    const avgPremiumPercentage =
+      Array.isArray(countResult) && countResult.length > 0
+        ? countResult.reduce(
+            (sum: number, row: any) =>
+              sum + (parseFloat(row.premium_percentage) || 0),
+            0
+          ) / countResult.length
+        : 0;
 
     return res.status(200).json({
       success: true,
@@ -530,7 +577,9 @@ export const getLatestOptionsTicksByInstrument = async (
     const { instrumentId } = req.params;
     const { expiryDate } = req.query as { expiryDate?: string };
     if (!instrumentId) {
-      return res.status(400).json({ success: false, message: "instrumentId is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "instrumentId is required" });
     }
 
     // Build expiry filter: either specific expiry (from UI) or default to nearest/future
@@ -613,6 +662,7 @@ export const getCoveredCallsTrendDaily = async (
       maxPremium,
       startDate,
       endDate,
+      expiryMonth
     } = req.query as {
       page?: string;
       optionType?: string;
@@ -622,6 +672,7 @@ export const getCoveredCallsTrendDaily = async (
       maxPremium?: string;
       startDate?: string;
       endDate?: string;
+      expiryMonth? : string;
     };
 
     if (!instrumentId) {
@@ -676,18 +727,39 @@ export const getCoveredCallsTrendDaily = async (
       filterConditions += ` AND no2."date" <= '${endDate}'::date`;
     }
 
-    const baseQuery = `
+    const dataQuery = `
       SELECT 
         ne.symbol AS underlying, 
         TO_CHAR(ne."date", 'yyyy-mm-dd') AS time, 
         ne."close"::numeric AS underlying_price, 
         no2.strike,
-        TO_CHAR(no2.expiry_date, 'Month') AS expiry_month, 
+        no2.expiry_month, 
         no2.option_type, 
         no2."close"::numeric AS premium,
         no2.volume,
         ROUND(((no2.strike::numeric / ne."close"::numeric) - 1) * 100, 2) * -1 AS otm,
-        ROUND((no2."close"::numeric / ne."close"::numeric) * 100, 2) AS premium_percentage
+        ROUND((no2."close"::numeric / ne."close"::numeric) * 100, 2) AS premium_percentage,
+        COALESCE(ROUND(((no2."close"::numeric / ne."close"::numeric) * 100 * 30)/NULLIF((no2.expiry_date - ne."date"), 0),2),0) AS monthly_percentage
+      FROM market_data.nse_options no2
+      INNER JOIN market_data.instrument_lists il 
+        ON no2.underlying = il.id  
+      INNER JOIN market_data.nse_equity ne 
+        ON ne.symbol = il.instrument_type 
+        AND no2."date" = ne."date"
+      WHERE no2.underlying = ${instrumentId}
+      ${filterConditions} ${expiryMonth !== null &&
+      expiryMonth !== undefined &&
+      expiryMonth !== "" &&
+      expiryMonth !== "ALL"
+        ? ` AND trim(no2.expiry_month) = '${expiryMonth}'`
+        : " AND 1 = 1"}
+      ORDER BY ne."date" DESC
+      LIMIT ${limitNum} OFFSET ${offset}
+    `;
+
+    const countQuery = `
+      SELECT 
+        count(*) as count, json_agg(distinct no2.expiry_month) AS expiry_month
       FROM market_data.nse_options no2
       INNER JOIN market_data.instrument_lists il 
         ON no2.underlying = il.id  
@@ -698,20 +770,9 @@ export const getCoveredCallsTrendDaily = async (
       ${filterConditions}
     `;
 
-    const dataQuery = `
-      ${baseQuery}
-      ORDER BY ne."date" DESC
-      LIMIT ${limitNum} OFFSET ${offset}
-    `;
-
-    const countQuery = `
-      SELECT COUNT(*) AS count
-      FROM (${baseQuery}) t
-    `;
-
     const [rows, countResult] = await Promise.all([
       prisma.$queryRawUnsafe<any[]>(dataQuery),
-      prisma.$queryRawUnsafe<Array<{ count: bigint }>>(countQuery),
+      prisma.$queryRawUnsafe<Array<{ count: bigint, expiry_month: string[]}>>(countQuery),
     ]);
 
     const totalCount = Number(countResult?.[0]?.count || 0);
@@ -724,6 +785,7 @@ export const getCoveredCallsTrendDaily = async (
         page: pageNum,
         limit: limitNum,
         total: totalCount,
+        expiry_month: countResult?.[0]?.expiry_month,
         totalPages,
         hasMore: pageNum < totalPages,
       },
@@ -757,6 +819,7 @@ export const getCoveredCallsTrendHourly = async (
       maxPremium,
       startDate,
       endDate,
+      expiryMonth
     } = req.query as {
       page?: string;
       optionType?: string;
@@ -766,6 +829,7 @@ export const getCoveredCallsTrendHourly = async (
       maxPremium?: string;
       startDate?: string;
       endDate?: string;
+      expiryMonth?: string;
     };
 
     if (!instrumentId) {
@@ -820,7 +884,7 @@ export const getCoveredCallsTrendHourly = async (
       filterConditions += ` AND to_timestamp(time, 'yyyy-mm-dd HH12:MI AM')::date <= '${endDate}'::date`;
     }
 
-    const baseQuery = `
+    const dataQuery = `
       WITH latest_tick_opt AS (
           SELECT DISTINCT
               op.id,
@@ -834,31 +898,25 @@ export const getCoveredCallsTrendHourly = async (
           ORDER BY op."instrumentId", op.id DESC
       ),
       latest_tick_eq AS (
-          SELECT DISTINCT ON ("instrumentId", time_bucket)
-              "instrumentId",
-              ltp,
-              time,
-              time_bucket
-          FROM (
-              SELECT *,
-                  date_trunc('hour', time) +
-                  floor(EXTRACT(minute FROM time)::int / 5) * interval '5 minutes' AS time_bucket
-              FROM periodic_market_data."ticksDataNSEEQ"
-          ) t
-          ORDER BY "instrumentId", time_bucket, time DESC
-      ),
-      strike_extraction AS (
-          SELECT
-              s.id,
-              s.instrument_id,
-              s.symbol,
-              s.strike::numeric strike,
-              (REGEXP_MATCHES(s.symbol, '(CE|PE)$'))[1] AS option_type,
-              TO_CHAR(s.expiry_date, 'Month') AS expiry_month,
-              s.expiry_date
-          FROM market_data.symbols_list s
-          WHERE s.segment = 'OPT'
-      ),
+        SELECT DISTINCT ON ("instrumentId", time_bucket)
+       		"instrumentId", ltp, time, time_bucket
+		FROM (
+    		SELECT * FROM periodic_market_data."ticksDataNSEEQ"
+		) t ORDER BY "instrumentId", time_bucket, time DESC
+    ),
+    strike_extraction AS (
+        SELECT
+            s.id,
+            s.instrument_id,
+            s.symbol,
+            s.strike::numeric strike,
+            s.option_type,
+            s.expiry_month,
+            s.expiry_date
+        FROM market_data.symbols_list s
+        WHERE s.segment = 'OPT'
+        AND s.expiry_date >= CURRENT_DATE
+    ),
       with_calcs AS (
           SELECT
               i.id AS id,
@@ -872,7 +930,8 @@ export const getCoveredCallsTrendHourly = async (
               se.strike,
               se.option_type,
               ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) * -1 AS otm,
-              ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage
+              ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage,
+              COALESCE(ROUND((((o.ltp::numeric / e.ltp::numeric) * 100) * 30)/NULLIF((se.expiry_date - date(o.time)), 0),2),0) AS monthly_premium
           FROM market_data.instrument_lists i
           JOIN strike_extraction se ON i.id = se.instrument_id
           JOIN latest_tick_opt o ON se.id = o."instrumentId"
@@ -900,29 +959,98 @@ export const getCoveredCallsTrendHourly = async (
           option_type,
           otm,
           premium_percentage,
+          monthly_premium,
           expiry_date
       FROM with_calcs
       WHERE id = ${instrumentId}
-      ${filterConditions}
-    `;
-
-    const dataQuery = `${baseQuery}
+      ${filterConditions} ${expiryMonth !== null &&
+      expiryMonth !== undefined &&
+      expiryMonth !== "" &&
+      expiryMonth !== "ALL"
+        ? ` AND trim(expiry_month) = '${expiryMonth}'`
+        : " AND 1 = 1"}
       ORDER BY time DESC
       LIMIT ${limitNum} OFFSET ${offset}
     `;
 
     const countQuery = `
-      SELECT COUNT(*) AS count
-      FROM (${baseQuery}) t
+      WITH latest_tick_opt AS (
+          SELECT DISTINCT
+              op.id,
+              op."instrumentId",
+              op.ltp,
+              op.volume,
+              op.time
+          FROM periodic_market_data."ticksDataNSEOPT" op
+          INNER JOIN market_data.symbols_list sl ON sl.id = op."instrumentId"
+          WHERE sl.instrument_id = ${instrumentId}
+          ORDER BY op."instrumentId", op.id DESC
+      ),
+      latest_tick_eq AS (
+        SELECT DISTINCT ON ("instrumentId", time_bucket)
+       		"instrumentId", ltp, time, time_bucket
+		FROM (
+    		SELECT * FROM periodic_market_data."ticksDataNSEEQ"
+		) t ORDER BY "instrumentId", time_bucket, time DESC
+    ),
+    strike_extraction AS (
+        SELECT
+            s.id,
+            s.instrument_id,
+            s.symbol,
+            s.strike::numeric strike,
+            s.option_type,
+            s.expiry_month,
+            s.expiry_date
+        FROM market_data.symbols_list s
+        WHERE s.segment = 'OPT'
+        AND s.expiry_date >= CURRENT_DATE
+    ),
+      with_calcs AS (
+          SELECT
+              i.id AS id,
+              i.instrument_type AS underlying,
+              se.expiry_month AS expiry_month,
+              se.expiry_date AS expiry_date,
+              e.ltp::numeric AS underlying_price,
+              TO_CHAR(o.time, 'yyyy-mm-dd HH12:MI AM') AS time,
+              o.ltp::numeric AS premium,
+              o.volume,
+              se.strike,
+              se.option_type,
+              ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) * -1 AS otm,
+              ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage,
+              COALESCE(ROUND((((o.ltp::numeric / e.ltp::numeric) * 100) * 30)/NULLIF((se.expiry_date - date(o.time)), 0),2),0) AS monthly_premium
+          FROM market_data.instrument_lists i
+          JOIN strike_extraction se ON i.id = se.instrument_id
+          JOIN latest_tick_opt o ON se.id = o."instrumentId"
+          JOIN LATERAL (
+              SELECT *
+              FROM latest_tick_eq e
+              WHERE e."instrumentId" = i.id
+              AND e.time_bucket IN (
+                  date_trunc('hour', o.time) + floor(EXTRACT(minute FROM o.time)::int / 5) * interval '5 minutes',
+                  date_trunc('hour', o.time) + (floor(EXTRACT(minute FROM o.time)::int / 5) + 4) * interval '5 minutes'
+              )
+              ORDER BY ABS(EXTRACT(EPOCH FROM (e.time - o.time)))
+              LIMIT 1
+          ) e ON true
+      )
+      SELECT
+          count(*), json_agg(distinct expiry_month) expiry_month
+      FROM with_calcs
+      WHERE id = ${instrumentId}
+      ${filterConditions}
     `;
 
     const [rowsRaw, countResult] = await Promise.all([
       prisma.$queryRawUnsafe<any[]>(dataQuery),
-      prisma.$queryRawUnsafe<Array<{ count: bigint }>>(countQuery),
+      prisma.$queryRawUnsafe<Array<{ count: bigint, expiry_month: string}>>(countQuery),
     ]);
 
     const totalCount = Number(countResult?.[0]?.count || 0);
     const totalPages = Math.ceil(totalCount / limitNum) || 1;
+    const expiry_month = countResult?.[0]?.expiry_month;
 
     // Drop expiry_date from response to match daily trend shape
     const rows = rowsRaw.map((r) => ({
@@ -936,6 +1064,7 @@ export const getCoveredCallsTrendHourly = async (
       option_type: r.option_type,
       otm: r.otm,
       premium_percentage: r.premium_percentage,
+      monthly_percentage: r.monthly_premium,
     }));
 
     return res.status(200).json({
@@ -946,6 +1075,7 @@ export const getCoveredCallsTrendHourly = async (
         limit: limitNum,
         total: totalCount,
         totalPages,
+        expiry_month,
         hasMore: pageNum < totalPages,
       },
     });

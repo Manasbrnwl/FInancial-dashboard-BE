@@ -1,4 +1,4 @@
-function getLastThursday(year:number , month: number) {
+function getLastTuesday(year:number , month: number) {
     if (month < 1 || month > 12) {
       throw new Error("Provide a valid year and a 1-based month (1–12)."); // [7]
     }
@@ -7,10 +7,10 @@ function getLastThursday(year:number , month: number) {
     const lastDay = new Date(year, month, 0); // e.g., month=2 -> last day of Feb [4][13]
   
     // Thursday is 4 (Sun=0, Mon=1, Tue=2, Wed=3, Thu=4, Fri=5, Sat=6) [7]
-    const THURSDAY = 4;
+    const TUESDAY = 2;
   
     // Distance to back up from lastDay to the previous Thursday (possibly 0 if already Thursday)
-    const back = (lastDay.getDay() - THURSDAY + 7) % 7; // wrap within [0..6] [7]
+    const back = (lastDay.getDay() - TUESDAY + 7) % 7; // wrap within [0..6] [7]
   
     // Set to last Thursday
     lastDay.setDate(lastDay.getDate() - back); // [7]
@@ -33,7 +33,7 @@ function parseContract(text:string) {
     if (monthNumber === 0) throw new Error(`Invalid month: ${month}`);
   
     // Add 5 hours 30 minutes (IST offset)
-    const dateStr = getLastThursday(year, monthNumber);
+    const dateStr = getLastTuesday(year, monthNumber);
     let date = new Date(dateStr);
 
     date = new Date(date.getTime() + (5 * 60 + 30) * 60000);
@@ -49,7 +49,7 @@ function parseContract(text:string) {
     };
   }
   
-  // Example usage
+//   Example usage
 //   const input = "DRREDDY25SEPFUT";
 //   console.log(parseContract(input)); // [ 'DRREDDY25SEPFUT', 'DRREDDY', '2025-SEPT-29', 'FUT' ]
 

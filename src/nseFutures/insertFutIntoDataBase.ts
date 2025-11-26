@@ -15,6 +15,7 @@ interface symbolData {
   instrument: string;
   expiry: string;
   type: string;
+  expiryMonthName?: string;
 }
 
 async function insertFutIntoDataBase(date: any) {
@@ -36,6 +37,9 @@ async function insertFutIntoDataBase(date: any) {
           expiry: Date;
           exchange: string;
           segment: string;
+          strike?: string;
+          option_type?: string;
+          expiry_month?: string;
         }> = [];
         const futuresData: Array<any> = [];
 
@@ -59,6 +63,9 @@ async function insertFutIntoDataBase(date: any) {
             expiry: new Date(symbol?.expiry),
             exchange: "NSE",
             segment: "FUT",
+            strike: "",
+            option_type: "",
+            expiry_month: symbol?.expiryMonthName
           });
 
           // Collect futures data

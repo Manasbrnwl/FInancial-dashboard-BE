@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { getDatesFromPastToToday } from "../utils/dateRange";
-import { sendEmailNotification } from "../utils/sendEmail";
+// import { sendEmailNotification } from "../utils/sendEmail";
 import { parseContract } from "./helper";
 import { getNseOptionsHistory } from "./nseOptionsHistory";
 import { createBatchInserter } from "../utils/batchInsert";
@@ -31,6 +31,8 @@ async function insertOptIntoDataBase(date: any) {
           exchange: string;
           segment: string;
           strike: string;
+          option_type: string;
+          expiry_month: string;
         }> = [];
         const optionsData: Array<any> = [];
 
@@ -54,7 +56,9 @@ async function insertOptIntoDataBase(date: any) {
             expiry: new Date(symbol!.expiry),
             exchange: "NSE",
             segment: "OPT",
-            strike: symbol?.strike
+            strike: symbol?.strike,
+            option_type: symbol?.type,
+            expiry_month: symbol?.expiryMonthName
           });
 
           // Collect options data

@@ -70,27 +70,29 @@ model nse_futures {
 }
 
 model nse_options {
-  id          BigInt    @id @default(autoincrement())
-  symbol_id   String?
-  symbol      Int
-  date        DateTime  @db.Date
-  open        Float?
-  high        Float?
-  low         Float?
-  close       Float?
-  volume      String?
-  oi          String?
-  underlying  Int?
-  expiry_date DateTime? @db.Date
-  strike      String?
-  option_type String?   @db.VarChar(2)
-  created_at  DateTime? @default(now()) @db.Timestamp(6)
-  updated_at  DateTime? @updatedAt @db.Timestamp(6)
+  id           BigInt    @id @default(autoincrement())
+  symbol_id    String?
+  symbol       Int
+  date         DateTime  @db.Date
+  open         Float?
+  high         Float?
+  low          Float?
+  close        Float?
+  volume       String?
+  oi           String?
+  underlying   Int?
+  expiry_date  DateTime? @db.Date
+  strike       String?
+  option_type  String?   @db.VarChar(2)
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+  updated_at   DateTime? @updatedAt @db.Timestamp(6)
+  expiry_month String?
 
   @@unique([symbol, date, underlying, expiry_date, option_type], map: "nse_options_symbol_date_underlying_expiry_unique")
   @@index([strike, date], map: "idx_nse_opt_strike_date")
   @@index([symbol, date], map: "idx_nse_opt_symbol_date")
   @@index([expiry_date], map: "idx_nse_options_expiry_date")
+  @@index([expiry_month], map: "idx_options_expirymonth")
   @@schema("market_data")
 }
 
@@ -159,12 +161,16 @@ model symbols_list {
   segment       String?   @db.VarChar(5)
   expiry_date   DateTime? @db.Date
   strike        String?   @default(dbgenerated("0")) @db.VarChar(15)
+  option_type   String?   @db.VarChar(2)
+  expiry_month  String?
 
   @@unique([instrument_id, symbol], map: "instrument_symbol_unique")
   @@index([instrument_id, symbol], map: "idx_instrument_symbol")
   @@index([instrument_id], map: "idx_symbols_list_instrument_id")
   @@index([segment], map: "idx_symbols_list_segment")
   @@index([instrument_id, expiry_date(sort: Desc)], map: "idx_symbols_expiry")
+  @@index([expiry_month], map: "idx_symbols_expirymonth")
+  @@index([option_type, expiry_date, instrument_id], map: "idx_symbols_opt_exp")
   @@schema("market_data")
 }
 
@@ -208,18 +214,19 @@ model ohlcEQDataBSE {
 
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model ticksDataNSEEQ {
-  id           BigInt   @id @default(autoincrement())
+  id           BigInt    @id @default(autoincrement())
   instrumentId Int
   ltp          String
-  volume       String?  @default("0")
-  oi           String?  @default("0")
-  bid          String?  @default("0")
-  bidqty       String?  @default("0")
-  ask          String?  @default("0")
-  askqty       String?  @default("0")
+  volume       String?   @default("0")
+  oi           String?   @default("0")
+  bid          String?   @default("0")
+  bidqty       String?   @default("0")
+  ask          String?   @default("0")
+  askqty       String?   @default("0")
   time         DateTime
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
   updatedAt    DateTime
+  time_bucket  DateTime? @db.Timestamp(6)
 
   @@unique([instrumentId, time], map: "uniq_data_nse_eq")
   @@index([instrumentId], map: "idx_instrumentId_nse_eq")
@@ -228,6 +235,7 @@ model ticksDataNSEEQ {
   @@index([instrumentId, id(sort: Desc), ltp], map: "idx_cover_ticks_nseeq")
   @@index([instrumentId, id(sort: Desc)], map: "idx_ticks_nseeq_instrument_id_desc")
   @@index([instrumentId, time(sort: Desc)], map: "idx_eq_time")
+  @@index([instrumentId, time_bucket, time(sort: Desc)], map: "idx_eq_inst_tb")
   @@schema("periodic_market_data")
 }
 

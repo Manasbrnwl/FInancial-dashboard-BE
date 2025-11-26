@@ -40,11 +40,13 @@ function parseContract(text:string) {
   
     // Format YYYY-MM-DD
     const formatted = date.toISOString().slice(0, 10);
+    const monthName = date.toLocaleString("en-US", { month: "long" });
   
     return {
       symbol,
       instrument,
       expiry: formatted,
+      expiryMonthName: monthName,
       type,
     };
   }

@@ -42,11 +42,13 @@ function parseContract(symbol: string) {
  
     // Format YYYY-MM-DD (avoid timezone issues)
     const formatted = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const monthName = date.toLocaleString("en-US", { month: "long" });
   
     return {
       symbol,
       instrument: match[1],
       expiry: formatted,
+      expiryMonthName: monthName,
       strike: match[5],
       type: match[6]
     };

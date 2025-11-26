@@ -213,9 +213,15 @@ export class BatchInserter {
       exchange: string;
       segment?: string;
       strike?: string;
+      option_type?: string;
+      expiry_month?: string;
     }>,
     options: BatchInsertOptions = {}
-  ): Promise<{ inserted: number; errors: number; symbolIdMap: Map<string, number> }> {
+  ): Promise<{
+    inserted: number;
+    errors: number;
+    symbolIdMap: Map<string, number>;
+  }> {
     const { logProgress = true, chunkSize = 50 } = options;
 
     const symbolIdMap = new Map<string, number>();
@@ -289,6 +295,8 @@ export class BatchInserter {
               segment: symbolData.segment,
               expiry_date: symbolData.expiry,
               strike: symbolData.strike || "0",
+              option_type: symbolData.option_type || "",
+              expiry_month: symbolData.expiry_month || ""
             },
             select: {
               id: true,

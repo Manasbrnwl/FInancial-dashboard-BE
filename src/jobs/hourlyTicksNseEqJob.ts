@@ -107,6 +107,13 @@ function transformRecordsToDbFormat(
     ask: record[6].toString(),
     askqty: record[7].toString(),
     time: new Date(record[0]),
+    time_bucket: (() => {
+      const ts = new Date(record[0]);
+      const bucket = new Date(ts);
+      bucket.setSeconds(0, 0);
+      bucket.setMinutes(Math.floor(ts.getMinutes() / 5) * 5);
+      return bucket;
+    })(),
     updatedAt: now,
   }));
 }

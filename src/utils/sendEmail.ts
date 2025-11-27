@@ -1,10 +1,9 @@
-const nodemailer = require("nodemailer");
-const dotenv = require("dotenv");
+import nodemailer from "nodemailer";
+import dotenv from "dotenv";
 
 dotenv.config();
 
 // Define the transporter object with the Gmail SMTP settings
-
 const transporter = nodemailer.createTransport({
   service: "gmail",
   host: "smtp.gmail.com",
@@ -22,14 +21,14 @@ const transporter = nodemailer.createTransport({
  * @param {string} subject - Email subject
  * @param {string} text - Email text content
  * @param {string} html - Email html content
- * @returns {Promise} - Promise resolved on email sent
+ * @returns {Promise<boolean>} - true when mail is accepted
  */
 const sendEmailNotification = async (
   email: string,
   subject: string,
   text: string,
   html: string
-) => {
+): Promise<boolean> => {
   try {
     const mailOptions = {
       from: process.env.EMAIL_USER,
@@ -39,16 +38,14 @@ const sendEmailNotification = async (
       html,
     };
 
-    transporter.sendMail(mailOptions, (error: any, info: any) => {
-      if (error) {
-        return false;
-      }
-      return true;
-    });
+    const info = await transporter.sendMail(mailOptions);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`OTP email queued: ${info.messageId}`);
+    }
+    return true;
   } catch (error: any) {
-    console.error(
-      process.env.NODE_ENV === "development" ? error.message : undefined
-    );
+    console.error("Failed to send OTP email:", error?.message || error);
+    throw error;
   }
 };
 

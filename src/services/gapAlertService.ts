@@ -192,38 +192,38 @@ async function triggerAlert({
     `?? Gap alert: ${instrumentName} ${alertType} deviation ${payload.deviationPercent}% (slot ${timeSlot})`
   );
 
-  const subject = `Gap alert | ${instrumentName} | ${alertType} | ${timeSlot}`;
-  const text = `Gap alert for ${instrumentName}
-Type: ${alertType}
-Slot: ${timeSlot}
-Current: ${currentValue}
-Baseline: ${baselineValue ?? "n/a"}
-Deviation: ${payload.deviationPercent}%
-Baseline date: ${baselineDate?.toISOString().slice(0, 10) ?? "n/a"}`;
-  const html = `
-    <h3>Gap alert for ${instrumentName}</h3>
-    <ul>
-      <li><strong>Type:</strong> ${alertType}</li>
-      <li><strong>Slot:</strong> ${timeSlot}</li>
-      <li><strong>Current:</strong> ${currentValue}</li>
-      <li><strong>Baseline:</strong> ${baselineValue ?? "n/a"}</li>
-      <li><strong>Deviation:</strong> ${payload.deviationPercent}%</li>
-      <li><strong>Baseline date:</strong> ${
-        baselineDate?.toISOString().slice(0, 10) ?? "n/a"
-      }</li>
-    </ul>
-    <p>Triggered at ${payload.triggeredAt}</p>
-  `;
+//   const subject = `Gap alert | ${instrumentName} | ${alertType} | ${timeSlot}`;
+//   const text = `Gap alert for ${instrumentName}
+// Type: ${alertType}
+// Slot: ${timeSlot}
+// Current: ${currentValue}
+// Baseline: ${baselineValue ?? "n/a"}
+// Deviation: ${payload.deviationPercent}%
+// Baseline date: ${baselineDate?.toISOString().slice(0, 10) ?? "n/a"}`;
+  // const html = `
+  //   <h3>Gap alert for ${instrumentName}</h3>
+  //   <ul>
+  //     <li><strong>Type:</strong> ${alertType}</li>
+  //     <li><strong>Slot:</strong> ${timeSlot}</li>
+  //     <li><strong>Current:</strong> ${currentValue}</li>
+  //     <li><strong>Baseline:</strong> ${baselineValue ?? "n/a"}</li>
+  //     <li><strong>Deviation:</strong> ${payload.deviationPercent}%</li>
+  //     <li><strong>Baseline date:</strong> ${
+  //       baselineDate?.toISOString().slice(0, 10) ?? "n/a"
+  //     }</li>
+  //   </ul>
+  //   <p>Triggered at ${payload.triggeredAt}</p>
+  // `;
 
-  if (ALERT_EMAIL_RECIPIENTS.length) {
-    Promise.allSettled(
-      ALERT_EMAIL_RECIPIENTS.map((email) =>
-        sendEmailNotification(email, subject, text, html)
-      )
-    ).catch((err) =>
-      console.error("? Failed to send gap alert emails:", err?.message || err)
-    );
-  }
+  // if (ALERT_EMAIL_RECIPIENTS.length) {
+  //   Promise.allSettled(
+  //     ALERT_EMAIL_RECIPIENTS.map((email) =>
+  //       sendEmailNotification(email, subject, text, html)
+  //     )
+  //   ).catch((err) =>
+  //     console.error("? Failed to send gap alert emails:", err?.message || err)
+  //   );
+  // }
 
   const smsMessage = `Gap alert ${instrumentName} ${alertType} ${timeSlot}: cur ${currentValue}, base ${
     baselineValue ?? "n/a"

@@ -40,10 +40,10 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
       filterCondition += ` AND otm <= ${maxOtm}`;
     }
     if (minPremium !== null) {
-      filterCondition += ` AND premium_percentage >= ${minPremium}`;
+      filterCondition += ` AND monthly_premium >= ${minPremium}`;
     }
     if (maxPremium !== null) {
-      filterCondition += ` AND premium_percentage <= ${maxPremium}`;
+      filterCondition += ` AND monthly_premium <= ${maxPremium}`;
     }
 
     // Get total count with filters
@@ -105,7 +105,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     		LIMIT 1
 		) e ON true
  	)
-    SELECT COUNT(*) as count, round(avg(premium_percentage),2) as avg_premium, json_agg(distinct expiry_month) expiry_month
+    SELECT COUNT(*) as count, 1 as avg_premium, json_agg(distinct expiry_month) expiry_month
     FROM with_calcs
     WHERE 1=1 ${Prisma.raw(filterCondition)}
     `;
@@ -708,14 +708,14 @@ export const getCoveredCallsTrendDaily = async (
     if (minPremium) {
       const v = Number(minPremium);
       if (!Number.isNaN(v)) {
-        filterConditions += ` AND ROUND((no2."close"::numeric / ne."close"::numeric) * 100, 2) >= ${v}`;
+        filterConditions += ` AND COALESCE(ROUND(((no2."close"::numeric / ne."close"::numeric) * 100 * 30)/NULLIF((no2.expiry_date - ne."date"), 0),2),0) >= ${v}`;
       }
     }
 
     if (maxPremium) {
       const v = Number(maxPremium);
       if (!Number.isNaN(v)) {
-        filterConditions += ` AND ROUND((no2."close"::numeric / ne."close"::numeric) * 100, 2) <= ${v}`;
+        filterConditions += ` AND COALESCE(ROUND(((no2."close"::numeric / ne."close"::numeric) * 100 * 30)/NULLIF((no2.expiry_date - ne."date"), 0),2),0) <= ${v}`;
       }
     }
 
@@ -865,14 +865,14 @@ export const getCoveredCallsTrendHourly = async (
     if (minPremium) {
       const v = Number(minPremium);
       if (!Number.isNaN(v)) {
-        filterConditions += ` AND premium_percentage >= ${v}`;
+        filterConditions += ` AND monthly_premium >= ${v}`;
       }
     }
 
     if (maxPremium) {
       const v = Number(maxPremium);
       if (!Number.isNaN(v)) {
-        filterConditions += ` AND premium_percentage <= ${v}`;
+        filterConditions += ` AND monthly_premium <= ${v}`;
       }
     }
 

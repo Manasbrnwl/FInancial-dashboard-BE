@@ -18,7 +18,8 @@ function getLastTuesday(year:number , month: number) {
   }
 
 function parseContract(text:string) {
-    const regex = /^([A-Z]+)(\d{2})([A-Z]{3})([A-Z]+)$/;
+    // const regex = /^([A-Z]+)(\d{2})([A-Z]{3})([A-Z]+)$/;
+    const regex = /^(.+?)(\d{2})([A-Z]{3})(FUT)$/i;
     const match = text.match(regex);
   
     if (!match) return null;

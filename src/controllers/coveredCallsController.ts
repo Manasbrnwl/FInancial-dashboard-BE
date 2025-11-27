@@ -751,7 +751,7 @@ export const getCoveredCallsTrendDaily = async (
       expiryMonth !== undefined &&
       expiryMonth !== "" &&
       expiryMonth !== "ALL"
-        ? ` AND trim(no2.expiry_month) = '${expiryMonth}'`
+        ? ` AND trim(no2.expiry_month) = '${expiryMonth.trim()}'`
         : " AND 1 = 1"}
       ORDER BY ne."date" DESC
       LIMIT ${limitNum} OFFSET ${offset}
@@ -967,7 +967,7 @@ export const getCoveredCallsTrendHourly = async (
       expiryMonth !== undefined &&
       expiryMonth !== "" &&
       expiryMonth !== "ALL"
-        ? ` AND trim(expiry_month) = '${expiryMonth}'`
+        ? ` AND trim(expiry_month) = '${expiryMonth.trim()}'`
         : " AND 1 = 1"}
       ORDER BY time DESC
       LIMIT ${limitNum} OFFSET ${offset}

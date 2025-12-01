@@ -3,9 +3,17 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+const normalizeBigInt = (row: Record<string, any>) =>
+  Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [
+      key,
+      typeof value === "bigint" ? Number(value) : value,
+    ])
+  );
+
 export const getNseEquityData = async (req: Request, res: Response) => {
   try {
-    const { symbol, startDate, endDate, limit = 100, offset = 0 } = req.query;
+    const { symbol, startDate, endDate, limit = 360, offset = 0 } = req.query;
 
     const where: any = {};
 
@@ -35,7 +43,7 @@ export const getNseEquityData = async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      data,
+      data: data.map(normalizeBigInt),
       pagination: {
         total,
         limit: Number(limit),

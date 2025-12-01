@@ -3,6 +3,14 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+const normalizeBigInt = (row: Record<string, any>) =>
+  Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [
+      key,
+      typeof value === "bigint" ? Number(value) : value,
+    ])
+  );
+
 export const getNseOptionsData = async (req: Request, res: Response) => {
   try {
     const {
@@ -13,18 +21,24 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
       optionType,
       startDate,
       endDate,
-      limit = 100,
+      limit = 360,
       offset = 0,
     } = req.query;
 
     const where: any = {};
 
     if (symbol) {
-      where.symbol = symbol as string;
+      where.symbol = symbol;
     }
 
-    if (underlying) {
-      where.underlying = underlying as string;
+    if (underlying !== undefined && underlying !== null) {
+      const numericUnderlying = Number(underlying);
+      if (
+        !Number.isNaN(numericUnderlying) &&
+        Number.isFinite(numericUnderlying)
+      ) {
+        where.underlying = numericUnderlying;
+      }
     }
 
     if (expiryDate) {
@@ -61,7 +75,7 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      data,
+      data: data.map(normalizeBigInt),
       pagination: {
         total,
         limit: Number(limit),
@@ -79,10 +93,7 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
   }
 };
 
-export const getNseOptionsUnderlyings = async (
-  req: Request,
-  res: Response
-) => {
+export const getNseOptionsUnderlyings = async (req: Request, res: Response) => {
   try {
     const underlyings = await prisma.nse_options.findMany({
       distinct: ["underlying"],

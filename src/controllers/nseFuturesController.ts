@@ -3,27 +3,38 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+const normalizeBigInt = (row: Record<string, any>) =>
+  Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [
+      key,
+      typeof value === "bigint" ? Number(value) : value,
+    ])
+  );
+
 export const getNseFuturesData = async (req: Request, res: Response) => {
   try {
     const {
       symbol,
       underlying,
-      expiryDate,
-      startDate,
+    expiryDate,
+    startDate,
       endDate,
-      limit = 100,
+      limit = 360,
       offset = 0,
     } = req.query;
 
-    const where: any = {};
+  const where: any = {};
 
-    if (symbol) {
-      where.symbol = symbol as string;
-    }
+  if (symbol) {
+    where.symbol = symbol;
+  }
 
-    if (underlying) {
-      where.underlying = underlying as string;
+  if (underlying !== undefined && underlying !== null) {
+    const numericUnderlying = Number(underlying);
+    if (!Number.isNaN(numericUnderlying) && Number.isFinite(numericUnderlying)) {
+      where.underlying = numericUnderlying;
     }
+  }
 
     if (expiryDate) {
       where.expiry_date = new Date(expiryDate as string);
@@ -51,7 +62,7 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      data,
+      data: data.map(normalizeBigInt),
       pagination: {
         total,
         limit: Number(limit),

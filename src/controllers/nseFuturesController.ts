@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -16,25 +16,36 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
     const {
       symbol,
       underlying,
-    expiryDate,
-    startDate,
+      expiryDate,
+      startDate,
       endDate,
       limit = 360,
       offset = 0,
     } = req.query;
 
-  const where: any = {};
+    const where: any = {};
 
-  if (symbol) {
-    where.symbol = symbol;
-  }
+    const parseNumberOrNull = (value: any) => {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : null;
+    };
 
-  if (underlying !== undefined && underlying !== null) {
-    const numericUnderlying = Number(underlying);
-    if (!Number.isNaN(numericUnderlying) && Number.isFinite(numericUnderlying)) {
-      where.underlying = numericUnderlying;
+    if (symbol) {
+      const numericSymbol = parseNumberOrNull(symbol);
+      if (numericSymbol !== null) {
+        where.symbol = numericSymbol;
+      }
     }
-  }
+
+    if (underlying !== undefined && underlying !== null) {
+      const numericUnderlying = Number(underlying);
+      if (
+        !Number.isNaN(numericUnderlying) &&
+        Number.isFinite(numericUnderlying)
+      ) {
+        where.underlying = numericUnderlying;
+      }
+    }
 
     if (expiryDate) {
       where.expiry_date = new Date(expiryDate as string);
@@ -50,13 +61,57 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
       }
     }
 
+    const filters: Prisma.Sql[] = [];
+
+    if (where.symbol !== undefined) {
+      filters.push(Prisma.sql`nf.symbol = ${where.symbol}`);
+    }
+    if (where.underlying !== undefined) {
+      filters.push(Prisma.sql`nf.underlying = ${where.underlying}`);
+    }
+    if (where.expiry_date) {
+      filters.push(Prisma.sql`nf.expiry_date = ${where.expiry_date}`);
+    }
+    if (where.date?.gte) {
+      filters.push(Prisma.sql`nf.date >= ${where.date.gte}`);
+    }
+    if (where.date?.lte) {
+      filters.push(Prisma.sql`nf.date <= ${where.date.lte}`);
+    }
+
+    if (filters.length === 0) {
+      filters.push(Prisma.sql`1=1`);
+    }
+
+    const limitNumber = Number.isFinite(Number(limit)) ? Number(limit) : 360;
+    const offsetNumber = Number.isFinite(Number(offset)) ? Number(offset) : 0;
+
+    const joinedQuery = Prisma.sql`
+      SELECT
+        nf.symbol,
+        nf.underlying,
+        nf.expiry_date,
+        nf.date,
+        nf.open,
+        nf.high,
+        nf.low,
+        nf.close,
+        nf.volume,
+        ne.close AS equity_close,
+        ((ne.close - nf.close)/ne.close)*100 AS gap_percentage
+      FROM market_data.nse_futures nf
+      LEFT JOIN market_data.instrument_lists il ON nf.underlying = il.id
+      LEFT JOIN market_data.nse_equity ne
+        ON il.instrument_type = ne.symbol
+        AND nf.date = ne.date
+      WHERE ${Prisma.join(filters, " AND ")}
+      ORDER BY nf.date DESC
+      LIMIT ${limitNumber}
+      OFFSET ${offsetNumber}
+    `;
+
     const [data, total] = await Promise.all([
-      prisma.nse_futures.findMany({
-        where,
-        orderBy: { date: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
-      }),
+      prisma.$queryRaw<any[]>(joinedQuery),
       prisma.nse_futures.count({ where }),
     ]);
 
@@ -65,9 +120,9 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
       data: data.map(normalizeBigInt),
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit: limitNumber,
+        offset: offsetNumber,
+        hasMore: offsetNumber + data.length < total,
       },
     });
   } catch (error: any) {

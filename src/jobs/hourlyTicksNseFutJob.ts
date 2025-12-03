@@ -128,7 +128,7 @@ async function getNseInstruments(): Promise<SymbolInstruments[]> {
           leg: legOrder[index] ?? "far",
         }));
 
-      if (sorted.length >= 1 ) {
+      if (sorted.length >= 1) {
         symbolInstruments.push({ symbolId, instruments: sorted });
       } else {
         console.warn(
@@ -277,8 +277,7 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
           }
         } else {
           console.log(
-            `?? Data fetch for ${leg.instrumentType} returned status: ${
-              response.data?.status || "unknown"
+            `?? Data fetch for ${leg.instrumentType} returned status: ${response.data?.status || "unknown"
             }`
           );
         }
@@ -290,30 +289,67 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
       }
     }
 
-    if (legPrices.near && legPrices.next && legPrices.far) {
-      const gap_1 = legPrices.next.ltp - legPrices.near.ltp;
-      const gap_2 = legPrices.far.ltp - legPrices.next.ltp;
-      const timestamp = new Date(
-        Math.max(
-          legPrices.near.time.getTime(),
-          legPrices.next.time.getTime(),
-          legPrices.far.time.getTime()
-        )
-      );
+    let gap_1: number | undefined;
+    let gap_2: number | undefined;
+    let timestamp: Date | undefined;
 
+    // Calculate Gap 1 (Next - Near)
+    if (legPrices.near && legPrices.next) {
+      const timeDiff = Math.abs(
+        legPrices.near.time.getTime() - legPrices.next.time.getTime()
+      );
+      if (timeDiff <= 60000) {
+        // 1 minute tolerance
+        gap_1 = legPrices.next.ltp - legPrices.near.ltp;
+        timestamp = new Date(
+          Math.max(legPrices.near.time.getTime(), legPrices.next.time.getTime())
+        );
+      } else {
+        console.warn(
+          `? Skipping Gap 1 for ${symbol.symbolId}: Time diff ${timeDiff / 1000
+          }s > 60s`
+        );
+      }
+    }
+
+    // Calculate Gap 2 (Far - Next)
+    if (legPrices.next && legPrices.far) {
+      const timeDiff = Math.abs(
+        legPrices.next.time.getTime() - legPrices.far.time.getTime()
+      );
+      if (timeDiff <= 60000) {
+        // 1 minute tolerance
+        gap_2 = legPrices.far.ltp - legPrices.next.ltp;
+        const currentMax = timestamp ? timestamp.getTime() : 0;
+        timestamp = new Date(
+          Math.max(
+            currentMax,
+            legPrices.next.time.getTime(),
+            legPrices.far.time.getTime()
+          )
+        );
+      } else {
+        console.warn(
+          `? Skipping Gap 2 for ${symbol.symbolId}: Time diff ${timeDiff / 1000
+          }s > 60s`
+        );
+      }
+    }
+
+    if ((gap_1 !== undefined || gap_2 !== undefined) && timestamp) {
       gapPayloads.push({
         instrumentId: symbol.symbolId,
         instrumentName: symbol.instruments[0].instrumentType,
-        gap_1,
-        gap_2,
-        price_1: legPrices.near.ltp,
-        price_2: legPrices.next.ltp,
-        price_3: legPrices.far.ltp,
+        gap_1: gap_1 ?? null, // Pass null if undefined
+        gap_2: gap_2 ?? null, // Pass null if undefined
+        price_1: legPrices.near?.ltp,
+        price_2: legPrices.next?.ltp,
+        price_3: legPrices.far?.ltp,
         timestamp,
       });
     } else {
       console.warn(
-        `? Missing leg data for symbolId ${symbol.symbolId}, skipping gap calculation`
+        `? No valid gaps calculated for symbolId ${symbol.symbolId} (insufficient legs or time sync issues)`
       );
     }
   }
@@ -385,18 +421,14 @@ async function sendHourlyJobEmail(
           <hr>
           <h3>?? Results Summary:</h3>
           <ul>
-            <li><strong>Instruments Processed:</strong> ${
-              details.instrumentsCount || 0
-            }</li>
-            <li><strong>Successful API Responses:</strong> ${
-              details.successfulCount || 0
-            }</li>
-            <li><strong>Total Records Inserted:</strong> ${
-              details.totalRecordsInserted || 0
-            }</li>
-            <li><strong>Gaps Evaluated:</strong> ${
-              details.gapsEvaluated || 0
-            }</li>
+            <li><strong>Instruments Processed:</strong> ${details.instrumentsCount || 0
+          }</li>
+            <li><strong>Successful API Responses:</strong> ${details.successfulCount || 0
+          }</li>
+            <li><strong>Total Records Inserted:</strong> ${details.totalRecordsInserted || 0
+          }</li>
+            <li><strong>Gaps Evaluated:</strong> ${details.gapsEvaluated || 0
+          }</li>
           </ul>
           <p><em>Data successfully stored in ticksFODataNSE table.</em></p>
         `;
@@ -411,8 +443,7 @@ async function sendHourlyJobEmail(
           <p><strong>Status:</strong> ? Failed</p>
           <hr>
           <h3>?? Error Details:</h3>
-          <p><strong>Error Message:</strong> ${
-            details.errorMessage || "Unknown error"
+          <p><strong>Error Message:</strong> ${details.errorMessage || "Unknown error"
           }</p>
           <p><em>Please check the application logs for detailed information.</em></p>
         `;

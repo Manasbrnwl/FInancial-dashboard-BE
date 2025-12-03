@@ -289,8 +289,8 @@ model gap_time_series {
   instrument_id Int
   date          DateTime @db.Date
   time_slot     String   @db.VarChar(5)
-  gap_1         Float
-  gap_2         Float
+  gap_1         Float?
+  gap_2         Float?
   price_1       Float?
   price_2       Float?
   price_3       Float?

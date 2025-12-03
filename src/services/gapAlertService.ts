@@ -12,8 +12,8 @@ const prisma = new PrismaClient();
 interface GapData {
   instrumentId: number;
   instrumentName: string;
-  gap_1: number;
-  gap_2: number;
+  gap_1: number | null;
+  gap_2: number | null;
   price_1?: number;
   price_2?: number;
   price_3?: number;
@@ -63,9 +63,9 @@ function toIST(date: Date): Date {
 }
 
 function formatTimeSlot(date: Date): string {
-  const ist = toIST(date);
-  const hours = String(ist.getHours()).padStart(2, "0");
-  const minutes = String(ist.getMinutes()).padStart(2, "0");
+  // const ist = toIST(date);
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
   return `${hours}:${minutes}`;
 }
 
@@ -80,10 +80,10 @@ function getTimestampDate(timestamp?: string | Date): Date {
 }
 
 function computeDeviationPercent(
-  current: number,
+  current: number | null,
   baseline: number | null
 ): number {
-  if (baseline === null || baseline === 0) return 0;
+  if (current === null || baseline === null || baseline === 0) return 0;
   return Math.abs((current - baseline) / baseline) * 100;
 }
 
@@ -117,11 +117,11 @@ async function getAlertConfig(instrumentId?: number): Promise<AlertConfig> {
 
   const finalConfig = specificConfig
     ? {
-        percentThreshold:
-          specificConfig.percent_threshold ?? globalConfig.percentThreshold,
-        cooldownMinutes:
-          specificConfig.cooldown_minutes ?? globalConfig.cooldownMinutes,
-      }
+      percentThreshold:
+        specificConfig.percent_threshold ?? globalConfig.percentThreshold,
+      cooldownMinutes:
+        specificConfig.cooldown_minutes ?? globalConfig.cooldownMinutes,
+    }
     : globalConfig;
 
   configCache.set(instrumentId, finalConfig);
@@ -192,14 +192,14 @@ async function triggerAlert({
     `?? Gap alert: ${instrumentName} ${alertType} deviation ${payload.deviationPercent}% (slot ${timeSlot})`
   );
 
-//   const subject = `Gap alert | ${instrumentName} | ${alertType} | ${timeSlot}`;
-//   const text = `Gap alert for ${instrumentName}
-// Type: ${alertType}
-// Slot: ${timeSlot}
-// Current: ${currentValue}
-// Baseline: ${baselineValue ?? "n/a"}
-// Deviation: ${payload.deviationPercent}%
-// Baseline date: ${baselineDate?.toISOString().slice(0, 10) ?? "n/a"}`;
+  //   const subject = `Gap alert | ${instrumentName} | ${alertType} | ${timeSlot}`;
+  //   const text = `Gap alert for ${instrumentName}
+  // Type: ${alertType}
+  // Slot: ${timeSlot}
+  // Current: ${currentValue}
+  // Baseline: ${baselineValue ?? "n/a"}
+  // Deviation: ${payload.deviationPercent}%
+  // Baseline date: ${baselineDate?.toISOString().slice(0, 10) ?? "n/a"}`;
   // const html = `
   //   <h3>Gap alert for ${instrumentName}</h3>
   //   <ul>
@@ -225,9 +225,8 @@ async function triggerAlert({
   //   );
   // }
 
-  const smsMessage = `Gap alert ${instrumentName} ${alertType} ${timeSlot}: cur ${currentValue}, base ${
-    baselineValue ?? "n/a"
-  }, dev ${payload.deviationPercent}%`;
+  const smsMessage = `Gap alert ${instrumentName} ${alertType} ${timeSlot}: cur ${currentValue}, base ${baselineValue ?? "n/a"
+    }, dev ${payload.deviationPercent}%`;
   if (ALERT_SMS_RECIPIENTS.length) {
     Promise.allSettled(
       ALERT_SMS_RECIPIENTS.map((phone) =>
@@ -253,8 +252,8 @@ async function storeGapPoint(
       },
     },
     update: {
-      gap_1: gap.gap_1,
-      gap_2: gap.gap_2,
+      gap_1: { set: gap.gap_1 as any },
+      gap_2: { set: gap.gap_2 as any },
       price_1: gap.price_1 ?? null,
       price_2: gap.price_2 ?? null,
       price_3: gap.price_3 ?? null,
@@ -263,8 +262,8 @@ async function storeGapPoint(
       instrument_id: gap.instrumentId,
       date: dateOnly,
       time_slot: timeSlot,
-      gap_1: gap.gap_1,
-      gap_2: gap.gap_2,
+      gap_1: gap.gap_1 as any,
+      gap_2: gap.gap_2 as any,
       price_1: gap.price_1 ?? null,
       price_2: gap.price_2 ?? null,
       price_3: gap.price_3 ?? null,
@@ -299,6 +298,8 @@ export async function processGapData(
 
       const percentThreshold =
         percentThresholdOverride ?? config.percentThreshold;
+
+      // Pass nulls safely to computeDeviationPercent
       const deviation1 = computeDeviationPercent(
         gap.gap_1,
         baseline.baselineGap1
@@ -308,7 +309,7 @@ export async function processGapData(
         baseline.baselineGap2
       );
 
-      if (deviation1 >= percentThreshold) {
+      if (gap.gap_1 !== null && deviation1 >= percentThreshold) {
         await triggerAlert({
           instrumentId: gap.instrumentId,
           instrumentName: gap.instrumentName,
@@ -321,7 +322,7 @@ export async function processGapData(
         });
       }
 
-      if (deviation2 >= percentThreshold) {
+      if (gap.gap_2 !== null && deviation2 >= percentThreshold) {
         await triggerAlert({
           instrumentId: gap.instrumentId,
           instrumentName: gap.instrumentName,

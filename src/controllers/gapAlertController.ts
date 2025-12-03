@@ -1,11 +1,9 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import { loadEnv } from "../config/env";
 import { loadGapBaselines } from "../cache/gapAverageCache";
 
 loadEnv();
-
-const prisma = new PrismaClient();
 
 function parseInteger(value: string | undefined, fallback: number): number {
   const parsed = parseInt(value || "", 10);

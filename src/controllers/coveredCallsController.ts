@@ -1,7 +1,6 @@
 import { Request, Response } from "express";
-import { PrismaClient, Prisma } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { Prisma } from "@prisma/client";
+import prisma from "../config/prisma";
 
 export const getCoveredCallsData = async (req: Request, res: Response) => {
   try {

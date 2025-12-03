@@ -1,7 +1,5 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import prisma from "../config/prisma";
 
 /**
  * Get arbitrage details for a specific instrument and date
@@ -331,11 +329,15 @@ ranked_symbols AS (
     }
 
     // Add gap range filtering
-    if (minGap) {
-      filterConditions += ` AND (gap_1 >= ${minGap} OR gap_2 >= ${minGap} OR gap_1 is null OR gap_2 is null)`;
-    }
-    if (maxGap) {
-      filterConditions += ` AND (gap_1 <= ${maxGap} OR gap_2 <= ${maxGap} OR gap_1 is null OR gap_2 is null)`;
+    if (minGap && maxGap) {
+      filterConditions += ` AND ((gap_1 >= ${minGap} AND gap_1 <= ${maxGap}) OR (gap_2 >= ${minGap} AND gap_2 <= ${maxGap}) OR gap_1 IS NULL OR gap_2 IS NULL)`;
+    } else if (minGap) {
+      filterConditions += ` AND ((gap_1 >= ${minGap}) OR (gap_2 >= ${minGap}) OR gap_1 IS NULL OR gap_2 IS NULL)`;
+    } else if (maxGap) {
+      filterConditions += ` AND ((gap_1 <= ${maxGap}) OR (gap_2 <= ${maxGap}) OR gap_1 IS NULL OR gap_2 IS NULL)`;
+    } else {
+      // Default to a permissive range so initial load is not over-filtered
+      filterConditions += ` AND ((gap_1 >= -1000 AND gap_1 <= 1000) OR (gap_2 >= -1000 AND gap_2 <= 1000) OR gap_1 IS NULL OR gap_2 IS NULL)`;
     }
 
     // Add date range filtering
@@ -354,7 +356,9 @@ ranked_symbols AS (
       }
     }
 
-    const countQuery = (timeRange == "hour" ? baseQueryhourly : baseQuerydaily) + filterConditions;
+    const countQuery =
+      (timeRange == "hour" ? baseQueryhourly : baseQuerydaily) +
+      filterConditions;
     const dataQuery =
       (timeRange == "hour" ? baseQueryhourly : baseQuerydaily) +
       filterConditions +
@@ -363,7 +367,7 @@ ranked_symbols AS (
       LIMIT ${limitNum}
       OFFSET ${offset}
     `;
-
+    
     // Execute both queries
     const [data, countResult] = await Promise.all([
       prisma.$queryRawUnsafe(dataQuery),

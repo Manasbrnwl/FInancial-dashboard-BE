@@ -4,6 +4,7 @@ import {
   getLiveDataForSymbols,
   getFilteredArbitrageData,
 } from "../../controllers/arbitrageDetailsController";
+import { getSymbolArbitrageHistory } from "../../controllers/arbitrageHistoryController";
 
 const router = Router();
 
@@ -15,5 +16,8 @@ router.get("/:instrumentId/live", getLiveDataForSymbols);
 
 // Get filtered arbitrage data with pagination
 router.get("/:instrumentId/filtered", getFilteredArbitrageData);
+
+// Get aggregated arbitrage history
+router.get("/:instrumentId/history", getSymbolArbitrageHistory);
 
 export default router;

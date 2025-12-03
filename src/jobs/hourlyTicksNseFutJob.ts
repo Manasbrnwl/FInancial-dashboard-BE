@@ -232,8 +232,10 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
   const gapPayloads: Parameters<typeof processGapData>[0] = [];
 
   for (const symbol of symbols) {
+    const MIN_VOLUME_THRESHOLD = 10; // Minimum contracts traded to consider liquid
+
     const legPrices: Partial<
-      Record<InstrumentLeg["leg"], { ltp: number; time: Date }>
+      Record<InstrumentLeg["leg"], { ltp: number; time: Date; volume: number }>
     > = {};
     for (const leg of symbol.instruments) {
       try {
@@ -260,9 +262,10 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
               response.data.Records[response.data.Records.length - 1],
             ];
             const ltp = Number(lastRecord[0][1]);
+            const volume = Number(lastRecord[0][2]); // Capture volume
             const time = new Date(lastRecord[0][0]);
             if (!Number.isNaN(ltp)) {
-              legPrices[leg.leg] = { ltp, time };
+              legPrices[leg.leg] = { ltp, time, volume };
             }
 
             const transformedRecords = transformRecordsToDbFormat(
@@ -298,17 +301,25 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
       const timeDiff = Math.abs(
         legPrices.near.time.getTime() - legPrices.next.time.getTime()
       );
-      if (timeDiff <= 60000) {
-        // 1 minute tolerance
+
+      // Liquidity Check
+      const isLiquid = legPrices.near.volume >= MIN_VOLUME_THRESHOLD && legPrices.next.volume >= MIN_VOLUME_THRESHOLD;
+
+      if (timeDiff <= 60000 && isLiquid) {
+        // 1 minute tolerance & liquidity check
         gap_1 = legPrices.next.ltp - legPrices.near.ltp;
         timestamp = new Date(
           Math.max(legPrices.near.time.getTime(), legPrices.next.time.getTime())
         );
       } else {
-        console.warn(
-          `? Skipping Gap 1 for ${symbol.symbolId}: Time diff ${timeDiff / 1000
-          }s > 60s`
-        );
+        if (!isLiquid) {
+          console.warn(`? Skipping Gap 1 for ${symbol.symbolId}: Low Liquidity (Near: ${legPrices.near.volume}, Next: ${legPrices.next.volume})`);
+        } else {
+          console.warn(
+            `? Skipping Gap 1 for ${symbol.symbolId}: Time diff ${timeDiff / 1000
+            }s > 60s`
+          );
+        }
       }
     }
 
@@ -317,8 +328,12 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
       const timeDiff = Math.abs(
         legPrices.next.time.getTime() - legPrices.far.time.getTime()
       );
-      if (timeDiff <= 60000) {
-        // 1 minute tolerance
+
+      // Liquidity Check
+      const isLiquid = legPrices.next.volume >= MIN_VOLUME_THRESHOLD && legPrices.far.volume >= MIN_VOLUME_THRESHOLD;
+
+      if (timeDiff <= 60000 && isLiquid) {
+        // 1 minute tolerance & liquidity check
         gap_2 = legPrices.far.ltp - legPrices.next.ltp;
         const currentMax = timestamp ? timestamp.getTime() : 0;
         timestamp = new Date(
@@ -329,10 +344,14 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
           )
         );
       } else {
-        console.warn(
-          `? Skipping Gap 2 for ${symbol.symbolId}: Time diff ${timeDiff / 1000
-          }s > 60s`
-        );
+        if (!isLiquid) {
+          console.warn(`? Skipping Gap 2 for ${symbol.symbolId}: Low Liquidity (Next: ${legPrices.next.volume}, Far: ${legPrices.far.volume})`);
+        } else {
+          console.warn(
+            `? Skipping Gap 2 for ${symbol.symbolId}: Time diff ${timeDiff / 1000
+            }s > 60s`
+          );
+        }
       }
     }
 

@@ -299,25 +299,30 @@ ranked_symbols AS (
               name,
               TO_CHAR(DATE_TRUNC('minute', tick_date) - ((EXTRACT(MINUTE FROM tick_date)::int % 5) * INTERVAL '1 minute'), 'yyyy-mm-dd HH12:MI AM') AS date,
               MAX(CASE WHEN symbol_rank = 1 THEN symbol END) as symbol_1,
-              MAX(CASE WHEN symbol_rank = 1 THEN TO_CHAR(correct_time, 'HH12:MI AM') END) as time_1,
+              MAX(CASE WHEN symbol_rank = 1 THEN correct_time END) as rtime_1,
               MAX(CASE WHEN symbol_rank = 1 THEN ltp END) as price_1,
               MAX(CASE WHEN symbol_rank = 2 THEN symbol END) as symbol_2,
-              MAX(CASE WHEN symbol_rank = 2 THEN TO_CHAR(correct_time, 'HH12:MI AM') END) as time_2,
+              MAX(CASE WHEN symbol_rank = 2 THEN correct_time END) as rtime_2,
               MAX(CASE WHEN symbol_rank = 2 THEN ltp END) as price_2,
               MAX(CASE WHEN symbol_rank = 3 THEN symbol END) as symbol_3,
-              MAX(CASE WHEN symbol_rank = 3 THEN TO_CHAR(correct_time, 'HH12:MI AM') END) as time_3,
+              MAX(CASE WHEN symbol_rank = 3 THEN correct_time END) as rtime_3,
               MAX(CASE WHEN symbol_rank = 3 THEN ltp END) as price_3
           FROM ranked_symbols
           GROUP BY instrumentid, name, DATE_TRUNC('minute', tick_date) - ((EXTRACT(MINUTE FROM tick_date)::int % 5) * INTERVAL '1 minute')
       ),
       with_gaps AS (
           SELECT *,
+              TO_CHAR(rtime_1, 'HH12:MI:SS AM') AS time_1,
+              TO_CHAR(rtime_2, 'HH12:MI:SS AM') AS time_2,
+              TO_CHAR(rtime_3, 'HH12:MI:SS AM') AS time_3,
               (price_1::numeric - price_2::numeric) AS gap_1,
-              (price_2::numeric - price_3::numeric) AS gap_2
+              (price_2::numeric - price_3::numeric) AS gap_2,
+              ABS(EXTRACT(EPOCH FROM (rtime_1::timestamp - rtime_2::timestamp))) AS diff_12,
+              ABS(EXTRACT(EPOCH FROM (rtime_2::timestamp - rtime_3::timestamp))) AS diff_23
           FROM arbitrage_data
       )
       SELECT * FROM with_gaps
-      WHERE 1=1
+      WHERE 1=1 AND (diff_12 >= 0 AND diff_12 <= 15) OR (diff_23 >= 0 AND diff_23 <= 15)
     `;
 
     // Add gap filtering

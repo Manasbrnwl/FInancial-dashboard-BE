@@ -232,7 +232,8 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
   const gapPayloads: Parameters<typeof processGapData>[0] = [];
 
   for (const symbol of symbols) {
-    const MIN_VOLUME_THRESHOLD = 10; // Minimum contracts traded to consider liquid
+    const MIN_VOLUME_THRESHOLD = Number(process.env.MIN_VOLUME_THRESHOLD) || 10;
+    const MIN_TIME_DIFF = Number(process.env.MIN_TIME_DIFF) || 1 * 15 * 1000; // 15 seconds
 
     const legPrices: Partial<
       Record<InstrumentLeg["leg"], { ltp: number; time: Date; volume: number }>
@@ -305,8 +306,7 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
       // Liquidity Check
       const isLiquid = legPrices.near.volume >= MIN_VOLUME_THRESHOLD && legPrices.next.volume >= MIN_VOLUME_THRESHOLD;
 
-      if (timeDiff <= 60000 && isLiquid) {
-        // 1 minute tolerance & liquidity check
+      if (timeDiff <= MIN_TIME_DIFF && isLiquid) {
         gap_1 = legPrices.next.ltp - legPrices.near.ltp;
         timestamp = new Date(
           Math.max(legPrices.near.time.getTime(), legPrices.next.time.getTime())
@@ -332,8 +332,7 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
       // Liquidity Check
       const isLiquid = legPrices.next.volume >= MIN_VOLUME_THRESHOLD && legPrices.far.volume >= MIN_VOLUME_THRESHOLD;
 
-      if (timeDiff <= 60000 && isLiquid) {
-        // 1 minute tolerance & liquidity check
+      if (timeDiff <= MIN_TIME_DIFF && isLiquid) {
         gap_2 = legPrices.far.ltp - legPrices.next.ltp;
         const currentMax = timestamp ? timestamp.getTime() : 0;
         timestamp = new Date(

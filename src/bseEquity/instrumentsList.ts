@@ -1,14 +1,26 @@
 import axios from "axios";
 import { config } from "dotenv";
+import { getDhanAccessToken } from "../config/store";
 config();
 
 async function fetchInstruments() {
   try {
+    const clientToken = getDhanAccessToken();
+
+    if (!clientToken) {
+      throw new Error(
+        "DhanHQ access token not available. Ensure dhanTokenManager is initialized."
+      );
+    }
+
     const response = await axios.get(
       process.env.API_URL_INSTRUMENTS ||
         "https://api.dhan.co/v2/instrument/BSE_EQ",
       {
-        headers: { Authorization: `Bearer ${process.env.ACCESS_TOKEN}` },
+        headers: {
+          "access-token": clientToken,
+          "Content-Type": "application/json"
+        },
       }
     );
 

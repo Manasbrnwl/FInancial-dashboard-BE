@@ -61,7 +61,7 @@ async function fetchAccessToken(): Promise<void> {
       setAccessToken(accessToken);
       // getBseEquityHistory();
       insertFutIntoDataBase(date.toISOString().split("T")[0]);
-      // insertFutIntoDataBase("2025-09-19");
+      // insertFutIntoDataBase("2024-01-30");
       insertOptIntoDataBase(date.toISOString().split("T")[0]);
       // insertOptIntoDataBase("2025-09-30");
       insertEqIntoDataBase(date.toISOString().split("T")[0]);

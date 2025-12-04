@@ -9,6 +9,8 @@ import { loadEnv } from "./config/env";
 import { initializeLoginJob } from "./jobs/loginJob";
 import { initializeHourlyTicksNseFutJob } from "./jobs/hourlyTicksNseFutJob";
 import { initializeDailyNseJob } from "./jobs/dailyNseOhlcJob";
+import { initializeBseEquityJob } from "./jobs/dailyBseEquityJob";
+import { initializeDhanToken } from "./jobs/dhanTokenInitJob";
 import { webSocketService } from "./services/websocketService";
 import { WebSocketManager } from "./utils/websocketManager";
 import { initializeHourlyTicksNseOptJob } from "./jobs/hourlyTicksNseOptJob";
@@ -48,6 +50,11 @@ app.use("/api/auth", authRouter);
 app.use("/api/websocket", authenticateRequest, websocketRouter);
 app.use("/api", apiRouter);
 
+// Initialize DhanHQ token manager (required for BSE equity data)
+// Must be called before BSE equity job
+// Uncomment the line below to enable automatic token management
+initializeDhanToken().catch(err => console.error("Failed to initialize Dhan token:", err));
+
 // Initialize the login job
 initializeLoginJob();
 
@@ -62,6 +69,10 @@ initializeHourlyTicksNseEqJob();
 
 // Initialize the daily NSE options job
 initializeDailyNseJob();
+
+// Initialize the daily BSE equity job
+// Note: Requires DhanHQ token manager to be initialized first
+initializeBseEquityJob();
 
 // Initialize gap baseline loader and cleanup jobs
 initializeGapAverageLoader();

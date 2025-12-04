@@ -317,7 +317,7 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
         } else {
           console.warn(
             `? Skipping Gap 1 for ${symbol.symbolId}: Time diff ${timeDiff / 1000
-            }s > 60s`
+            }s > ${MIN_TIME_DIFF / 1000}s`
           );
         }
       }
@@ -348,7 +348,7 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
         } else {
           console.warn(
             `? Skipping Gap 2 for ${symbol.symbolId}: Time diff ${timeDiff / 1000
-            }s > 60s`
+            }s > ${MIN_TIME_DIFF / 1000}s`
           );
         }
       }

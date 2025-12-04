@@ -165,8 +165,8 @@ class DhanTokenManager {
       return;
     }
 
-    // Run every day at 2:00 AM to renew token (20 hours after typical 6 AM start)
-    cron.schedule("0 2 * * *", async () => {
+    // Run every day at 3:00 AM to renew token (20 hours after typical 6 AM start)
+    cron.schedule("0 3 * * *", async () => {
       console.log("⏰ Scheduled token renewal triggered");
       try {
         await this.renewToken();
@@ -178,7 +178,7 @@ class DhanTokenManager {
     });
 
     this.renewalScheduled = true;
-    console.log("⏰ Automatic token renewal scheduled for 2:00 AM daily");
+    console.log("⏰ Automatic token renewal scheduled for 3:00 AM daily");
   }
 
   /**

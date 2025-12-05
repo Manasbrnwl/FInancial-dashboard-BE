@@ -9,19 +9,12 @@ loadEnv();
  */
 export async function initializeDhanToken(): Promise<void> {
   try {
-    console.log("🔑 Initializing DhanHQ token manager...");
 
     const initialToken = process.env.DHAN_ACCESS_TOKEN;
 
     if (!initialToken) {
       console.error(
         "❌ DHAN_ACCESS_TOKEN not found in environment variables"
-      );
-      console.log(
-        "ℹ️ To generate a token, visit: https://web.dhan.co"
-      );
-      console.log(
-        "   Navigate to Profile > Access DhanHQ APIs > Generate Token"
       );
       throw new Error(
         "DHAN_ACCESS_TOKEN is required. Please set it in your .env file."
@@ -41,16 +34,10 @@ export async function initializeDhanToken(): Promise<void> {
     await dhanTokenManager.initialize(initialToken);
 
     console.log("✅ DhanHQ token manager initialized successfully");
-    console.log(
-      `🕐 Token expires at: ${dhanTokenManager.getTokenExpiry()?.toISOString()}`
-    );
   } catch (error: any) {
     console.error(
       "❌ Failed to initialize DhanHQ token manager:",
       error.message
-    );
-    console.log(
-      "\n⚠️ BSE equity data operations will not work until this is resolved."
     );
     throw error;
   }

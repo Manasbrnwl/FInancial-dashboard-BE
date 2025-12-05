@@ -58,9 +58,9 @@ export function initializeBseEquityJob(): void {
 
   // Run immediately in development mode if needed
   // Uncomment the line below to run on startup in dev
-  // if (process.env.NODE_ENV === "development") {
-  //   executeBseEquityJob();
-  // }
+  if (process.env.NODE_ENV === "development") {
+    executeBseEquityJob();
+  }
 
   // Schedule to run every day at 10:00 PM
   cron.schedule(CRON_EXPRESSION, executeBseEquityJob, {

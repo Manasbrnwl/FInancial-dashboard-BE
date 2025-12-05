@@ -45,6 +45,7 @@ model nse_equity {
 
   @@unique([symbol, date], map: "nse_equity_symbol_date_unique")
   @@index([symbol, date], map: "idx_nse_eq_symbol_date")
+  @@index([symbol, date], map: "idx_nse_equity_symbol_date")
   @@schema("market_data")
 }
 
@@ -93,6 +94,7 @@ model nse_options {
   @@index([symbol, date], map: "idx_nse_opt_symbol_date")
   @@index([expiry_date], map: "idx_nse_options_expiry_date")
   @@index([expiry_month], map: "idx_options_expirymonth")
+  @@index([date(sort: Desc)], map: "idx_nse_options_date_desc")
   @@schema("market_data")
 }
 
@@ -108,6 +110,9 @@ model instrument_lists {
   @@index([exchange, instrument_type], map: "idx_instrument_lists_exchange_instrument_type")
   @@index([id, instrument_type], map: "idx_instrument_lists_id")
   @@index([id, instrument_type], map: "idx_instrument_lists_id_type")
+  @@index([instrument_type], map: "idx_instr_instrumenttype")
+  @@index([id, instrument_type], map: "idx_instrument_lists_id_instrument_type")
+  @@index([instrument_type(ops: raw("gin_trgm_ops"))], map: "idx_underlying_trgm", type: Gin)
   @@schema("market_data")
 }
 
@@ -171,6 +176,9 @@ model symbols_list {
   @@index([instrument_id, expiry_date(sort: Desc)], map: "idx_symbols_expiry")
   @@index([expiry_month], map: "idx_symbols_expirymonth")
   @@index([option_type, expiry_date, instrument_id], map: "idx_symbols_opt_exp")
+  @@index([instrument_id, strike], map: "idx_calc_underlying_strike")
+  @@index([segment, expiry_date], map: "idx_symbols_opt_expiry")
+  @@index([option_type], map: "idx_symbols_option_type")
   @@schema("market_data")
 }
 
@@ -329,5 +337,32 @@ model gap_alert_config {
   created_at        DateTime @default(now()) @db.Timestamp(6)
   updated_at        DateTime @updatedAt @db.Timestamp(6)
 
+  @@schema("market_data")
+}
+
+model margin_calculations {
+  id                   BigInt   @id @default(autoincrement())
+  security_id          String   @db.VarChar(50)
+  symbol               String   @db.VarChar(100)
+  exchange_segment     String   @db.VarChar(20)
+  transaction_type     String   @db.VarChar(10)
+  quantity             Int
+  product_type         String   @db.VarChar(20)
+  price                Float
+  trigger_price        Float?
+  total_margin         Float?
+  span_margin          Float?
+  exposure_margin      Float?
+  available_balance    Float?
+  variable_margin      Float?
+  insufficient_balance Float?
+  brokerage            Float?
+  leverage             String?  @db.VarChar(20)
+  created_at           DateTime @default(now()) @db.Timestamp(6)
+  updated_at           DateTime @db.Timestamp(6)
+
+  @@unique([security_id, exchange_segment, transaction_type, quantity, product_type, price], map: "margin_calc_unique")
+  @@index([created_at], map: "idx_margin_created")
+  @@index([security_id, exchange_segment], map: "idx_margin_security")
   @@schema("market_data")
 }

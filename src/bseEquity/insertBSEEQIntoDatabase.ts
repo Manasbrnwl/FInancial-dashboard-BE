@@ -1,6 +1,5 @@
 import { PrismaClient } from "@prisma/client";
 import { sendEmailNotification } from "../utils/sendEmail";
-import { createBatchInserter } from "../utils/batchInsert";
 
 const prisma = new PrismaClient();
 
@@ -14,8 +13,11 @@ function toISTDate(timestamp: any) {
   });
 }
 
+// Delay function to add pause between API calls
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function insertBSEEqtIntoDataBase(
-  instrumentData: any,
+  data: any,
   history: {
     open: number[];
     high: number[];
@@ -26,17 +28,15 @@ async function insertBSEEqtIntoDataBase(
   }
 ) {
   try {
-    const batchInserter = createBatchInserter(prisma);
-
     // Prepare all records for batch insertion
-    const equityData: Array<any> = [];
+    const records = [];
 
     for (let i = 0; i < history.timestamp.length; i++) {
       const ts = toISTDate(history.timestamp[i]);
 
-      equityData.push({
-        symbol_id: instrumentData.SECURITY_ID,
-        symbol: instrumentData.SYMBOL_NAME,
+      records.push({
+        symbol_id: data.SECURITY_ID,
+        symbol: data.SYMBOL_NAME,
         date: new Date(ts),
         open: history.open[i],
         close: history.close[i],
@@ -48,38 +48,30 @@ async function insertBSEEqtIntoDataBase(
       });
     }
 
-    // Batch insert with duplicate handling
-    if (equityData.length > 0) {
-      const result = await batchInserter.batchInsert(
-        "bse_equity",
-        equityData,
-        async (chunk) => {
-          return await prisma.bse_equity.createMany({
-            data: chunk,
-            skipDuplicates: true,
-          });
-        },
-        {
-          chunkSize: 1000,
-          logProgress: true,
-        }
-      );
+    // Batch insert all records at once
+    if (records.length > 0) {
+      const result = await prisma.bse_equity.createMany({
+        data: records,
+        skipDuplicates: true,
+      });
 
-      console.log(
-        `✅ BSE ${instrumentData.SYMBOL_NAME}: ${result.inserted} processed, ${result.errors} errors`
-      );
-
-      return result;
+      return {
+        inserted: result.count,
+        total: records.length,
+      };
     }
 
-    return { inserted: 0, errors: 0 };
+    return {
+      inserted: 0,
+      total: 0,
+    };
   } catch (error: any) {
-    console.error(`❌ Error inserting BSE data for ${instrumentData.SYMBOL_NAME}:`, error.message);
+    console.error(`❌ Error inserting BSE data for ${data.SYMBOL_NAME}:`, error.message);
     await sendEmailNotification(
       process.env.RECEIVER_EMAIL || "tech@anfy.in",
       "Finance Dashboard History Cron",
       `Error Uploading BSE Equity`,
-      `<h1>Finance Dashboard History</h1><p>Cron encountered error: <strong>${error.message}</strong></p><p>On uploading BSE Equity Data for ${instrumentData.SYMBOL_NAME}.</p>`
+      `<h1>Finance Dashboard History</h1><p>Cron encountered error: <strong>${error.message}</strong></p><p>On uploading BSE Equity Data for ${data.SYMBOL_NAME}.</p>`
     );
     throw error;
   }

@@ -18,6 +18,7 @@ type InstrumentLeg = {
   symbolId: number;
   instrumentId: number;
   instrumentType: string;
+  name: string;
   expiry_date: Date;
   leg: "near" | "next" | "far";
 };
@@ -83,16 +84,19 @@ async function getNseInstruments(): Promise<SymbolInstruments[]> {
     const instruments = await prisma.$queryRaw<
       Array<{
         symbolid: number;
+        name:string;
         instrumentid: number;
         instrument_type: string;
         expiry_date: Date;
       }>
     >`
-      select instrument_id as symbolId,
-             id as instrumentId,
-             symbol as instrument_type,
-             expiry_date
-      from market_data.symbols_list
+      select sl.instrument_id as symbolId, 
+        il.instrument_type as name, 
+        sl.id as instrumentId, 
+        sl.symbol as instrument_type, 
+        sl.expiry_date
+      from market_data.symbols_list sl
+      inner join market_data.instrument_lists il on il.id = sl.instrument_id 
       where expiry_date >= CURRENT_DATE and segment = 'FUT'
       order by symbolId asc, expiry_date asc
     `;
@@ -101,6 +105,7 @@ async function getNseInstruments(): Promise<SymbolInstruments[]> {
     instruments.forEach(
       (instrument: {
         symbolid: number;
+        name:string;
         instrumentid: number;
         instrument_type: string;
         expiry_date: Date;
@@ -110,6 +115,7 @@ async function getNseInstruments(): Promise<SymbolInstruments[]> {
           symbolId: instrument.symbolid,
           instrumentId: instrument.instrumentid,
           instrumentType: instrument.instrument_type,
+          name: instrument.name,
           expiry_date: instrument.expiry_date,
           leg: "near",
         });
@@ -357,7 +363,7 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
     if ((gap_1 !== undefined || gap_2 !== undefined) && timestamp) {
       gapPayloads.push({
         instrumentId: symbol.symbolId,
-        instrumentName: symbol.instruments[0].instrumentType,
+        instrumentName: symbol.instruments[0].name,
         gap_1: gap_1 ?? null, // Pass null if undefined
         gap_2: gap_2 ?? null, // Pass null if undefined
         price_1: legPrices.near?.ltp,

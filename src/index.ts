@@ -11,6 +11,7 @@ import { initializeHourlyTicksNseFutJob } from "./jobs/hourlyTicksNseFutJob";
 import { initializeDailyNseJob } from "./jobs/dailyNseOhlcJob";
 import { initializeBseEquityJob } from "./jobs/dailyBseEquityJob";
 import { initializeDhanToken } from "./jobs/dhanTokenInitJob";
+import { initializeWeeklyMarginCalculatorJob } from "./jobs/weeklyMarginCalculatorJob";
 import { webSocketService } from "./services/websocketService";
 import { WebSocketManager } from "./utils/websocketManager";
 import { initializeHourlyTicksNseOptJob } from "./jobs/hourlyTicksNseOptJob";
@@ -36,7 +37,13 @@ socketIOService.initialize(httpServer);
 // CORS configuration - allow requests from frontend
 app.use(
   cors({
-    origin: ["https://anfy.in", "https://www.anfy.in", "anfy.in", "www.anfy.in", "http://localhost:5173"],
+    origin: [
+      "https://anfy.in",
+      "https://www.anfy.in",
+      "anfy.in",
+      "www.anfy.in",
+      "http://localhost:5173",
+    ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
@@ -44,7 +51,7 @@ app.use(
 );
 
 app.use(express.json());
-app.use(morgan("dev"))
+app.use(morgan("dev"));
 // Routes
 app.use("/api/auth", authRouter);
 app.use("/api/websocket", authenticateRequest, websocketRouter);
@@ -53,7 +60,15 @@ app.use("/api", apiRouter);
 // Initialize DhanHQ token manager (required for BSE equity data)
 // Must be called before BSE equity job
 // Uncomment the line below to enable automatic token management
-initializeDhanToken().catch(err => console.error("Failed to initialize Dhan token:", err));
+initializeDhanToken().then(() => {
+      // Initialize the daily BSE equity job
+      // Note: Requires DhanHQ token manager to be initialized first
+  initializeBseEquityJob();
+
+      // Initialize the weekly margin calculator job (runs every Sunday at 2:00 AM)
+      // Note: Requires DhanHQ token manager to be initialized first
+  initializeWeeklyMarginCalculatorJob();
+}).catch(err => console.error("Failed to initialize Dhan token:", err));
 
 // Initialize the login job
 initializeLoginJob();
@@ -69,10 +84,6 @@ initializeHourlyTicksNseEqJob();
 
 // Initialize the daily NSE options job
 initializeDailyNseJob();
-
-// Initialize the daily BSE equity job
-// Note: Requires DhanHQ token manager to be initialized first
-initializeBseEquityJob();
 
 // Initialize gap baseline loader and cleanup jobs
 initializeGapAverageLoader();

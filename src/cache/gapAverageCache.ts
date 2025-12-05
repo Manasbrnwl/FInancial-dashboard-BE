@@ -9,8 +9,8 @@ interface GapBaseline {
   baselineDate: Date | null; // most recent sample date in the window
 }
 
-// Map<instrumentId, Map<timeSlot, GapBaseline>>
-const gapBaselines = new Map<number, Map<string, GapBaseline>>();
+// Map<instrumentId, GapBaseline> 
+const gapBaselines = new Map<number, GapBaseline>();
 const prisma = new PrismaClient();
 
 function getBaselineWindow(): { minDays: number; maxDays: number } {
@@ -25,38 +25,36 @@ function getBaselineWindow(): { minDays: number; maxDays: number } {
 }
 
 /**
- * Load the freshest baseline per instrument/time-slot within the configured 10–20 day window.
+ * Load the freshest baseline per instrument.
+ * Computes average gaps from the most recent 5 data points per instrument.
  */
 export async function loadGapBaselines(): Promise<void> {
   const { minDays, maxDays } = getBaselineWindow();
 
   const rows = await prisma.$queryRaw<Array<{
     instrument_id: number;
-    time_slot: string;
     baseline_gap_1: number | null;
     baseline_gap_2: number | null;
     baseline_date: Date | null;
   }>>(Prisma.sql`
+    with ranked_gap_series as (
+	    select *,
+		    row_number() over (partition by instrument_id order by date desc, time_slot desc, id desc) rn
+	    from market_data.gap_time_series)
     SELECT
       instrument_id,
-      time_slot,
       AVG(gap_1) AS baseline_gap_1,
       AVG(gap_2) AS baseline_gap_2,
       MAX(date) AS baseline_date
-    FROM market_data.gap_time_series
-    WHERE date BETWEEN CURRENT_DATE - (20 * INTERVAL '1 day')
-                AND CURRENT_DATE - (0 * INTERVAL '1 day')
-    GROUP BY instrument_id, time_slot
+    FROM ranked_gap_series
+    WHERE rn <= 5
+    GROUP BY instrument_id
   `);
 
   gapBaselines.clear();
 
   rows.forEach((row) => {
-    if (!gapBaselines.has(row.instrument_id)) {
-      gapBaselines.set(row.instrument_id, new Map());
-    }
-
-    gapBaselines.get(row.instrument_id)!.set(row.time_slot, {
+    gapBaselines.set(row.instrument_id, {
       baselineGap1: row.baseline_gap_1,
       baselineGap2: row.baseline_gap_2,
       baselineDate: row.baseline_date,
@@ -64,15 +62,14 @@ export async function loadGapBaselines(): Promise<void> {
   });
 
   console.log(
-    `?? Loaded gap baselines for ${gapBaselines.size} instruments (window ${maxDays}-${minDays} days)`
+    `?? Loaded gap baselines for ${gapBaselines.size} instruments`
   );
 }
 
 export function getGapBaseline(
-  instrumentId: number,
-  timeSlot: string
+  instrumentId: number
 ): GapBaseline | undefined {
-  return gapBaselines.get(instrumentId)?.get(timeSlot);
+  return gapBaselines.get(instrumentId);
 }
 
 export function clearGapBaselines(): void {

@@ -147,7 +147,7 @@ async function triggerAlert({
   deviationPercent: number;
   baselineDate: Date | null;
 }): Promise<void> {
-  const alertKey = `${instrumentId}-${alertType}-${timeSlot}`;
+  const alertKey = `${instrumentId}-${alertType}`;
   const existing = recentAlerts.get(alertKey);
 
   const config = await getAlertConfig(instrumentId);
@@ -287,7 +287,7 @@ export async function processGapData(
       const timestampDate = getTimestampDate(gap.timestamp);
       const timeSlot = gap.timeSlot || formatTimeSlot(timestampDate);
       const dateOnly = getISTDateOnly(timestampDate);
-      const baseline = getGapBaseline(gap.instrumentId, timeSlot);
+      const baseline = getGapBaseline(gap.instrumentId);
       const config = await getAlertConfig(gap.instrumentId);
 
       await storeGapPoint(gap, timeSlot, dateOnly);

@@ -128,7 +128,7 @@ export const getEquityDateRangeController = async (
     >`
       SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
       FROM market_data.nse_equity ne
-      WHERE ne.symbol = COALESCE(${param}, ne.symbol)
+      WHERE (${param} IS NULL OR ne.symbol = ${param})
     `;
 
     const hourly_rows = await prisma.$queryRaw<

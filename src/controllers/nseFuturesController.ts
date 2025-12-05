@@ -211,7 +211,7 @@ export const getFuturesDateRangeController = async (
     >`
       SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
       FROM market_data.nse_futures nf
-      WHERE nf.underlying = COALESCE(${param}, nf.underlying)
+      WHERE  (${param} IS NULL OR nf.underlying = ${param})
     `;
 
     const hourlyrows = await prisma.$queryRaw<

@@ -50,7 +50,9 @@ class DhanTokenManager {
         );
       }
 
-      console.log("🔑 Initializing DhanHQ token manager...");
+      if (process.env.NODE_ENV === "development") {
+        console.log("🔑 Initializing DhanHQ token manager...");
+      }
 
       // Set initial token
       this.accessToken = token;
@@ -73,9 +75,11 @@ class DhanTokenManager {
       // Schedule automatic renewal (every 20 hours to be safe)
       this.scheduleAutomaticRenewal();
 
-      console.log(
-        "✅ DhanHQ token manager initialized successfully"
-      );
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          "✅ DhanHQ token manager initialized successfully"
+        );
+      }
     } catch (error: any) {
       console.error("❌ Failed to initialize DhanHQ token manager:", error.message);
       throw error;
@@ -93,7 +97,9 @@ class DhanTokenManager {
         },
       });
 
-      console.log("✅ DhanHQ token verified successfully");
+      if (process.env.NODE_ENV === "development") {
+        console.log("✅ DhanHQ token verified successfully");
+      }
       return response.status === 200;
     } catch (error: any) {
       console.error("❌ Token verification failed:", error.message);
@@ -106,7 +112,9 @@ class DhanTokenManager {
    */
   async renewToken(): Promise<void> {
     try {
-      console.log("🔄 Renewing DhanHQ access token...");
+      if (process.env.NODE_ENV === "development") {
+        console.log("🔄 Renewing DhanHQ access token...");
+      }
 
       const response = await axios.post(
         "https://api.dhan.co/v2/RenewToken",
@@ -125,8 +133,10 @@ class DhanTokenManager {
         setDhanAccessToken(response.data.accessToken); // Update global store
         this.expiryTime = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-        console.log("✅ DhanHQ token renewed successfully");
-        console.log(`🕐 Token valid until: ${this.expiryTime.toISOString()}`);
+        if (process.env.NODE_ENV === "development") {
+          console.log("✅ DhanHQ token renewed successfully");
+          console.log(`🕐 Token valid until: ${this.expiryTime.toISOString()}`);
+        }
 
         // Verify renewed token
         const isValid = await this.verifyToken();
@@ -161,13 +171,17 @@ class DhanTokenManager {
    */
   private scheduleAutomaticRenewal(): void {
     if (this.renewalScheduled) {
-      console.log("⏰ Token renewal already scheduled");
+      if (process.env.NODE_ENV === "development") {
+        console.log("⏰ Token renewal already scheduled");
+      }
       return;
     }
 
     // Run every day at 3:00 AM to renew token (20 hours after typical 6 AM start)
     cron.schedule("0 3 * * *", async () => {
-      console.log("⏰ Scheduled token renewal triggered");
+      if (process.env.NODE_ENV === "development") {
+        console.log("⏰ Scheduled token renewal triggered");
+      }
       try {
         await this.renewToken();
       } catch (error: any) {
@@ -178,7 +192,9 @@ class DhanTokenManager {
     });
 
     this.renewalScheduled = true;
-    console.log("⏰ Automatic token renewal scheduled for 3:00 AM daily");
+    if (process.env.NODE_ENV === "development") {
+      console.log("⏰ Automatic token renewal scheduled for 3:00 AM daily");
+    }
   }
 
   /**
@@ -248,7 +264,9 @@ class DhanTokenManager {
    * Manually trigger token renewal (for testing or emergency use)
    */
   async forceRenewal(): Promise<void> {
-    console.log("🔧 Manual token renewal triggered");
+    if (process.env.NODE_ENV === "development") {
+      console.log("🔧 Manual token renewal triggered");
+    }
     await this.renewToken();
   }
 }

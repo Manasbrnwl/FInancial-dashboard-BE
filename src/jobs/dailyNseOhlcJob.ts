@@ -25,7 +25,9 @@ async function fetchAccessToken(): Promise<boolean> {
       grant_type: "password",
     };
 
-    console.log("🔑 Fetching access token for daily NSE job...");
+    if (process.env.NODE_ENV === "development") {
+      console.log("🔑 Fetching access token for daily NSE job...");
+    }
 
     const response = await axios.post(
       LOGIN_API_URL,
@@ -41,7 +43,9 @@ async function fetchAccessToken(): Promise<boolean> {
 
     if (accessToken) {
       setAccessToken(accessToken);
-      console.log("✅ Access token updated successfully for daily job");
+      if (process.env.NODE_ENV === "development") {
+        console.log("✅ Access token updated successfully for daily job");
+      }
       return true;
     } else {
       console.error("❌ No access token received from API");
@@ -61,7 +65,9 @@ async function fetchAccessToken(): Promise<boolean> {
  */
 async function getNseInstrumentTypes(): Promise<string[]> {
   try {
-    console.log("🔍 Fetching NSE instrument types from database...");
+    if (process.env.NODE_ENV === "development") {
+      console.log("🔍 Fetching NSE instrument types from database...");
+    }
 
     const nseInstruments = await prisma.instrument_lists.findMany({
       distinct: ['instrument_type'],
@@ -70,9 +76,11 @@ async function getNseInstrumentTypes(): Promise<string[]> {
       },
     });
 
-    console.log(
-      `✅ Found ${nseInstruments.length} NSE instrument types:`
-    );
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `✅ Found ${nseInstruments.length} NSE instrument types:`
+      );
+    }
 
     const instrumentTypes: string[] = [];
     nseInstruments.forEach((instrument, index) => {
@@ -146,9 +154,11 @@ async function bulkInsertOHLCData(records: any[]): Promise<number> {
       skipDuplicates: true,
     });
 
-    console.log(
-      `✅ Successfully inserted ${result.count} records into ohlcDataNSE`
-    );
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `✅ Successfully inserted ${result.count} records into ohlcDataNSE`
+      );
+    }
     return result.count;
   } catch (error: any) {
     console.error(`❌ Failed to bulk insert OHLC data:`, error.message);
@@ -159,7 +169,7 @@ async function bulkInsertOHLCData(records: any[]): Promise<number> {
 /**
  * Function to fetch historical data for instrument types
  */
-async function fetchHistoricalData(instrumentTypes: string[]): Promise<{successfulInstrumentsCount: number, totalRecordsInserted: number}> {
+async function fetchHistoricalData(instrumentTypes: string[]): Promise<{ successfulInstrumentsCount: number, totalRecordsInserted: number }> {
   const accessToken = getAccessToken();
 
   if (!accessToken) {
@@ -188,16 +198,20 @@ async function fetchHistoricalData(instrumentTypes: string[]): Promise<{successf
   // Format dates as YYMMDDTHH:MM:SS
   const fromDate = `${todayMorning.getFullYear().toString().slice(-2)}${(todayMorning.getMonth() + 1).toString().padStart(2, '0')}${todayMorning.getDate().toString().padStart(2, '0')}T${todayMorning.getHours().toString().padStart(2, '0')}:${todayMorning.getMinutes().toString().padStart(2, '0')}:${todayMorning.getSeconds().toString().padStart(2, '0')}`;
   const toDate = `${todayEvening.getFullYear().toString().slice(-2)}${(todayEvening.getMonth() + 1).toString().padStart(2, '0')}${todayEvening.getDate().toString().padStart(2, '0')}T${todayEvening.getHours().toString().padStart(2, '0')}:${todayEvening.getMinutes().toString().padStart(2, '0')}:${todayEvening.getSeconds().toString().padStart(2, '0')}`;
-//   const fromDate = "250926T09:00:00";
-//   const toDate = "250926T14:00:00";
-  console.log(`📊 Fetching historical data from ${fromDate} to ${toDate}`);
+  //   const fromDate = "250926T09:00:00";
+  //   const toDate = "250926T14:00:00";
+  if (process.env.NODE_ENV === "development") {
+    console.log(`📊 Fetching historical data from ${fromDate} to ${toDate}`);
+  }
 
   let successfulInstrumentsCount = 0;
   let totalRecordsInserted = 0;
 
   for (const type of instrumentTypes) {
     try {
-      console.log(`🔄 Fetching data for instrument type: ${type}`);
+      if (process.env.NODE_ENV === "development") {
+        console.log(`🔄 Fetching data for instrument type: ${type}`);
+      }
 
       const response = await axios.get(
         `https://history.truedata.in/getbars?symbol=${type}&from=${fromDate}&to=${toDate}&response=json&interval=EOD`,
@@ -213,10 +227,12 @@ async function fetchHistoricalData(instrumentTypes: string[]): Promise<{successf
         const recordsCount = response.data.Records
           ? response.data.Records.length
           : 0;
-        console.log(
-          `✅ Successfully fetched data for ${type} (Status: ${response.data.status})`
-        );
-        console.log(`📊 Data records: ${recordsCount}`);
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            `✅ Successfully fetched data for ${type} (Status: ${response.data.status})`
+          );
+          console.log(`📊 Data records: ${recordsCount}`);
+        }
 
         // Get instrument ID and insert data into database
         if (recordsCount > 0) {
@@ -229,31 +245,38 @@ async function fetchHistoricalData(instrumentTypes: string[]): Promise<{successf
             );
             const insertedCount = await bulkInsertOHLCData(transformedRecords);
             totalRecordsInserted += insertedCount;
-            console.log(
-              `💾 Inserted ${insertedCount} records for ${type} (instrumentId: ${instrumentId})`
-            );
+            if (process.env.NODE_ENV === "development") {
+              console.log(
+                `💾 Inserted ${insertedCount} records for ${type} (instrumentId: ${instrumentId})`
+              );
+            }
           } else {
-            console.log(
-              `⚠️ Could not find instrument ID for ${type}, skipping database insert`
-            );
+            if (process.env.NODE_ENV === "development") {
+              console.log(
+                `⚠️ Could not find instrument ID for ${type}, skipping database insert`
+              );
+            }
           }
         }
       } else {
-        console.log(
-          `⚠️ Data fetch for ${type} returned status: ${
-            response.data?.status || "unknown"
-          }`
-        );
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            `⚠️ Data fetch for ${type} returned status: ${response.data?.status || "unknown"
+            }`
+          );
+        }
       }
     } catch (error: any) {
       console.error(`❌ Failed to fetch data for ${type}:`, error.message);
     }
   }
 
-  console.log(
-    `📈 Summary: ${successfulInstrumentsCount} out of ${instrumentTypes.length} instruments returned successful data`
-  );
-  console.log(`💾 Total records inserted: ${totalRecordsInserted}`);
+  if (process.env.NODE_ENV === "development") {
+    console.log(
+      `📈 Summary: ${successfulInstrumentsCount} out of ${instrumentTypes.length} instruments returned successful data`
+    );
+    console.log(`💾 Total records inserted: ${totalRecordsInserted}`);
+  }
 
   return { successfulInstrumentsCount, totalRecordsInserted };
 }
@@ -336,7 +359,9 @@ async function sendDailyJobEmail(
       htmlContent
     );
 
-    console.log(`📧 Email notification sent: ${status}`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`📧 Email notification sent: ${status}`);
+    }
   } catch (error: any) {
     console.error(`❌ Failed to send email notification:`, error.message);
   }
@@ -348,7 +373,9 @@ async function sendDailyJobEmail(
 async function executeDailyJob(): Promise<void> {
   try {
     const date = new Date();
-    console.log(`🕐 Starting daily NSE job at ${date.toISOString()}`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`🕐 Starting daily NSE job at ${date.toISOString()}`);
+    }
 
     // Send start notification
     await sendDailyJobEmail("started", {});
@@ -363,9 +390,11 @@ async function executeDailyJob(): Promise<void> {
       // Fetch historical data for each instrument type
       if (instrumentTypes.length > 0) {
         const result = await fetchHistoricalData(instrumentTypes);
-        console.log(
-          `🎯 Final Result: ${result.successfulInstrumentsCount} instruments returned successful responses with status="success"`
-        );
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            `🎯 Final Result: ${result.successfulInstrumentsCount} instruments returned successful responses with status="success"`
+          );
+        }
 
         // Send completion notification
         await sendDailyJobEmail("completed", {
@@ -374,9 +403,11 @@ async function executeDailyJob(): Promise<void> {
           totalRecordsInserted: result.totalRecordsInserted,
         });
       } else {
-        console.log(
-          "⚠️ No instrument types found, skipping historical data fetch"
-        );
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            "⚠️ No instrument types found, skipping historical data fetch"
+          );
+        }
 
         // Send completion notification with zero results
         await sendDailyJobEmail("completed", {
@@ -394,9 +425,11 @@ async function executeDailyJob(): Promise<void> {
       });
     }
 
-    console.log(
-      `✅ daily NSE job completed at ${new Date().toISOString()}`
-    );
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `✅ daily NSE job completed at ${new Date().toISOString()}`
+      );
+    }
   } catch (error: any) {
     console.error("❌ Error in daily NSE job:", error.message);
 
@@ -414,7 +447,7 @@ async function executeDailyJob(): Promise<void> {
  */
 export function initializeDailyNseJob(): void {
   // Run immediately when the application starts
-  if(process.env.NODE_ENV === "development"){
+  if (process.env.NODE_ENV === "development") {
     executeDailyJob();
   }
 
@@ -422,7 +455,7 @@ export function initializeDailyNseJob(): void {
   cron.schedule("0 19 * * 1-5", executeDailyJob, {
     timezone: "Asia/Kolkata", // Indian timezone
   });
-  
+
   console.log(
     "⏰ daily NSE job scheduled to run every day 7 PM, Monday to Friday (IST)"
   );

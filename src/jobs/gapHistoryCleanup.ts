@@ -22,7 +22,9 @@ export function initializeGapHistoryCleanupJob(): void {
           DELETE FROM market_data.gap_time_series
           WHERE date < CURRENT_DATE - (${retentionDays} * INTERVAL '1 day')
         `;
-        console.log(`?? Cleaned gap_time_series older than ${retentionDays} days`);
+        if (process.env.NODE_ENV === "development") {
+          console.log(`?? Cleaned gap_time_series older than ${retentionDays} days`);
+        }
       } catch (error: any) {
         console.error("? Failed to cleanup gap_time_series:", error?.message || error);
       }
@@ -30,7 +32,9 @@ export function initializeGapHistoryCleanupJob(): void {
     { timezone: "Asia/Kolkata" }
   );
 
-  console.log(
-    `?? Gap history cleanup scheduled with cron "${CRON_EXPRESSION}" (IST timezone)`
-  );
+  if (process.env.NODE_ENV === "development") {
+    console.log(
+      `?? Gap history cleanup scheduled with cron "${CRON_EXPRESSION}" (IST timezone)`
+    );
+  }
 }

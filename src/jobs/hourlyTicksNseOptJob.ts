@@ -62,7 +62,9 @@ async function fetchAccessToken(): Promise<boolean> {
  */
 async function getNseInstruments(): Promise<Map<string, number>> {
   try {
-    console.log("🔍 Fetching NSE Options instruments from database...");
+    if (process.env.NODE_ENV === "development") {
+      console.log("🔍 Fetching NSE Options instruments from database...");
+    }
 
     const instruments = await prisma.$queryRaw<
       Array<{
@@ -187,9 +189,9 @@ async function fetchHistoricalData(
   )
     .toString()
     .padStart(2, "0")}${today
-    .getDate()
-    .toString()
-    .padStart(2, "0")}`;
+      .getDate()
+      .toString()
+      .padStart(2, "0")}`;
   // const fromDate = "251006T09:00:00";
   // const date = "251113";
   // console.log(`📊 Fetching historical data for ${date}`);
@@ -205,9 +207,11 @@ async function fetchHistoricalData(
       await rateLimiter.waitForSlot();
 
       const stats = rateLimiter.getStats();
-      console.log(
-        `📊 Rate limit stats - Second: ${stats.perSecond}/5, Minute: ${stats.perMinute}/300, Hour: ${stats.perHour}/18000`
-      );
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          `📊 Rate limit stats - Second: ${stats.perSecond}/5, Minute: ${stats.perMinute}/300, Hour: ${stats.perHour}/18000`
+        );
+      }
 
       const response = await axios.get(
         `https://history.truedata.in/getticks?symbol=${type}&bidask=1&from=${date}T09:00:00&to=${date}T15:30:00&response=json`,
@@ -226,7 +230,9 @@ async function fetchHistoricalData(
         // console.log(
         //   `✅ Successfully fetched data for ${type} (Status: ${response.data.status})`
         // );
-        console.log(`📊 Data records: ${recordsCount}`);
+        if (process.env.NODE_ENV === "development") {
+          console.log(`📊 Data records: ${recordsCount}`);
+        }
         // Get instrument ID and insert data into database
         if (recordsCount > 0) {
           // Pick up to 15 random records, ordered by time, then insert
@@ -242,11 +248,12 @@ async function fetchHistoricalData(
           // );
         }
       } else {
-        console.log(
-          `⚠️ Data fetch for ${type} returned status: ${
-            response.data?.status || "unknown"
-          }`
-        );
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            `⚠️ Data fetch for ${type} returned status: ${response.data?.status || "unknown"
+            }`
+          );
+        }
       }
     } catch (error: any) {
       console.error(`❌ Failed to fetch data for ${type}:`, error.message);
@@ -309,15 +316,12 @@ async function sendHourlyJobEmail(
           <hr>
           <h3>📈 Results Summary:</h3>
           <ul>
-            <li><strong>Instruments Processed:</strong> ${
-              details.instrumentsCount || 0
-            }</li>
-            <li><strong>Successful API Responses:</strong> ${
-              details.successfulCount || 0
-            }</li>
-            <li><strong>Total Records Inserted:</strong> ${
-              details.totalRecordsInserted || 0
-            }</li>
+            <li><strong>Instruments Processed:</strong> ${details.instrumentsCount || 0
+          }</li>
+            <li><strong>Successful API Responses:</strong> ${details.successfulCount || 0
+          }</li>
+            <li><strong>Total Records Inserted:</strong> ${details.totalRecordsInserted || 0
+          }</li>
           </ul>
           <p><em>Data successfully stored in ticksFODataNSE table.</em></p>
         `;
@@ -332,8 +336,7 @@ async function sendHourlyJobEmail(
           <p><strong>Status:</strong> ❌ Failed</p>
           <hr>
           <h3>🚨 Error Details:</h3>
-          <p><strong>Error Message:</strong> ${
-            details.errorMessage || "Unknown error"
+          <p><strong>Error Message:</strong> ${details.errorMessage || "Unknown error"
           }</p>
           <p><em>Please check the application logs for detailed information.</em></p>
         `;
@@ -347,7 +350,9 @@ async function sendHourlyJobEmail(
       htmlContent
     );
 
-    console.log(`📧 Email notification sent: ${status}`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`📧 Email notification sent: ${status}`);
+    }
   } catch (error: any) {
     console.error(`❌ Failed to send email notification:`, error.message);
   }
@@ -359,7 +364,9 @@ async function sendHourlyJobEmail(
 async function executeHourlyJob(): Promise<void> {
   try {
     const date = new Date();
-    console.log(`🕐 Starting hourly NSE Options job at ${date.toISOString()}`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`🕐 Starting hourly NSE Options job at ${date.toISOString()}`);
+    }
 
     // Send start notification
     await sendHourlyJobEmail("started", {});
@@ -385,7 +392,9 @@ async function executeHourlyJob(): Promise<void> {
           totalRecordsInserted: result.totalRecordsInserted,
         });
       } else {
-        console.log("⚠️ No instruments found, skipping historical data fetch");
+        if (process.env.NODE_ENV === "development") {
+          console.log("⚠️ No instruments found, skipping historical data fetch");
+        }
 
         // Send completion notification with zero results
         await sendHourlyJobEmail("completed", {

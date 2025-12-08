@@ -13,7 +13,9 @@ async function executeBseEquityJob(): Promise<void> {
   const startTime = Date.now();
 
   try {
-    console.log("⏰ Starting BSE Equity job");
+    if (process.env.NODE_ENV === "development") {
+      console.log("⏰ Starting BSE Equity job");
+    }
 
     // Check if Dhan token is initialized
     if (!isDhanTokenReady()) {
@@ -34,7 +36,9 @@ async function executeBseEquityJob(): Promise<void> {
 
     const duration = Date.now() - startTime;
     updateJobStatus("bseEquityJob", "success", CRON_EXPRESSION, duration);
-    console.log(`✅ BSE Equity job completed in ${Math.floor(duration / 60000)} minutes`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`✅ BSE Equity job completed in ${Math.floor(duration / 60000)} minutes`);
+    }
   } catch (error: any) {
     const duration = Date.now() - startTime;
     console.error("❌ BSE Equity job failed:", error.message);

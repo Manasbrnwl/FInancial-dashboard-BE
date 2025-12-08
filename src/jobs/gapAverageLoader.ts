@@ -24,7 +24,9 @@ export function initializeGapAverageLoader(): void {
     { timezone: "Asia/Kolkata" }
   );
 
-  console.log(
-    `?? Gap baseline loader scheduled with cron "${CRON_EXPRESSION}" (IST timezone)`
-  );
+  if (process.env.NODE_ENV === "development") {
+    console.log(
+      `?? Gap baseline loader scheduled with cron "${CRON_EXPRESSION}" (IST timezone)`
+    );
+  }
 }

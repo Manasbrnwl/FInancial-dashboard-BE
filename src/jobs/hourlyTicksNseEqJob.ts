@@ -26,7 +26,9 @@ async function fetchAccessToken(): Promise<boolean> {
       grant_type: "password",
     };
 
-    console.log("🔑 Fetching access token for hourly NSE Equity job...");
+    if (process.env.NODE_ENV === "development") {
+      console.log("🔑 Fetching access token for hourly NSE Equity job...");
+    }
 
     const response = await axios.post(
       LOGIN_API_URL,
@@ -42,7 +44,9 @@ async function fetchAccessToken(): Promise<boolean> {
 
     if (accessToken) {
       setAccessToken(accessToken);
-      console.log("✅ Access token updated successfully for hourly job");
+      if (process.env.NODE_ENV === "development") {
+        console.log("✅ Access token updated successfully for hourly job");
+      }
       return true;
     } else {
       console.error("❌ No access token received from API");
@@ -63,7 +67,9 @@ async function fetchAccessToken(): Promise<boolean> {
  */
 async function getNseInstruments(): Promise<Map<string, number>> {
   try {
-    console.log("🔍 Fetching NSE Equity instruments from database...");
+    if (process.env.NODE_ENV === "development") {
+      console.log("🔍 Fetching NSE Equity instruments from database...");
+    }
 
     const instruments = await prisma.$queryRaw<
       Array<{
@@ -74,7 +80,9 @@ async function getNseInstruments(): Promise<Map<string, number>> {
       select distinct il.id as id, il.instrument_type as instrument_type from market_data.instrument_lists il inner join market_data.symbols_list sl on il.id = sl.instrument_id where il.exchange = 'NSE'
     `;
 
-    console.log(`✅ Found ${instruments.length} NSE Equity instruments`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`✅ Found ${instruments.length} NSE Equity instruments`);
+    }
 
     // Create a Map of instrument_type -> instrumentId (id)
     const instrumentMap = new Map<string, number>();
@@ -128,9 +136,11 @@ async function bulkInsertTicksData(records: any[]): Promise<number> {
       skipDuplicates: true,
     });
 
-    console.log(
-      `✅ Successfully inserted ${result.count} records into ticksDataNSEEQ`
-    );
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `✅ Successfully inserted ${result.count} records into ticksDataNSEEQ`
+      );
+    }
     return result.count;
   } catch (error: any) {
     console.error(`❌ Failed to bulk insert ticks data:`, error.message);
@@ -172,22 +182,28 @@ async function fetchHistoricalData(
     .padStart(2, "0")}${today.getDate().toString().padStart(2, "0")}`;
   // const fromDate = "251006T09:00:00";
   // const toDate = "251006T15:00:00";
-  console.log(`📊 Fetching historical data for ${date}`);
+  if (process.env.NODE_ENV === "development") {
+    console.log(`📊 Fetching historical data for ${date}`);
+  }
 
   let successfulInstrumentsCount = 0;
   let totalRecordsInserted = 0;
 
   for (const [type, instrumentId] of instrumentsMap) {
     try {
-      console.log(`🔄 Fetching data for instrument type: ${type}`);
+      if (process.env.NODE_ENV === "development") {
+        console.log(`🔄 Fetching data for instrument type: ${type}`);
+      }
 
       // Wait for rate limiter before making request
       await rateLimiter.waitForSlot();
 
       const stats = rateLimiter.getStats();
-      console.log(
-        `📊 Rate limit stats - Second: ${stats.perSecond}/5, Minute: ${stats.perMinute}/300, Hour: ${stats.perHour}/18000`
-      );
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          `📊 Rate limit stats - Second: ${stats.perSecond}/5, Minute: ${stats.perMinute}/300, Hour: ${stats.perHour}/18000`
+        );
+      }
 
       const response = await axios.get(
         `https://history.truedata.in/getticks?symbol=${type}&bidask=1&from=${date}T09:00:00&to=${date}T15:30:00&response=json`,
@@ -203,10 +219,12 @@ async function fetchHistoricalData(
         const recordsCount = response.data.Records
           ? response.data.Records.length
           : 0;
-        console.log(
-          `✅ Successfully fetched data for ${type} (Status: ${response.data.status})`
-        );
-        console.log(`📊 Data records: ${recordsCount}`);
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            `✅ Successfully fetched data for ${type} (Status: ${response.data.status})`
+          );
+          console.log(`📊 Data records: ${recordsCount}`);
+        }
         // Get instrument ID and insert data into database
         if (recordsCount > 0) {
           // Get only the last record from the response
@@ -219,26 +237,31 @@ async function fetchHistoricalData(
           );
           const insertedCount = await bulkInsertTicksData(transformedRecords);
           totalRecordsInserted += insertedCount;
-          console.log(
-            `💾 Inserted ${insertedCount} records for ${type} (instrumentId: ${instrumentId})`
-          );
+          if (process.env.NODE_ENV === "development") {
+            console.log(
+              `💾 Inserted ${insertedCount} records for ${type} (instrumentId: ${instrumentId})`
+            );
+          }
         }
       } else {
-        console.log(
-          `⚠️ Data fetch for ${type} returned status: ${
-            response.data?.status || "unknown"
-          }`
-        );
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            `⚠️ Data fetch for ${type} returned status: ${response.data?.status || "unknown"
+            }`
+          );
+        }
       }
     } catch (error: any) {
       console.error(`❌ Failed to fetch data for ${type}:`, error.message);
     }
   }
 
-  console.log(
-    `📈 Summary: ${successfulInstrumentsCount} out of ${instrumentsMap.size} instruments returned successful data`
-  );
-  console.log(`💾 Total records inserted: ${totalRecordsInserted}`);
+  if (process.env.NODE_ENV === "development") {
+    console.log(
+      `📈 Summary: ${successfulInstrumentsCount} out of ${instrumentsMap.size} instruments returned successful data`
+    );
+    console.log(`💾 Total records inserted: ${totalRecordsInserted}`);
+  }
 
   return { successfulInstrumentsCount, totalRecordsInserted };
 }
@@ -291,15 +314,12 @@ async function sendHourlyJobEmail(
           <hr>
           <h3>📈 Results Summary:</h3>
           <ul>
-            <li><strong>Instruments Processed:</strong> ${
-              details.instrumentsCount || 0
-            }</li>
-            <li><strong>Successful API Responses:</strong> ${
-              details.successfulCount || 0
-            }</li>
-            <li><strong>Total Records Inserted:</strong> ${
-              details.totalRecordsInserted || 0
-            }</li>
+            <li><strong>Instruments Processed:</strong> ${details.instrumentsCount || 0
+          }</li>
+            <li><strong>Successful API Responses:</strong> ${details.successfulCount || 0
+          }</li>
+            <li><strong>Total Records Inserted:</strong> ${details.totalRecordsInserted || 0
+          }</li>
           </ul>
           <p><em>Data successfully stored in ticksDataNSEEQ table.</em></p>
         `;
@@ -314,8 +334,7 @@ async function sendHourlyJobEmail(
           <p><strong>Status:</strong> ❌ Failed</p>
           <hr>
           <h3>🚨 Error Details:</h3>
-          <p><strong>Error Message:</strong> ${
-            details.errorMessage || "Unknown error"
+          <p><strong>Error Message:</strong> ${details.errorMessage || "Unknown error"
           }</p>
           <p><em>Please check the application logs for detailed information.</em></p>
         `;
@@ -329,7 +348,9 @@ async function sendHourlyJobEmail(
       htmlContent
     );
 
-    console.log(`📧 Email notification sent: ${status}`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`📧 Email notification sent: ${status}`);
+    }
   } catch (error: any) {
     console.error(`❌ Failed to send email notification:`, error.message);
   }
@@ -341,7 +362,9 @@ async function sendHourlyJobEmail(
 async function executeHourlyJob(): Promise<void> {
   try {
     const date = new Date();
-    console.log(`🕐 Starting hourly NSE Equity job at ${date.toISOString()}`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`🕐 Starting hourly NSE Equity job at ${date.toISOString()}`);
+    }
 
     // Send start notification
     await sendHourlyJobEmail("started", {});
@@ -356,9 +379,11 @@ async function executeHourlyJob(): Promise<void> {
       // Fetch historical data for each instrument
       if (instrumentsMap.size > 0) {
         const result = await fetchHistoricalData(instrumentsMap);
-        console.log(
-          `🎯 Final Result: ${result.successfulInstrumentsCount} instruments returned successful responses with status="success"`
-        );
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            `🎯 Final Result: ${result.successfulInstrumentsCount} instruments returned successful responses with status="success"`
+          );
+        }
 
         // Send completion notification
         await sendHourlyJobEmail("completed", {
@@ -367,7 +392,9 @@ async function executeHourlyJob(): Promise<void> {
           totalRecordsInserted: result.totalRecordsInserted,
         });
       } else {
-        console.log("⚠️ No instruments found, skipping historical data fetch");
+        if (process.env.NODE_ENV === "development") {
+          console.log("⚠️ No instruments found, skipping historical data fetch");
+        }
 
         // Send completion notification with zero results
         await sendHourlyJobEmail("completed", {
@@ -385,9 +412,11 @@ async function executeHourlyJob(): Promise<void> {
       });
     }
 
-    console.log(
-      `✅ Hourly NSE Equity job completed at ${new Date().toISOString()}`
-    );
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `✅ Hourly NSE Equity job completed at ${new Date().toISOString()}`
+      );
+    }
   } catch (error: any) {
     console.error("❌ Error in hourly NSE Equity job:", error.message);
 

@@ -33,7 +33,9 @@ export async function initializeDhanToken(): Promise<void> {
     // Initialize token manager with the initial token
     await dhanTokenManager.initialize(initialToken);
 
-    console.log("✅ DhanHQ token manager initialized successfully");
+    if (process.env.NODE_ENV === "development") {
+      console.log("✅ DhanHQ token manager initialized successfully");
+    }
   } catch (error: any) {
     console.error(
       "❌ Failed to initialize DhanHQ token manager:",

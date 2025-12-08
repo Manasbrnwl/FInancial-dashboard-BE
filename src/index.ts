@@ -60,34 +60,34 @@ app.use("/api", apiRouter);
 // Initialize DhanHQ token manager (required for BSE equity data)
 // Must be called before BSE equity job
 // Uncomment the line below to enable automatic token management
-initializeDhanToken().then(() => {
-      // Initialize the daily BSE equity job
-      // Note: Requires DhanHQ token manager to be initialized first
-  initializeBseEquityJob();
+// initializeDhanToken().then(() => {
+//       // Initialize the daily BSE equity job
+//       // Note: Requires DhanHQ token manager to be initialized first
+//   initializeBseEquityJob();
 
-      // Initialize the weekly margin calculator job (runs every Sunday at 2:00 AM)
-      // Note: Requires DhanHQ token manager to be initialized first
-  initializeWeeklyMarginCalculatorJob();
-}).catch(err => console.error("Failed to initialize Dhan token:", err));
+//       // Initialize the weekly margin calculator job (runs every Sunday at 2:00 AM)
+//       // Note: Requires DhanHQ token manager to be initialized first
+//   initializeWeeklyMarginCalculatorJob();
+// }).catch(err => console.error("Failed to initialize Dhan token:", err));
 
-// Initialize the login job
-initializeLoginJob();
+// // Initialize the login job
+// initializeLoginJob();
 
-// Initialize the hourly NSE futures job
-initializeHourlyTicksNseFutJob();
+// // Initialize the hourly NSE futures job
+// initializeHourlyTicksNseFutJob();
 
-// Initialize the hourly NSE options job
-initializeHourlyTicksNseOptJob();
+// // Initialize the hourly NSE options job
+// initializeHourlyTicksNseOptJob();
 
-// Initialize the hourly NSE equity job
-initializeHourlyTicksNseEqJob();
+// // Initialize the hourly NSE equity job
+// initializeHourlyTicksNseEqJob();
 
-// Initialize the daily NSE options job
-initializeDailyNseJob();
+// // Initialize the daily NSE options job
+// initializeDailyNseJob();
 
-// Initialize gap baseline loader and cleanup jobs
-initializeGapAverageLoader();
-initializeGapHistoryCleanupJob();
+// // Initialize gap baseline loader and cleanup jobs
+// initializeGapAverageLoader();
+// initializeGapHistoryCleanupJob();
 
 // Initialize WebSocket service for real-time data (arbitrage monitoring)
 async function initializeWebSocketService() {
@@ -99,7 +99,7 @@ async function initializeWebSocketService() {
 }
 
 // Start WebSocket service
-initializeWebSocketService();
+// initializeWebSocketService();
 
 // Graceful shutdown handling
 process.on("SIGTERM", () => {

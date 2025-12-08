@@ -94,11 +94,12 @@ class MarginCalculatorService {
         throw new Error("DHAN_CLIENT_ID is not set in environment variables");
       }
 
-      console.log(
-        `📊 Calculating margin for ${request.symbol || request.securityId} (${
-          request.exchangeSegment
-        })`
-      );
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          `📊 Calculating margin for ${request.symbol || request.securityId} (${request.exchangeSegment
+          })`
+        );
+      }
 
       const response = await axios.post(
         this.API_URL,
@@ -117,6 +118,7 @@ class MarginCalculatorService {
             Accept: "application/json",
             "Content-Type": "application/json",
             "access-token": token,
+            "client-id": this.clientId,
           },
         }
       );
@@ -148,14 +150,14 @@ class MarginCalculatorService {
       await prisma.margin_calculations.upsert({
         where: {
           security_id_exchange_segment_transaction_type_quantity_product_type_price:
-            {
-              security_id: request.securityId,
-              exchange_segment: request.exchangeSegment,
-              transaction_type: request.transactionType,
-              quantity: request.quantity,
-              product_type: request.productType,
-              price: request.price,
-            },
+          {
+            security_id: request.securityId,
+            exchange_segment: request.exchangeSegment,
+            transaction_type: request.transactionType,
+            quantity: request.quantity,
+            product_type: request.productType,
+            price: request.price,
+          },
         },
         update: {
           symbol: request.symbol || request.securityId,
@@ -190,19 +192,19 @@ class MarginCalculatorService {
         },
       });
 
-      console.log(
-        `✅ Margin calculated and stored for ${
-          request.symbol || request.securityId
-        }`
-      );
-      console.log(`   Total Margin: ₹${marginData.totalMargin.toFixed(2)}`);
-      console.log(`   Leverage: ${marginData.leverage}x`);
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          `✅ Margin calculated and stored for ${request.symbol || request.securityId
+          }`
+        );
+        console.log(`   Total Margin: ₹${marginData.totalMargin.toFixed(2)}`);
+        console.log(`   Leverage: ${marginData.leverage}x`);
+      }
 
       return marginData;
     } catch (error: any) {
       console.error(
-        `❌ Failed to calculate and store margin for ${
-          request.symbol || request.securityId
+        `❌ Failed to calculate and store margin for ${request.symbol || request.securityId
         }:`,
         error.message
       );
@@ -223,7 +225,9 @@ class MarginCalculatorService {
       error?: string;
     }>;
   }> {
-    console.log(`📊 Calculating margins for ${requests.length} orders...`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`📊 Calculating margins for ${requests.length} orders...`);
+    }
 
     let successful = 0;
     let failed = 0;
@@ -252,9 +256,11 @@ class MarginCalculatorService {
       }
     }
 
-    console.log(
-      `✅ Bulk margin calculation completed: ${successful} successful, ${failed} failed`
-    );
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `✅ Bulk margin calculation completed: ${successful} successful, ${failed} failed`
+      );
+    }
 
     return { successful, failed, results };
   }
@@ -314,9 +320,11 @@ class MarginCalculatorService {
       },
     });
 
-    console.log(
-      `🗑️ Cleaned up ${deleted.count} old margin calculations (older than ${daysToKeep} days)`
-    );
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `🗑️ Cleaned up ${deleted.count} old margin calculations (older than ${daysToKeep} days)`
+      );
+    }
 
     return deleted.count;
   }

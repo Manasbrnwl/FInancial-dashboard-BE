@@ -93,7 +93,7 @@ class DhanTokenManager {
     try {
       const response = await axios.get("https://api.dhan.co/v2/profile", {
         headers: {
-          "access-token": this.accessToken,
+          "access-token": this.accessToken
         },
       });
 
@@ -116,9 +116,8 @@ class DhanTokenManager {
         console.log("🔄 Renewing DhanHQ access token...");
       }
 
-      const response = await axios.post(
+      const response = await axios.get(
         "https://api.dhan.co/v2/RenewToken",
-        {},
         {
           headers: {
             "access-token": this.accessToken,

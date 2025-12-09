@@ -60,15 +60,15 @@ app.use("/api", apiRouter);
 // Initialize DhanHQ token manager (required for BSE equity data)
 // Must be called before BSE equity job
 // Uncomment the line below to enable automatic token management
-// initializeDhanToken().then(() => {
+initializeDhanToken().then(() => {
 //       // Initialize the daily BSE equity job
 //       // Note: Requires DhanHQ token manager to be initialized first
-//   initializeBseEquityJob();
+  initializeBseEquityJob();
 
 //       // Initialize the weekly margin calculator job (runs every Sunday at 2:00 AM)
 //       // Note: Requires DhanHQ token manager to be initialized first
-//   initializeWeeklyMarginCalculatorJob();
-// }).catch(err => console.error("Failed to initialize Dhan token:", err));
+  initializeWeeklyMarginCalculatorJob();
+}).catch(err => console.error("Failed to initialize Dhan token:", err));
 
 // // Initialize the login job
 // initializeLoginJob();

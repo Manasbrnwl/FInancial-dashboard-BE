@@ -73,7 +73,9 @@ export class SocketIOService {
 
       // Handle client subscription to specific symbols
       socket.on('subscribe-symbols', (symbols: string[]) => {
-        console.log(`📡 Client ${socket.id} subscribing to:`, symbols);
+        if (process.env.NODE_ENV === "development") {
+          console.log(`📡 Client ${socket.id} subscribing to:`, symbols);
+        }
 
         // Join rooms for each symbol
         symbols.forEach(symbol => {
@@ -82,7 +84,6 @@ export class SocketIOService {
 
         // Forward subscription to TrueData WebSocket
         webSocketService.subscribeToSymbols(symbols);
-        // console.log(`✅ Forwarded subscription to TrueData WebSocket:`, symbols);
 
         socket.emit('subscription-confirmed', {
           symbols,
@@ -92,7 +93,9 @@ export class SocketIOService {
 
       // Handle client unsubscription
       socket.on('unsubscribe-symbols', (symbols: string[]) => {
-        console.log(`📡 Client ${socket.id} unsubscribing from:`, symbols);
+        if (process.env.NODE_ENV === "development") {
+          console.log(`📡 Client ${socket.id} unsubscribing from:`, symbols);
+        }
 
         symbols.forEach(symbol => {
           socket.leave(`symbol:${symbol}`);
@@ -100,7 +103,6 @@ export class SocketIOService {
 
         // Forward unsubscription to TrueData WebSocket
         webSocketService.unsubscribeFromSymbols(symbols);
-        // console.log(`✅ Forwarded unsubscription to TrueData WebSocket:`, symbols);
 
         socket.emit('unsubscription-confirmed', {
           symbols,
@@ -122,13 +124,17 @@ export class SocketIOService {
 
       // Handle disconnection
       socket.on('disconnect', () => {
-        console.log(`❌ Client disconnected: ${socket.id}`);
+        if (process.env.NODE_ENV === "development") {
+          console.log(`❌ Client disconnected: ${socket.id}`);
+        }
         this.connectedClients.delete(socket.id);
       });
 
       // Handle errors
       socket.on('error', (error) => {
-        console.error(`❌ Socket error for client ${socket.id}:`, error);
+        if (process.env.NODE_ENV === "development") {
+          console.error(`❌ Socket error for client ${socket.id}:`, error);
+        }
       });
     });
   }

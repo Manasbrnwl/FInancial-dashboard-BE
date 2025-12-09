@@ -47,7 +47,7 @@ export async function loadGapBaselines(): Promise<void> {
       AVG(gap_2) AS baseline_gap_2,
       MAX(date) AS baseline_date
     FROM ranked_gap_series
-    WHERE rn <= 5
+    WHERE rn <= 20
     GROUP BY instrument_id
   `);
 

@@ -298,10 +298,12 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
             }
           }
         } else {
-          console.log(
-            `?? Data fetch for ${leg.instrumentType} returned status: ${response.data?.status || "unknown"
-            }`
-          );
+          if (process.env.NODE_ENV === "development") {
+            console.log(
+              `?? Data fetch for ${leg.instrumentType} returned status: ${response.data?.status || "unknown"
+              }`
+            );
+          }
         }
       } catch (error: any) {
         console.error(
@@ -331,12 +333,16 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
         );
       } else {
         if (!isLiquid) {
-          console.warn(`? Skipping Gap 1 for ${symbol.symbolId}: Low Liquidity (Near: ${legPrices.near.volume}, Next: ${legPrices.next.volume})`);
+          if (process.env.NODE_ENV === "development") {
+            console.warn(`? Skipping Gap 1 for ${symbol.symbolId}: Low Liquidity (Near: ${legPrices.near.volume}, Next: ${legPrices.next.volume})`);
+          }
         } else {
-          console.warn(
-            `? Skipping Gap 1 for ${symbol.symbolId}: Time diff ${timeDiff / 1000
-            }s > ${MIN_TIME_DIFF / 1000}s`
-          );
+          if (process.env.NODE_ENV === "development") {
+            console.warn(
+              `? Skipping Gap 1 for ${symbol.symbolId}: Time diff ${timeDiff / 1000
+              }s > ${MIN_TIME_DIFF / 1000}s`
+            );
+          }
         }
       }
     }
@@ -362,12 +368,16 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
         );
       } else {
         if (!isLiquid) {
-          console.warn(`? Skipping Gap 2 for ${symbol.symbolId}: Low Liquidity (Next: ${legPrices.next.volume}, Far: ${legPrices.far.volume})`);
+          if (process.env.NODE_ENV === "development") {
+            console.warn(`? Skipping Gap 2 for ${symbol.symbolId}: Low Liquidity (Next: ${legPrices.next.volume}, Far: ${legPrices.far.volume})`);
+          }
         } else {
-          console.warn(
-            `? Skipping Gap 2 for ${symbol.symbolId}: Time diff ${timeDiff / 1000
-            }s > ${MIN_TIME_DIFF / 1000}s`
-          );
+          if (process.env.NODE_ENV === "development") {
+            console.warn(
+              `? Skipping Gap 2 for ${symbol.symbolId}: Time diff ${timeDiff / 1000
+              }s > ${MIN_TIME_DIFF / 1000}s`
+            );
+          }
         }
       }
     }
@@ -384,9 +394,11 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
         timestamp,
       });
     } else {
-      console.warn(
-        `? No valid gaps calculated for symbolId ${symbol.symbolId} (insufficient legs or time sync issues)`
-      );
+      if (process.env.NODE_ENV === "development") {
+        console.warn(
+          `? No valid gaps calculated for symbolId ${symbol.symbolId} (insufficient legs or time sync issues)`
+        );
+      }
     }
   }
 
@@ -397,9 +409,11 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
         console.log(`?? Processed ${gapPayloads.length} gap calculations`);
       }
     } catch (error: any) {
-      console.error("? Failed to process gap data:", error.message);
+      if (process.env.NODE_ENV === "development") {
+        console.error("? Failed to process gap data:", error.message);
+      }
     }
-  }
+  } 
 
   return {
     processedSymbols: symbols.length,
@@ -495,7 +509,9 @@ async function sendHourlyJobEmail(
       htmlContent
     );
 
-    console.log(`?? Email notification sent: ${status}`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`?? Email notification sent: ${status}`);
+    }
   } catch (error: any) {
     console.error(`? Failed to send email notification:`, error.message);
   }

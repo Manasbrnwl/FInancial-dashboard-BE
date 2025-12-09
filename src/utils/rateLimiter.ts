@@ -91,7 +91,9 @@ class RateLimiter {
     while (!this.canMakeRequest()) {
       const waitTime = this.getWaitTime();
       if (waitTime > 0) {
-        console.log(`⏳ Rate limit reached. Waiting ${waitTime}ms...`);
+        if (process.env.NODE_ENV === "development") {
+          console.log(`⏳ Rate limit reached. Waiting ${waitTime}ms...`);
+        }
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
     }

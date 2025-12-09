@@ -33,6 +33,7 @@ interface ProcessOptions {
 
 const recentAlerts = new Map<string, Date>();
 const configCache = new Map<string | number, AlertConfig>();
+const consecutiveBreaches = new Map<string, number>();
 
 const DEFAULT_CONFIG: AlertConfig = {
   percentThreshold: toNumber(process.env.GAP_ALERT_PERCENT, 15),
@@ -163,8 +164,8 @@ async function triggerAlert({
     instrumentName,
     alertType,
     timeSlot,
-    currentValue,
-    baselineValue,
+    currentValue: currentValue.toFixed(2),
+    baselineValue: baselineValue?.toFixed(2),
     deviationPercent: Math.round(deviationPercent * 100) / 100,
     baselineDate,
     triggeredAt: new Date().toISOString(),
@@ -192,38 +193,38 @@ async function triggerAlert({
     `?? Gap alert: ${instrumentName} ${alertType} deviation ${payload.deviationPercent}% (slot ${timeSlot})`
   );
 
-  //   const subject = `Gap alert | ${instrumentName} | ${alertType} | ${timeSlot}`;
-  //   const text = `Gap alert for ${instrumentName}
-  // Type: ${alertType}
-  // Slot: ${timeSlot}
-  // Current: ${currentValue}
-  // Baseline: ${baselineValue ?? "n/a"}
-  // Deviation: ${payload.deviationPercent}%
-  // Baseline date: ${baselineDate?.toISOString().slice(0, 10) ?? "n/a"}`;
-  // const html = `
-  //   <h3>Gap alert for ${instrumentName}</h3>
-  //   <ul>
-  //     <li><strong>Type:</strong> ${alertType}</li>
-  //     <li><strong>Slot:</strong> ${timeSlot}</li>
-  //     <li><strong>Current:</strong> ${currentValue}</li>
-  //     <li><strong>Baseline:</strong> ${baselineValue ?? "n/a"}</li>
-  //     <li><strong>Deviation:</strong> ${payload.deviationPercent}%</li>
-  //     <li><strong>Baseline date:</strong> ${
-  //       baselineDate?.toISOString().slice(0, 10) ?? "n/a"
-  //     }</li>
-  //   </ul>
-  //   <p>Triggered at ${payload.triggeredAt}</p>
-  // `;
+    const subject = `Gap alert | ${instrumentName} | ${alertType} | ${timeSlot}`;
+    const text = `Gap alert for ${instrumentName}
+  Type: ${alertType}
+  Slot: ${timeSlot}
+  Current: ${currentValue.toFixed(2)}
+  Baseline: ${baselineValue?.toFixed(2) ?? "n/a"}
+  Deviation: ${payload.deviationPercent}%
+  Baseline date: ${baselineDate?.toISOString().slice(0, 10) ?? "n/a"}`;
+  const html = `
+    <h3>Gap alert for ${instrumentName}</h3>  
+    <ul>
+      <li><strong>Type:</strong> ${alertType}</li>
+      <li><strong>Slot:</strong> ${timeSlot}</li>
+      <li><strong>Current:</strong> ${payload.currentValue}</li>
+      <li><strong>Baseline:</strong> ${payload.baselineValue ?? "n/a"}</li>
+      <li><strong>Deviation:</strong> ${payload.deviationPercent}%</li>
+      <li><strong>Baseline date:</strong> ${
+        baselineDate?.toISOString().slice(0, 10) ?? "n/a"
+      }</li>
+    </ul>
+    <p>Triggered at ${payload.triggeredAt}</p>
+  `;
 
-  // if (ALERT_EMAIL_RECIPIENTS.length) {
-  //   Promise.allSettled(
-  //     ALERT_EMAIL_RECIPIENTS.map((email) =>
-  //       sendEmailNotification(email, subject, text, html)
-  //     )
-  //   ).catch((err) =>
-  //     console.error("? Failed to send gap alert emails:", err?.message || err)
-  //   );
-  // }
+  if (ALERT_EMAIL_RECIPIENTS.length) {
+    Promise.allSettled(
+      ALERT_EMAIL_RECIPIENTS.map((email) =>
+        sendEmailNotification(email, subject, text, html)
+      )
+    ).catch((err) =>
+      console.error("? Failed to send gap alert emails:", err?.message || err)
+    );
+  }
 
   const smsMessage = `Gap alert ${instrumentName} ${alertType} ${timeSlot}: cur ${currentValue}, base ${baselineValue ?? "n/a"
     }, dev ${payload.deviationPercent}%`;
@@ -309,30 +310,52 @@ export async function processGapData(
         baseline.baselineGap2
       );
 
-      if (gap.gap_1 !== null && deviation1 >= percentThreshold) {
-        await triggerAlert({
-          instrumentId: gap.instrumentId,
-          instrumentName: gap.instrumentName,
-          alertType: "gap_1",
-          timeSlot,
-          currentValue: gap.gap_1,
-          baselineValue: baseline.baselineGap1,
-          deviationPercent: deviation1,
-          baselineDate: baseline.baselineDate ?? now,
-        });
+      // Gap 1 Logic
+      const key1 = `${gap.instrumentId}-gap_1`;
+      if (gap.gap_1 !== null) {
+        if (deviation1 >= percentThreshold) {
+          const count = (consecutiveBreaches.get(key1) || 0) + 1;
+          consecutiveBreaches.set(key1, count);
+
+          if (count >= 3) {
+            await triggerAlert({
+              instrumentId: gap.instrumentId,
+              instrumentName: gap.instrumentName,
+              alertType: "gap_1",
+              timeSlot,
+              currentValue: gap.gap_1,
+              baselineValue: baseline.baselineGap1,
+              deviationPercent: deviation1,
+              baselineDate: baseline.baselineDate ?? now,
+            });
+          }
+        } else {
+          consecutiveBreaches.set(key1, 0);
+        }
       }
 
-      if (gap.gap_2 !== null && deviation2 >= percentThreshold) {
-        await triggerAlert({
-          instrumentId: gap.instrumentId,
-          instrumentName: gap.instrumentName,
-          alertType: "gap_2",
-          timeSlot,
-          currentValue: gap.gap_2,
-          baselineValue: baseline.baselineGap2,
-          deviationPercent: deviation2,
-          baselineDate: baseline.baselineDate ?? now,
-        });
+      // Gap 2 Logic
+      const key2 = `${gap.instrumentId}-gap_2`;
+      if (gap.gap_2 !== null) {
+        if (deviation2 >= percentThreshold) {
+          const count = (consecutiveBreaches.get(key2) || 0) + 1;
+          consecutiveBreaches.set(key2, count);
+
+          if (count >= 3) {
+            await triggerAlert({
+              instrumentId: gap.instrumentId,
+              instrumentName: gap.instrumentName,
+              alertType: "gap_2",
+              timeSlot,
+              currentValue: gap.gap_2,
+              baselineValue: baseline.baselineGap2,
+              deviationPercent: deviation2,
+              baselineDate: baseline.baselineDate ?? now,
+            });
+          }
+        } else {
+          consecutiveBreaches.set(key2, 0);
+        }
       }
 
       if (cooldownOverride ?? config.cooldownMinutes !== undefined) {
@@ -353,4 +376,5 @@ export async function processGapData(
 export function clearAlertCaches(): void {
   recentAlerts.clear();
   configCache.clear();
+  consecutiveBreaches.clear();
 }

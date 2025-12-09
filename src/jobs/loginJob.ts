@@ -62,10 +62,11 @@ async function fetchAccessToken(): Promise<void> {
       // getBseEquityHistory();
       insertFutIntoDataBase(date.toISOString().split("T")[0]);
       // insertFutIntoDataBase("2024-01-30");
+      // insertFutIntoDataBase("2025-12-04");
       insertOptIntoDataBase(date.toISOString().split("T")[0]);
-      // insertOptIntoDataBase("2025-09-30");
+      // insertOptIntoDataBase("2025-12-04");
       insertEqIntoDataBase(date.toISOString().split("T")[0]);
-      // insertEqIntoDataBase("2025-10-02");
+      // insertEqIntoDataBase("2025-12-04");
       // console.log('✅ Access token updated successfully');
 
       const duration = Date.now() - startTime;

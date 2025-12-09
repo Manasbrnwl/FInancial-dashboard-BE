@@ -29,11 +29,17 @@ interface AlertConfig {
 interface ProcessOptions {
   percentThreshold?: number;
   cooldownMinutes?: number;
+  suppressAlerts?: boolean;
 }
 
 const recentAlerts = new Map<string, Date>();
 const configCache = new Map<string | number, AlertConfig>();
-const consecutiveBreaches = new Map<string, number>();
+
+interface BreachState {
+  count: number;
+  direction: "positive" | "negative";
+}
+const consecutiveBreaches = new Map<string, BreachState>();
 
 const DEFAULT_CONFIG: AlertConfig = {
   percentThreshold: toNumber(process.env.GAP_ALERT_PERCENT, 15),
@@ -80,12 +86,19 @@ function getTimestampDate(timestamp?: string | Date): Date {
   return timestamp instanceof Date ? timestamp : new Date(timestamp);
 }
 
-function computeDeviationPercent(
+function computeSignedDeviationPercent(
   current: number | null,
   baseline: number | null
 ): number {
   if (current === null || baseline === null || baseline === 0) return 0;
-  return Math.abs((current - baseline) / baseline) * 100;
+  return ((current - baseline) / baseline) * 100;
+}
+
+function computeDeviationPercent(
+  current: number | null,
+  baseline: number | null
+): number {
+  return Math.abs(computeSignedDeviationPercent(current, baseline));
 }
 
 async function getAlertConfig(instrumentId?: number): Promise<AlertConfig> {
@@ -138,6 +151,7 @@ async function triggerAlert({
   baselineValue,
   deviationPercent,
   baselineDate,
+  direction,
 }: {
   instrumentId: number;
   instrumentName: string;
@@ -147,6 +161,7 @@ async function triggerAlert({
   baselineValue: number | null;
   deviationPercent: number;
   baselineDate: Date | null;
+  direction: "positive" | "negative";
 }): Promise<void> {
   const alertKey = `${instrumentId}-${alertType}`;
   const existing = recentAlerts.get(alertKey);
@@ -189,13 +204,17 @@ async function triggerAlert({
   });
 
   recentAlerts.set(alertKey, new Date());
+
+  const trend = direction === "positive" ? "Uptrend" : "Downtrend";
+
   console.log(
-    `?? Gap alert: ${instrumentName} ${alertType} deviation ${payload.deviationPercent}% (slot ${timeSlot})`
+    `?? Gap alert: ${instrumentName} ${alertType} deviation ${payload.deviationPercent}% (slot ${timeSlot}) | Trend: ${trend}`
   );
 
-    const subject = `Gap alert | ${instrumentName} | ${alertType} | ${timeSlot}`;
-    const text = `Gap alert for ${instrumentName}
+  const subject = `Gap alert | ${instrumentName} | ${alertType} | ${timeSlot} | ${trend}`;
+  const text = `Gap alert for ${instrumentName}
   Type: ${alertType}
+  Trend: ${trend}
   Slot: ${timeSlot}
   Current: ${currentValue.toFixed(2)}
   Baseline: ${baselineValue?.toFixed(2) ?? "n/a"}
@@ -205,13 +224,13 @@ async function triggerAlert({
     <h3>Gap alert for ${instrumentName}</h3>  
     <ul>
       <li><strong>Type:</strong> ${alertType}</li>
+      <li><strong>Trend:</strong> ${trend}</li>
       <li><strong>Slot:</strong> ${timeSlot}</li>
       <li><strong>Current:</strong> ${payload.currentValue}</li>
       <li><strong>Baseline:</strong> ${payload.baselineValue ?? "n/a"}</li>
       <li><strong>Deviation:</strong> ${payload.deviationPercent}%</li>
-      <li><strong>Baseline date:</strong> ${
-        baselineDate?.toISOString().slice(0, 10) ?? "n/a"
-      }</li>
+      <li><strong>Baseline date:</strong> ${baselineDate?.toISOString().slice(0, 10) ?? "n/a"
+    }</li>
     </ul>
     <p>Triggered at ${payload.triggeredAt}</p>
   `;
@@ -226,7 +245,7 @@ async function triggerAlert({
     );
   }
 
-  const smsMessage = `Gap alert ${instrumentName} ${alertType} ${timeSlot}: cur ${currentValue}, base ${baselineValue ?? "n/a"
+  const smsMessage = `Gap alert ${instrumentName} ${alertType} ${timeSlot} (${trend}): cur ${currentValue}, base ${baselineValue ?? "n/a"
     }, dev ${payload.deviationPercent}%`;
   if (ALERT_SMS_RECIPIENTS.length) {
     Promise.allSettled(
@@ -281,7 +300,9 @@ export async function processGapData(
 ): Promise<void> {
   const now = new Date();
   const percentThresholdOverride = options.percentThreshold;
+
   const cooldownOverride = options.cooldownMinutes;
+  const suppressAlerts = options.suppressAlerts || false;
 
   for (const gap of gaps) {
     try {
@@ -313,11 +334,20 @@ export async function processGapData(
       // Gap 1 Logic
       const key1 = `${gap.instrumentId}-gap_1`;
       if (gap.gap_1 !== null) {
-        if (deviation1 >= percentThreshold) {
-          const count = (consecutiveBreaches.get(key1) || 0) + 1;
-          consecutiveBreaches.set(key1, count);
+        const signedDev = computeSignedDeviationPercent(gap.gap_1, baseline.baselineGap1);
+        const direction = signedDev >= 0 ? "positive" : "negative";
 
-          if (count >= 3) {
+        if (deviation1 >= percentThreshold) {
+          const existing = consecutiveBreaches.get(key1);
+          let newCount = 1;
+
+          if (existing && existing.direction === direction) {
+            newCount = existing.count + 1;
+          }
+
+          consecutiveBreaches.set(key1, { count: newCount, direction });
+
+          if (newCount >= 3 && !suppressAlerts) {
             await triggerAlert({
               instrumentId: gap.instrumentId,
               instrumentName: gap.instrumentName,
@@ -327,21 +357,31 @@ export async function processGapData(
               baselineValue: baseline.baselineGap1,
               deviationPercent: deviation1,
               baselineDate: baseline.baselineDate ?? now,
+              direction,
             });
           }
         } else {
-          consecutiveBreaches.set(key1, 0);
+          consecutiveBreaches.delete(key1);
         }
       }
 
       // Gap 2 Logic
       const key2 = `${gap.instrumentId}-gap_2`;
       if (gap.gap_2 !== null) {
-        if (deviation2 >= percentThreshold) {
-          const count = (consecutiveBreaches.get(key2) || 0) + 1;
-          consecutiveBreaches.set(key2, count);
+        const signedDev = computeSignedDeviationPercent(gap.gap_2, baseline.baselineGap2);
+        const direction = signedDev >= 0 ? "positive" : "negative";
 
-          if (count >= 3) {
+        if (deviation2 >= percentThreshold) {
+          const existing = consecutiveBreaches.get(key2);
+          let newCount = 1;
+
+          if (existing && existing.direction === direction) {
+            newCount = existing.count + 1;
+          }
+
+          consecutiveBreaches.set(key2, { count: newCount, direction });
+
+          if (newCount >= 3 && !suppressAlerts) {
             await triggerAlert({
               instrumentId: gap.instrumentId,
               instrumentName: gap.instrumentName,
@@ -351,10 +391,11 @@ export async function processGapData(
               baselineValue: baseline.baselineGap2,
               deviationPercent: deviation2,
               baselineDate: baseline.baselineDate ?? now,
+              direction,
             });
           }
         } else {
-          consecutiveBreaches.set(key2, 0);
+          consecutiveBreaches.delete(key2);
         }
       }
 

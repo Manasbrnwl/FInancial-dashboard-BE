@@ -128,7 +128,7 @@ export const getEquityDateRangeController = async (
     >`
       SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
       FROM market_data.nse_equity ne
-      WHERE (${param} IS NULL OR ne.symbol = ${param})
+      WHERE (${param}::text IS NULL OR ne.symbol = ${param})
     `;
 
     const hourly_rows = await prisma.$queryRaw<
@@ -137,7 +137,7 @@ export const getEquityDateRangeController = async (
       SELECT TO_CHAR(MIN(time), 'yyyy-mm-dd HH12:MI AM') AS min_date, TO_CHAR(MAX(time), 'yyyy-mm-dd HH12:MI AM') AS max_date 
       FROM periodic_market_data."ticksDataNSEEQ" ne 
       INNER JOIN market_data.instrument_lists il ON ne."instrumentId" = il.id 
-      WHERE il.instrument_type = COALESCE(${param}, il.instrument_type)`;
+      WHERE (${param}::text IS NULL OR il.instrument_type = ${param})`;
 
     const row = rows[0] || { min_date: null, max_date: null };
     const hourly_row = hourly_rows[0] || { min_date: null, max_date: null };

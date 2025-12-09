@@ -100,7 +100,7 @@ class MarginCalculatorService {
           })`
         );
       }
-
+console.log(request)
       const response = await axios.post(
         this.API_URL,
         {
@@ -117,8 +117,7 @@ class MarginCalculatorService {
           headers: {
             Accept: "application/json",
             "Content-Type": "application/json",
-            "access-token": token,
-            "client-id": this.clientId,
+            "access-token": token
           },
         }
       );

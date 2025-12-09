@@ -306,9 +306,9 @@ export function initializeWeeklyMarginCalculatorJob(): void {
   initializeJobStatus("weeklyMarginCalculatorJob", CRON_EXPRESSION);
 
   // Uncomment to run immediately in development
-  // if (process.env.NODE_ENV === "development") {
-  //   calculateAllMargins();
-  // }
+  if (process.env.NODE_ENV === "development") {
+    calculateAllMargins();
+  }
 
   // Schedule to run every Sunday at 2:00 AM
   cron.schedule(CRON_EXPRESSION, calculateAllMargins, {

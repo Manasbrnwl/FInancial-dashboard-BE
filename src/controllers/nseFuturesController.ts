@@ -211,7 +211,7 @@ export const getFuturesDateRangeController = async (
     >`
       SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
       FROM market_data.nse_futures nf
-      WHERE  (${param} IS NULL OR nf.underlying = ${param})
+      WHERE  (${param}::text IS NULL OR nf.underlying = ${param})
     `;
 
     const hourlyrows = await prisma.$queryRaw<
@@ -220,7 +220,7 @@ export const getFuturesDateRangeController = async (
       SELECT TO_CHAR(MIN(time), 'yyyy-mm-dd HH12:MI AM') AS min_date, TO_CHAR(MAX(time), 'yyyy-mm-dd HH12:MI AM') AS max_date 
       FROM periodic_market_data."ticksDataNSEFUT" nf 
       INNER JOIN market_data.symbols_list sl ON nf."instrumentId" = sl.id 
-      WHERE sl.instrument_id  = COALESCE(${param}, sl.instrument_id)
+      WHERE (${param}::text IS NULL OR sl.instrument_id = ${param})
     `;
 
     const row = rows[0] || { min_date: null, max_date: null };

@@ -319,7 +319,7 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
 
     // Calculate Gap 1 (Next - Near)
     if (legPrices.near && legPrices.next) {
-      const timeDiff = Math.abs(
+      const timeDiff = (
         legPrices.near.time.getTime() - legPrices.next.time.getTime()
       );
 
@@ -349,7 +349,7 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
 
     // Calculate Gap 2 (Far - Next)
     if (legPrices.next && legPrices.far) {
-      const timeDiff = Math.abs(
+      const timeDiff = (
         legPrices.next.time.getTime() - legPrices.far.time.getTime()
       );
 
@@ -413,7 +413,7 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
         console.error("? Failed to process gap data:", error.message);
       }
     }
-  } 
+  }
 
   return {
     processedSymbols: symbols.length,

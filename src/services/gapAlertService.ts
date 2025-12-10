@@ -98,7 +98,7 @@ function computeDeviationPercent(
   current: number | null,
   baseline: number | null
 ): number {
-  return Math.abs(computeSignedDeviationPercent(current, baseline));
+  return (computeSignedDeviationPercent(current, baseline));
 }
 
 async function getAlertConfig(instrumentId?: number): Promise<AlertConfig> {

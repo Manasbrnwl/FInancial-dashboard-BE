@@ -142,7 +142,7 @@ async function getAlertConfig(instrumentId?: number): Promise<AlertConfig> {
   return finalConfig;
 }
 
-async function triggerAlert({
+export async function triggerAlert({
   instrumentId,
   instrumentName,
   alertType,
@@ -214,17 +214,73 @@ async function triggerAlert({
   const subject = `Gap alert | ${instrumentName} | ${alertType} | ${timeSlot} | ${trend}`;
   const text = `Gap alert for ${instrumentName}
   Type: ${alertType}
-  Trend: ${trend}
   Slot: ${timeSlot}
   Current: ${currentValue.toFixed(2)}
   Baseline: ${baselineValue?.toFixed(2) ?? "n/a"}
   Deviation: ${payload.deviationPercent}%
   Baseline date: ${baselineDate?.toISOString().slice(0, 10) ?? "n/a"}`;
+
+  const todayIST = getISTDateOnly(new Date());
+
+  // Fetch latest 10 alerts globally (within today)
+  const last10Alerts = await prisma.gap_alerts.findMany({
+    where: { 
+      triggered_at: {
+        gte: todayIST
+      }
+    },
+    orderBy: { triggered_at: "desc" },
+    take: 10,
+  });
+
+  // Sort by instrument name for the email display
+  last10Alerts.sort((a, b) => a.instrument_name.localeCompare(b.instrument_name));
+
+  const alertsTableRows = last10Alerts
+    .map((alert) => {
+      const alertTime = toIST(alert.triggered_at)
+        .toISOString()
+        .replace("T", " ")
+        .substring(0, 19);
+
+      return `
+        <tr>
+          <td style="padding: 8px; border: 1px solid #ddd;">${alert.instrument_name}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${alertTime}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${alert.alert_type}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${alert.time_slot}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${alert.current_value.toFixed(2)}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${alert.avg_value.toFixed(2)}</td>
+          <td style="padding: 8px; border: 1px solid #ddd;">${alert.deviation_percent.toFixed(2)}%</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const alertsTableHtml = `
+    <h3>Latest 10 Alerts (Global)</h3>
+    <table style="border-collapse: collapse; width: 100%; font-family: Arial, sans-serif;">
+      <thead>
+        <tr style="background-color: #f2f2f2;">
+          <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Instrument</th>
+          <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Time (IST)</th>
+          <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Type</th>
+          <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Slot</th>
+          <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Current</th>
+          <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Avg</th>
+          <th style="padding: 8px; border: 1px solid #ddd; text-align: left;">Deviation %</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${alertsTableRows}
+      </tbody>
+    </table>
+  `;
+
   const html = `
     <h3>Gap alert for ${instrumentName}</h3>  
     <ul>
       <li><strong>Type:</strong> ${alertType}</li>
-      <li><strong>Trend:</strong> ${trend}</li>
       <li><strong>Slot:</strong> ${timeSlot}</li>
       <li><strong>Current:</strong> ${payload.currentValue}</li>
       <li><strong>Baseline:</strong> ${payload.baselineValue ?? "n/a"}</li>
@@ -233,6 +289,8 @@ async function triggerAlert({
     }</li>
     </ul>
     <p>Triggered at ${payload.triggeredAt}</p>
+    <br/>
+    ${alertsTableHtml}
   `;
 
   if (ALERT_EMAIL_RECIPIENTS.length) {

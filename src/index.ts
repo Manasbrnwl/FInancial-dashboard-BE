@@ -22,6 +22,7 @@ import apiRouter from "./routes/api";
 import { socketIOService } from "./services/socketioService";
 import authRouter from "./routes/auth";
 import { authenticateRequest } from "./middleware/authMiddleware";
+import { backfillGapsForDate } from "./services/manualBackfillService";
 
 dotenv.config();
 loadEnv();
@@ -57,29 +58,60 @@ app.use("/api/auth", authRouter);
 app.use("/api/websocket", authenticateRequest, websocketRouter);
 app.use("/api", apiRouter);
 
+// Temporary Upstox Callback Route
+import { upstoxAuthService } from "./services/upstoxAuthService";
+app.get("/callback", async (req, res) => {
+  const code = req.query.code as string;
+  if (code) {
+    try {
+      const token = await upstoxAuthService.generateAccessToken(code);
+      console.log("? Upstox Token Generated:", token.substring(0, 10) + "...");
+      res.send(`<h1>Login Successful</h1><p>Token generated. check console.</p>`);
+    } catch (err: any) {
+      res.status(500).send("Error: " + err.message);
+    }
+  } else {
+    res.status(400).send("No code");
+  }
+});
+
 // Initialize DhanHQ token manager (required for BSE equity data)
 // Must be called before BSE equity job
 // Uncomment the line below to enable automatic token management
 initializeDhanToken().then(() => {
-//       // Initialize the daily BSE equity job
-//       // Note: Requires DhanHQ token manager to be initialized first
-  initializeBseEquityJob();
+      // Initialize the daily BSE equity job
+      // Note: Requires DhanHQ token manager to be initialized first
+initializeBseEquityJob();
 
-//       // Initialize the weekly margin calculator job (runs every Sunday at 2:00 AM)
-//       // Note: Requires DhanHQ token manager to be initialized first
-  initializeWeeklyMarginCalculatorJob();
+      // Initialize the weekly margin calculator job (runs every Sunday at 2:00 AM)
+      // Note: Requires DhanHQ token manager to be initialized first
+initializeWeeklyMarginCalculatorJob();
 }).catch(err => console.error("Failed to initialize Dhan token:", err));
 
-// // Initialize the login job
+// Initialize the login job
 initializeLoginJob();
 
-// // Initialize the hourly NSE futures job
+import { fetchAccessToken } from "./jobs/loginJob";
+
+import { syncUpstoxIds } from "./jobs/upstoxSyncJob";
+
+// Initialize the hourly NSE futures job
 initializeHourlyTicksNseFutJob();
 
-// // Initialize the hourly NSE options job
+// (async () => {
+  // try {
+    // await fetchAccessToken();
+    // await syncUpstoxIds();
+// await backfillGapsForDate('2025-12-08');
+//   } catch (err) {
+//     console.error("Initialization failed:", err);
+//   }
+// })();
+
+// Initialize the hourly NSE options job
 initializeHourlyTicksNseOptJob();
 
-// // Initialize the hourly NSE equity job
+// Initialize the hourly NSE equity job
 initializeHourlyTicksNseEqJob();
 
 // // Initialize the daily NSE options job
@@ -88,6 +120,9 @@ initializeDailyNseJob();
 // // Initialize gap baseline loader and cleanup jobs
 initializeGapAverageLoader();
 initializeGapHistoryCleanupJob();
+
+import { initializeLoginReminderJob } from "./jobs/dailyLoginEmailJob";
+initializeLoginReminderJob();
 
 // Initialize WebSocket service for real-time data (arbitrage monitoring)
 async function initializeWebSocketService() {

@@ -1,447 +1,203 @@
 import axios from "axios";
-import { setAccessToken, getAccessToken } from "../config/store";
-import cron from "node-cron";
-import qs from "qs";
-import { loadEnv } from "../config/env";
 import { PrismaClient } from "@prisma/client";
+import cron from "node-cron";
+import { upstoxAuthService } from "../services/upstoxAuthService";
+import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { sendEmailNotification } from "../utils/sendEmail";
-import { rateLimiter } from "../utils/rateLimiter";
+import { loadEnv } from "../config/env";
 
 loadEnv();
-
 const prisma = new PrismaClient();
 
-// API endpoint for login
-const LOGIN_API_URL =
-  process.env.LOGIN_API_URL || "https://auth.truedata.in/token";
+// Batch size for Upstox Quote API (Upstox supports up to 500)
+const BATCH_SIZE = 500;
+
+interface InstrumentMap {
+  upstoxId: string;
+  instrumentId: number;
+}
 
 /**
- * Function to fetch access token from the login API
+ * Fetch active NSE Options with valid Upstox IDs from DB.
  */
-async function fetchAccessToken(): Promise<boolean> {
+async function getActiveOptions(): Promise<InstrumentMap[]> {
   try {
-    const credentials = {
-      username: process.env.API_USERNAME || "FYERS2317",
-      password: process.env.API_PASSWORD || "HO2LZYCf",
-      grant_type: "password",
-    };
-
-    // console.log("🔑 Fetching access token for hourly NSE Options job...");
-
-    const response = await axios.post(
-      LOGIN_API_URL,
-      qs.stringify(credentials),
-      {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
+    const symbols = await prisma.symbols_list.findMany({
+      where: {
+        segment: "OPT",
+        expiry_date: {
+          gte: new Date(), // Active contracts only
         },
-      }
-    );
+        upstox_id: {
+          not: null, // Must have Upstox ID
+        },
+      },
+      select: {
+        id: true, // Internal instrumentId
+        upstox_id: true,
+      },
+    });
 
-    const accessToken = response.data.access_token;
+    return symbols.map((s) => ({
+      instrumentId: s.id,
+      upstoxId: s.upstox_id!,
+    }));
+  } catch (error: any) {
+    console.error("? Failed to fetch active options from DB:", error.message);
+    return [];
+  }
+}
 
-    if (accessToken) {
-      setAccessToken(accessToken);
-      // console.log("✅ Access token updated successfully for hourly job");
-      return true;
-    } else {
-      console.error("❌ No access token received from API");
-      return fetchAccessToken();
+/**
+ * Fetch Market Quotes from Upstox for a batch of keys.
+ */
+async function fetchQuotes(keys: string[], accessToken: string) {
+  try {
+    const url = `${UPSTOX_CONFIG.BASE_URL}/market/quote/quotes`;
+    const params = new URLSearchParams({
+      instrument_key: keys.join(","),
+    });
+
+    const response = await axios.get(url, {
+      params,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+      },
+    });
+
+    if (response.data.status === "success") {
+      return response.data.data;
     }
+    return null;
   } catch (error: any) {
     console.error(
-      "❌ Failed to fetch access token for hourly job:",
-      error.message
+      "? Failed to fetch quotes batch:",
+      error.response?.data?.message || error.message
     );
-    return fetchAccessToken();
+    return null;
   }
 }
 
 /**
- * Function to get NSE Options futures instruments with IDs from database
+ * Main execution function for the 5-minute job.
  */
-async function getNseInstruments(): Promise<Map<string, number>> {
+async function executeFiveMinuteJob() {
+  const startTime = Date.now();
+  console.log(`? Starting 5-minute NSE Options Job at ${new Date().toISOString()}`);
+
   try {
-    if (process.env.NODE_ENV === "development") {
-      console.log("🔍 Fetching NSE Options instruments from database...");
+    // 1. Get Access Token (Must be valid)
+    const token = upstoxAuthService.getAccessToken();
+    if (!token) {
+      console.error("? No Upstox Access Token available. Skipping job.");
+      // Optional: Trigger re-login or alert
+      return;
     }
 
-    const instruments = await prisma.$queryRaw<
-      Array<{
-        instrumentid: number;
-        instrument_type: string;
-      }>
-    >`
-      select id as instrumentId, symbol as instrument_type from market_data.symbols_list where expiry_date >= CURRENT_DATE and segment = 'OPT'
-    `;
+    // 2. Get Active Instruments
+    const instruments = await getActiveOptions();
+    if (instruments.length === 0) {
+      console.log("? No active options with Upstox IDs found.");
+      return;
+    }
 
-    // console.log(
-    //   `✅ Found ${instruments.length} NSE Options futures instruments`
-    // );
+    console.log(`? Found ${instruments.length} active options. Processing batches...`);
 
-    // Create a Map of instrument_type -> instrumentId
-    const instrumentMap = new Map<string, number>();
-    instruments.forEach((instrument) => {
-      instrumentMap.set(instrument.instrument_type, instrument.instrumentid);
-    });
+    // Create a lookup map for internal ID: upstoxId -> instrumentId
+    const idMap = new Map<string, number>();
+    instruments.forEach((i) => idMap.set(i.upstoxId, i.instrumentId));
 
-    return instrumentMap;
-  } catch (error: any) {
-    console.error("❌ Failed to fetch NSE Options instruments:", error.message);
-    return new Map();
-  }
-}
+    // 3. Batch Process
+    let totalInserted = 0;
+    const allKeys = instruments.map((i) => i.upstoxId);
 
-/**
- * Function to transform API records to database format
- */
-function transformRecordsToDbFormat(
-  records: any[],
-  instrumentId: number
-): any[] {
-  const now = new Date();
-  return records.map((record) => ({
-    instrumentId: instrumentId,
-    ltp: record[1].toString(),
-    volume: record[2].toString(),
-    oi: record[3].toString(),
-    bid: record[4].toString(),
-    bidqty: record[5].toString(),
-    ask: record[6].toString(),
-    askqty: record[7].toString(),
-    time: new Date(record[0]),
-    updatedAt: now,
-  }));
-}
+    for (let i = 0; i < allKeys.length; i += BATCH_SIZE) {
+      const batchKeys = allKeys.slice(i, i + BATCH_SIZE);
+      const quotes = await fetchQuotes(batchKeys, token);
 
-/**
- * Pick a random sample of records and return them ordered by time (ascending)
- */
-function pickRandomOrdered(records: any[], count: number): any[] {
-  if (!Array.isArray(records) || records.length === 0) return [];
-  const target = Math.min(count, records.length);
+      if (quotes) {
+        const dbRecords = [];
+        const now = new Date(); // Use fetch time as timestamp
 
-  // Sample without replacement
-  const indices = new Set<number>();
-  while (indices.size < target) {
-    indices.add(Math.floor(Math.random() * records.length));
-  }
+        for (const key of batchKeys) {
+          const quote = quotes[key]; // Access by instrument_key
+          if (!quote) continue;
 
-  const picked = Array.from(indices).map((i) => records[i]);
+          /* Upstox Quote Structure (Market Quote - Full):
+             {
+               last_price: 100.5,
+               volume: 5000,
+               oi: 100000,
+               depth: { buy: [{quantity, price, orders}], sell: [...] },
+               last_trade_time: "..."
+             }
+          */
 
-  // Sort by timestamp (record[0]) ascending to preserve order
-  picked.sort(
-    (a, b) => new Date(a[0]).getTime() - new Date(b[0]).getTime()
-  );
+          const instrumentId = idMap.get(key);
+          if (!instrumentId) continue;
 
-  return picked;
-}
+          // Extract best Bid/Ask
+          const bestBid = quote.depth?.buy?.[0]?.price || 0;
+          const bestBidQty = quote.depth?.buy?.[0]?.quantity || 0;
+          const bestAsk = quote.depth?.sell?.[0]?.price || 0;
+          const bestAskQty = quote.depth?.sell?.[0]?.quantity || 0;
 
-/**
- * Function to bulk insert ticks data into database
- */
-async function bulkInsertTicksData(records: any[]): Promise<number> {
-  try {
-    const result = await prisma.ticksDataNSEOPT.createMany({
-      data: records,
-      skipDuplicates: true,
-    });
+          dbRecords.push({
+            instrumentId: instrumentId,
+            ltp: quote.last_price.toString(),
+            volume: quote.volume.toString(),
+            oi: quote.oi.toString(),
+            bid: bestBid.toString(),
+            bidqty: bestBidQty.toString(),
+            ask: bestAsk.toString(),
+            askqty: bestAskQty.toString(),
+            time: now, // Storing snapshot time
+            updatedAt: now,
+          });
+        }
 
-    // console.log(
-    //   `✅ Successfully inserted ${result.count} records into ticksDataNSE`
-    // );
-    return result.count;
-  } catch (error: any) {
-    console.error(`❌ Failed to bulk insert ticks data:`, error.message);
-    return 0;
-  }
-}
-
-/**
- * Function to fetch historical data for instruments
- */
-async function fetchHistoricalData(
-  instrumentsMap: Map<string, number>
-): Promise<{
-  successfulInstrumentsCount: number;
-  totalRecordsInserted: number;
-}> {
-  const accessToken = getAccessToken();
-
-  if (!accessToken) {
-    console.error("❌ No access token available for historical data fetch");
-    return { successfulInstrumentsCount: 0, totalRecordsInserted: 0 };
-  }
-
-  const now = new Date();
-  const today = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    now.getHours(),
-    now.getMinutes() - 15,
-    now.getSeconds()
-  );
-
-  // Format dates as YYMMDDTHH:MM:SS
-  const date = `${today.getFullYear().toString().slice(-2)}${(
-    today.getMonth() + 1
-  )
-    .toString()
-    .padStart(2, "0")}${today
-      .getDate()
-      .toString()
-      .padStart(2, "0")}`;
-  // const fromDate = "251006T09:00:00";
-  // const date = "251113";
-  // console.log(`📊 Fetching historical data for ${date}`);
-
-  let successfulInstrumentsCount = 0;
-  let totalRecordsInserted = 0;
-
-  for (const [type, instrumentId] of instrumentsMap) {
-    try {
-      // console.log(`🔄 Fetching data for instrument type: ${type}`);
-
-      // Wait for rate limiter before making request
-      await rateLimiter.waitForSlot();
-
-      const stats = rateLimiter.getStats();
-      if (process.env.NODE_ENV === "development") {
-        console.log(
-          `📊 Rate limit stats - Second: ${stats.perSecond}/5, Minute: ${stats.perMinute}/300, Hour: ${stats.perHour}/18000`
-        );
+        if (dbRecords.length > 0) {
+          const res = await prisma.ticksDataNSEOPT.createMany({
+            data: dbRecords,
+            skipDuplicates: true, // Avoid primary key collisions if any
+          });
+          totalInserted += res.count;
+        }
       }
 
-      const response = await axios.get(
-        `https://history.truedata.in/getticks?symbol=${type}&bidask=1&from=${date}T09:00:00&to=${date}T15:30:00&response=json`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
-      );
-      // Check if response status is success
-      if (response.data && response.data.status === "Success") {
-        successfulInstrumentsCount++;
-        const recordsCount = response.data.Records
-          ? response.data.Records.length
-          : 0;
-        // console.log(
-        //   `✅ Successfully fetched data for ${type} (Status: ${response.data.status})`
-        // );
-        if (process.env.NODE_ENV === "development") {
-          console.log(`📊 Data records: ${recordsCount}`);
-        }
-        // Get instrument ID and insert data into database
-        if (recordsCount > 0) {
-          // Pick up to 15 random records, ordered by time, then insert
-          const sampledOrdered = pickRandomOrdered(response.data.Records, 15);
-          const transformedRecords = transformRecordsToDbFormat(
-            sampledOrdered,
-            instrumentId
-          );
-          const insertedCount = await bulkInsertTicksData(transformedRecords);
-          totalRecordsInserted += insertedCount;
-          // console.log(
-          //   `💾 Inserted ${insertedCount} records for ${type} (instrumentId: ${instrumentId})`
-          // );
-        }
-      } else {
-        if (process.env.NODE_ENV === "development") {
-          console.log(
-            `⚠️ Data fetch for ${type} returned status: ${response.data?.status || "unknown"
-            }`
-          );
-        }
-      }
-    } catch (error: any) {
-      console.error(`❌ Failed to fetch data for ${type}:`, error.message);
-    }
-  }
-
-  // console.log(
-  //   `📈 Summary: ${successfulInstrumentsCount} out of ${instrumentsMap.size} instruments returned successful data`
-  // );
-  // console.log(`💾 Total records inserted: ${totalRecordsInserted}`);
-
-  return { successfulInstrumentsCount, totalRecordsInserted };
-}
-
-/**
- * Function to send email notification for hourly job
- */
-async function sendHourlyJobEmail(
-  status: "started" | "completed" | "failed",
-  details: {
-    instrumentsCount?: number;
-    successfulCount?: number;
-    totalRecordsInserted?: number;
-    errorMessage?: string;
-  }
-): Promise<void> {
-  try {
-    const date = new Date();
-    const timeString = date.toLocaleString("en-IN", {
-      timeZone: "Asia/Kolkata",
-      hour12: true,
-    });
-
-    let subject: string;
-    let textContent: string;
-    let htmlContent: string;
-
-    switch (status) {
-      case "started":
-        subject = "📊 Hourly NSE Options ticks Data Job Started";
-        textContent = `Hourly NSE Options ticks data job started at ${timeString}`;
-        htmlContent = `
-          <h2>📊 Hourly NSE Options ticks Data Job Started</h2>
-          <p><strong>Time:</strong> ${timeString}</p>
-          <p><strong>Status:</strong> Job initialization successful</p>
-          <p>Starting data fetch for NSE_FUT instruments...</p>
-        `;
-        break;
-
-      case "completed":
-        subject = "✅ Hourly NSE Options ticks Data Job Completed Successfully";
-        textContent = `Hourly NSE Options ticks data job completed successfully at ${timeString}.
-        Instruments processed: ${details.instrumentsCount || 0}
-        Successful responses: ${details.successfulCount || 0}
-        Total records inserted: ${details.totalRecordsInserted || 0}`;
-        htmlContent = `
-          <h2>✅ Hourly NSE Options ticks Data Job Completed</h2>
-          <p><strong>Completion Time:</strong> ${timeString}</p>
-          <p><strong>Status:</strong> ✅ Success</p>
-          <hr>
-          <h3>📈 Results Summary:</h3>
-          <ul>
-            <li><strong>Instruments Processed:</strong> ${details.instrumentsCount || 0
-          }</li>
-            <li><strong>Successful API Responses:</strong> ${details.successfulCount || 0
-          }</li>
-            <li><strong>Total Records Inserted:</strong> ${details.totalRecordsInserted || 0
-          }</li>
-          </ul>
-          <p><em>Data successfully stored in ticksFODataNSE table.</em></p>
-        `;
-        break;
-
-      case "failed":
-        subject = "❌ Hourly NSE Options ticks Data Job Failed";
-        textContent = `Hourly NSE Options ticks data job failed at ${timeString}. Error: ${details.errorMessage}`;
-        htmlContent = `
-          <h2>❌ Hourly NSE Options ticks Data Job Failed</h2>
-          <p><strong>Failure Time:</strong> ${timeString}</p>
-          <p><strong>Status:</strong> ❌ Failed</p>
-          <hr>
-          <h3>🚨 Error Details:</h3>
-          <p><strong>Error Message:</strong> ${details.errorMessage || "Unknown error"
-          }</p>
-          <p><em>Please check the application logs for detailed information.</em></p>
-        `;
-        break;
+      // Basic rate limiting/politeness (Upstox is fast, but good practice)
+      await new Promise(r => setTimeout(r, 200));
     }
 
-    await sendEmailNotification(
-      process.env.RECEIVER_EMAIL || "mystmanas@gmail.com",
-      subject,
-      textContent,
-      htmlContent
-    );
+    const duration = (Date.now() - startTime) / 1000;
+    console.log(`? Job Completed. Inserted ${totalInserted} records in ${duration.toFixed(2)}s.`);
 
-    if (process.env.NODE_ENV === "development") {
-      console.log(`📧 Email notification sent: ${status}`);
-    }
   } catch (error: any) {
-    console.error(`❌ Failed to send email notification:`, error.message);
+    console.error("? Critical Error in 5-minute Options Job:", error.message);
+    // await sendEmailNotification(...) // Optional failure alert
   }
 }
 
 /**
- * Main function to execute the hourly job
- */
-async function executeHourlyJob(): Promise<void> {
-  try {
-    const date = new Date();
-    if (process.env.NODE_ENV === "development") {
-      console.log(`🕐 Starting hourly NSE Options job at ${date.toISOString()}`);
-    }
-
-    // Send start notification
-    await sendHourlyJobEmail("started", {});
-
-    // First login and get access token
-    const loginSuccess = await fetchAccessToken();
-
-    if (loginSuccess) {
-      // Fetch NSE Options instruments with their IDs
-      const instrumentsMap = await getNseInstruments();
-
-      // Fetch historical data for each instrument
-      if (instrumentsMap.size > 0) {
-        const result = await fetchHistoricalData(instrumentsMap);
-        // console.log(
-        //   `🎯 Final Result: ${result.successfulInstrumentsCount} instruments returned successful responses with status="success"`
-        // );
-
-        // Send completion notification
-        await sendHourlyJobEmail("completed", {
-          instrumentsCount: instrumentsMap.size,
-          successfulCount: result.successfulInstrumentsCount,
-          totalRecordsInserted: result.totalRecordsInserted,
-        });
-      } else {
-        if (process.env.NODE_ENV === "development") {
-          console.log("⚠️ No instruments found, skipping historical data fetch");
-        }
-
-        // Send completion notification with zero results
-        await sendHourlyJobEmail("completed", {
-          instrumentsCount: 0,
-          successfulCount: 0,
-          totalRecordsInserted: 0,
-        });
-      }
-    } else {
-      console.error("❌ Skipping instrument query due to login failure");
-
-      // Send failure notification
-      await sendHourlyJobEmail("failed", {
-        errorMessage: "Failed to fetch access token",
-      });
-    }
-
-    // console.log(
-    //   `✅ Hourly NSE Options job completed at ${new Date().toISOString()}`
-    // );
-  } catch (error: any) {
-    console.error("❌ Error in hourly NSE Options job:", error.message);
-
-    // Send failure notification
-    await sendHourlyJobEmail("failed", {
-      errorMessage: error.message,
-    });
-  }
-}
-
-/**
- * Initialize the hourly NSE Options job
- * Runs every hour from 9 AM to 6 PM, Monday to Friday
- * Cron pattern: "0 9-18 * * 1-5" (at minute 0 of every hour from 9 through 18 on Monday through Friday)
+ * Initialize the cron job.
  */
 export function initializeHourlyTicksNseOptJob(): void {
-  // Run immediately when the application starts
-  if (process.env.NODE_ENV === "development") {
-    executeHourlyJob();
-  }
+  // Run every 5 minutes from 9 AM to 3:30 PM (Mon-Fri)
+  // Cron: */5 9-15 * * 1-5
+  // Note: 15 refers to 3 PM hour. Need to handle 3:30 stop strictly if required, 
+  // but running until 15:55 is usually fine for buffers.
 
-  // Schedule to run every hour from 9 AM to 6 PM, Monday to Friday
-  cron.schedule("0 18 * * 1-5", executeHourlyJob, {
-    timezone: "Asia/Kolkata", // Indian timezone
+  const schedule = "*/5 9-15 * * 1-5";
+
+  cron.schedule(schedule, executeFiveMinuteJob, {
+    timezone: "Asia/Kolkata",
   });
 
-  console.log(
-    "⏰ Hourly NSE Options job scheduled to run every hour from 9 AM to 6 PM, Monday to Friday (IST)"
-  );
+  console.log(`? 5-Minute Options Job Scheduled (${schedule})`);
+
+  // Optional: Run once on start for DEV verification
+  if (process.env.NODE_ENV === "production") {
+    executeFiveMinuteJob();
+  }
 }

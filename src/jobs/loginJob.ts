@@ -20,7 +20,7 @@ const LOGIN_API_URL =
 /**
  * Function to fetch access token from the login API
  */
-async function fetchAccessToken(): Promise<void> {
+export async function fetchAccessToken(): Promise<void> {
   const startTime = Date.now();
 
   try {
@@ -62,11 +62,11 @@ async function fetchAccessToken(): Promise<void> {
       // getBseEquityHistory();
       insertFutIntoDataBase(date.toISOString().split("T")[0]);
       // insertFutIntoDataBase("2024-01-30");
-      // insertFutIntoDataBase("2025-12-04");
+      // insertFutIntoDataBase("2025-12-08");
       insertOptIntoDataBase(date.toISOString().split("T")[0]);
-      // insertOptIntoDataBase("2025-12-04");
+      // insertOptIntoDataBase("2025-12-08");
       insertEqIntoDataBase(date.toISOString().split("T")[0]);
-      // insertEqIntoDataBase("2025-12-04");
+      // insertEqIntoDataBase("2025-12-08");
       // console.log('✅ Access token updated successfully');
 
       const duration = Date.now() - startTime;
@@ -95,7 +95,7 @@ export function initializeLoginJob(): void {
   initializeJobStatus('loginJob', CRON_EXPRESSION);
 
   // Run immediately when the application starts
-  if(process.env.NODE_ENV === "development"){
+  if (process.env.NODE_ENV === "development") {
     fetchAccessToken();
   }
 

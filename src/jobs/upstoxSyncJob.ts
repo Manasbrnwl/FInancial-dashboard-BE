@@ -17,7 +17,10 @@ export async function syncUpstoxIds(): Promise<void> {
         // simply querying the model 'symbols_list' should work.
         const missingSymbols = await prisma.symbols_list.findMany({
             where: {
-                upstox_id: null,
+                OR: [
+                    { upstox_id: null },
+                    { upstox_symbol: null }
+                ],
                 expiry_date: {
                     gte: new Date()
                 },
@@ -40,12 +43,15 @@ export async function syncUpstoxIds(): Promise<void> {
 
         // 3. Process each symbol
         for (const item of missingSymbols) {
-            const key = upstoxInstrumentService.getInstrumentKey(item.symbol);
+            const details = upstoxInstrumentService.getInstrumentDetails(item.symbol);
 
-            if (key) {
+            if (details) {
                 await prisma.symbols_list.update({
                     where: { id: item.id },
-                    data: { upstox_id: key }
+                    data: {
+                        upstox_id: details.key,
+                        upstox_symbol: details.symbol
+                    }
                 });
                 updatedCount++;
             }

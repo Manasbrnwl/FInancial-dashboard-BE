@@ -75,27 +75,18 @@ app.get("/callback", async (req, res) => {
   }
 });
 
-// Initialize DhanHQ token manager (required for BSE equity data)
-// Must be called before BSE equity job
-// Uncomment the line below to enable automatic token management
-initializeDhanToken().then(() => {
-      // Initialize the daily BSE equity job
-      // Note: Requires DhanHQ token manager to be initialized first
-initializeBseEquityJob();
 
-      // Initialize the weekly margin calculator job (runs every Sunday at 2:00 AM)
-      // Note: Requires DhanHQ token manager to be initialized first
+initializeDhanToken().then(() => {
+initializeBseEquityJob();
 initializeWeeklyMarginCalculatorJob();
 }).catch(err => console.error("Failed to initialize Dhan token:", err));
 
-// Initialize the login job
 initializeLoginJob();
 
 import { fetchAccessToken } from "./jobs/loginJob";
 
 import { syncUpstoxIds } from "./jobs/upstoxSyncJob";
 
-// Initialize the hourly NSE futures job
 initializeHourlyTicksNseFutJob();
 
 // (async () => {
@@ -108,16 +99,12 @@ initializeHourlyTicksNseFutJob();
 //   }
 // })();
 
-// Initialize the hourly NSE options job
 initializeHourlyTicksNseOptJob();
 
-// Initialize the hourly NSE equity job
 initializeHourlyTicksNseEqJob();
 
-// // Initialize the daily NSE options job
 initializeDailyNseJob();
 
-// // Initialize gap baseline loader and cleanup jobs
 initializeGapAverageLoader();
 initializeGapHistoryCleanupJob();
 

@@ -169,6 +169,7 @@ model symbols_list {
   option_type   String?   @db.VarChar(2)
   expiry_month  String?
   upstox_id     String?   @db.VarChar(50)
+  upstox_symbol String?   @db.VarChar(100)
 
   @@unique([instrument_id, symbol], map: "instrument_symbol_unique")
   @@index([instrument_id, symbol], map: "idx_instrument_symbol")

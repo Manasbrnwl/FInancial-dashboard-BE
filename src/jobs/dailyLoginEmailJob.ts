@@ -2,11 +2,7 @@ import cron from "node-cron";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { sendEmailNotification } from "../utils/sendEmail";
 
-// Hardcoded recipient or from env
-// Assuming ALERT_EMAIL_RECIPIENTS logic or a primary admin email. 
-// For now, using process.env.EMAIL_USER as the recipient if not available, 
-// or simpler: just use ALERT_EMAIL_RECIPIENTS from config if it exists, otherwise assume a dedicated env.
-const TARGET_EMAIL = process.env.EMAIL_USER; // Sent to self by default
+const TARGET_EMAIL = process.env.GAP_ALERT_EMAILS;
 
 /**
  * Execute the login reminder email logic.

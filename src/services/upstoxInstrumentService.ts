@@ -75,36 +75,52 @@ export const upstoxInstrumentService = {
    * TrueData: NIFTY25123030000PE (YYMMDD)
    * Upstox:   NIFTY25DEC30000PE (YYMMM) - Assuming monthly
    */
-    getInstrumentKey: (symbol: string): string | undefined => {
+    /**
+     * Get Upstox Instrument Details (Key + Symbol) for a given trading symbol.
+     */
+    getInstrumentDetails: (symbol: string): { key: string, symbol: string } | undefined => {
+        // Use the same logic as getInstrumentKey but return the symbol key from map
+
+        // Helper to find map key for value (or just store it differently... 
+        // actually simplest is just to return the key used for lookup if found)
+
         // 1. Direct match
-        if (symbolKeyMap.has(symbol)) return symbolKeyMap.get(symbol);
+        if (symbolKeyMap.has(symbol)) return { key: symbolKeyMap.get(symbol)!, symbol: symbol };
 
-        // 2. Normalization Strategy
-        // Regex: Symbol(Group 1) + YY(2) + MM(3) + DD(4) + Strike(5) + Type(6)
-        // e.g. NIFTY 25 12 30 30000 PE
-        const regex = /^([A-Z]+)(\d{2})(\d{2})(\d{2})(\d+)([A-Z]{2})$/;
-        const match = symbol.match(regex);
+        // 2. Normalization Strategy using multiple patterns
+        const patterns = [
+            /^([A-Z]+)(\d{2})(\d{2})(\d{2})(\d{6})(CE|PE)$/i,
+            /^([A-Z]+)(\d{2})(\d{2})(\d{2})(\d{5})(CE|PE)$/i,
+            /^([A-Z]+)(\d{2})(\d{2})(\d{2})(\d+)(CE|PE)$/i,
+            /^(.+?)(\d{2})(\d{2})(\d{2})(\d+(?:\.\d+)?)(CE|PE)$/i,
+            /^(.+?)(\d{2})(\d{2})(\d{2})(\d+)(CE|PE)$/i
+        ];
 
-        if (match) {
-            const [_, name, yy, mm, dd, strike, type] = match;
-            const monthMap: { [key: string]: string } = {
-                "01": "JAN", "02": "FEB", "03": "MAR", "04": "APR", "05": "MAY", "06": "JUN",
-                "07": "JUL", "08": "AUG", "09": "SEP", "10": "OCT", "11": "NOV", "12": "DEC"
-            };
+        const monthMap: { [key: string]: string } = {
+            "01": "JAN", "02": "FEB", "03": "MAR", "04": "APR", "05": "MAY", "06": "JUN",
+            "07": "JUL", "08": "AUG", "09": "SEP", "10": "OCT", "11": "NOV", "12": "DEC"
+        };
 
-            const mmm = monthMap[mm];
-            if (mmm) {
-                // Strategy A: Construct "Monthly" format (NIFTY25DEC30000PE)
-                const monthlySymbol = `${name}${yy}${mmm}${strike}${type}`;
-                if (symbolKeyMap.has(monthlySymbol)) return symbolKeyMap.get(monthlySymbol);
+        for (const regex of patterns) {
+            const match = symbol.match(regex);
+            if (match) {
+                const [_, name, yy, mm, dd, strike, type] = match;
+                const mmm = monthMap[mm];
 
-                // Strategy B: Construct "Weekly" format (NIFTY25DEC3030000PE)
-                // Check if map has Symbol + YY + MMM + DD + Strike + Type
-                const weeklySymbol = `${name}${yy}${mmm}${dd}${strike}${type}`;
-                if (symbolKeyMap.has(weeklySymbol)) return symbolKeyMap.get(weeklySymbol);
+                if (mmm) {
+                    const monthlySymbol = `${name.toUpperCase()}${yy}${mmm}${strike}${type.toUpperCase()}`;
+                    if (symbolKeyMap.has(monthlySymbol)) return { key: symbolKeyMap.get(monthlySymbol)!, symbol: monthlySymbol };
+
+                    const weeklySymbol = `${name.toUpperCase()}${yy}${mmm}${dd}${strike}${type.toUpperCase()}`;
+                    if (symbolKeyMap.has(weeklySymbol)) return { key: symbolKeyMap.get(weeklySymbol)!, symbol: weeklySymbol };
+                }
             }
         }
-
         return undefined;
+    },
+
+    getInstrumentKey: (symbol: string): string | undefined => {
+        const details = upstoxInstrumentService.getInstrumentDetails(symbol);
+        return details?.key;
     }
 };

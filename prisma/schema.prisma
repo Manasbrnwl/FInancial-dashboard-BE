@@ -368,3 +368,26 @@ model margin_calculations {
   @@index([security_id, exchange_segment], map: "idx_margin_security")
   @@schema("market_data")
 }
+
+model covered_calls_gaps {
+  id               BigInt   @id @default(autoincrement())
+  instrument_id    Int
+  underlying_price Float
+  option_price     Float
+  otm_value        Float
+  strike_price     Float
+  time             DateTime
+  created_at       DateTime @default(now())
+
+  @@index([instrument_id, time], map: "idx_cc_gaps_inst_time")
+  @@schema("market_data")
+}
+
+model app_config {
+  id         Int      @id @default(autoincrement())
+  key        String   @unique @db.VarChar(100)
+  value      String   @db.Text
+  updated_at DateTime @default(now()) @updatedAt
+
+  @@schema("market_data")
+}

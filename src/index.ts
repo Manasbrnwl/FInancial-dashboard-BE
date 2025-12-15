@@ -77,8 +77,8 @@ app.get("/callback", async (req, res) => {
 
 
 initializeDhanToken().then(() => {
-initializeBseEquityJob();
-initializeWeeklyMarginCalculatorJob();
+  initializeBseEquityJob();
+  initializeWeeklyMarginCalculatorJob();
 }).catch(err => console.error("Failed to initialize Dhan token:", err));
 
 initializeLoginJob();
@@ -90,9 +90,9 @@ import { syncUpstoxIds } from "./jobs/upstoxSyncJob";
 initializeHourlyTicksNseFutJob();
 
 // (async () => {
-  // try {
-    // await fetchAccessToken();
-    // await syncUpstoxIds();
+// try {
+// await fetchAccessToken();
+// await syncUpstoxIds();
 // await backfillGapsForDate('2025-12-08');
 //   } catch (err) {
 //     console.error("Initialization failed:", err);
@@ -110,6 +110,8 @@ initializeGapHistoryCleanupJob();
 
 import { initializeLoginReminderJob } from "./jobs/dailyLoginEmailJob";
 initializeLoginReminderJob();
+
+
 
 // Initialize WebSocket service for real-time data (arbitrage monitoring)
 async function initializeWebSocketService() {

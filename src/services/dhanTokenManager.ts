@@ -1,4 +1,5 @@
 import axios from "axios";
+import { PrismaClient } from "@prisma/client";
 import { config } from "dotenv";
 import cron from "node-cron";
 import { sendEmailNotification } from "../utils/sendEmail";
@@ -36,13 +37,38 @@ class DhanTokenManager {
    */
   async initialize(initialToken?: string): Promise<void> {
     try {
-      const token = initialToken || process.env.DHAN_ACCESS_TOKEN;
+      const prisma = new PrismaClient();
+      let token = initialToken;
+
+      // 1. Try to fetch from Database FIRST (Priority)
+      if (!token) {
+        const config = await prisma.app_config.findUnique({ where: { key: 'DHAN_ACCESS_TOKEN' } });
+        if (config?.value) {
+          token = config.value;
+          if (process.env.NODE_ENV === "development") console.log("🔑 Loaded Dhan token from Database");
+        }
+      }
+
+      // 2. Fallback to Environment (Bootstrapping)
+      if (!token) {
+        token = process.env.DHAN_ACCESS_TOKEN;
+        if (token && process.env.NODE_ENV === "development") console.log("⚠️ Loaded Dhan token from Environment (Fallback)");
+      }
 
       if (!token) {
         throw new Error(
-          "No Dhan access token provided. Please set DHAN_ACCESS_TOKEN in environment variables or pass it to initialize()"
+          "No Dhan access token provided (DB is empty and no DHAN_ACCESS_TOKEN in env). Please set it in DB or Env."
         );
+      } else {
+        // Ensure it's in DB (Sync Env -> DB if needed)
+        // We only upsert if we found a token (which we did)
+        await prisma.app_config.upsert({
+          where: { key: 'DHAN_ACCESS_TOKEN' },
+          update: { value: token },
+          create: { key: 'DHAN_ACCESS_TOKEN', value: token }
+        });
       }
+      await prisma.$disconnect();
 
       if (!this.dhanClientId) {
         throw new Error(
@@ -85,6 +111,7 @@ class DhanTokenManager {
       throw error;
     }
   }
+
 
   /**
    * Verify if current token is valid
@@ -130,6 +157,16 @@ class DhanTokenManager {
       if (response.data && response.data.accessToken) {
         this.accessToken = response.data.accessToken;
         setDhanAccessToken(response.data.accessToken); // Update global store
+
+        // Save to DB
+        const prisma = new PrismaClient();
+        await prisma.app_config.upsert({
+          where: { key: 'DHAN_ACCESS_TOKEN' },
+          update: { value: response.data.accessToken },
+          create: { key: 'DHAN_ACCESS_TOKEN', value: response.data.accessToken }
+        });
+        await prisma.$disconnect();
+
         this.expiryTime = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
         if (process.env.NODE_ENV === "development") {

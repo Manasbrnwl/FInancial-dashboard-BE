@@ -91,13 +91,14 @@ export async function executeFiveMinuteJob() {
 
   try {
     // 1. Get Access Token (Must be valid)
-    // const token = upstoxAuthService.getAccessToken();
-    // if (!token) {
-    //   console.error("? No Upstox Access Token available. Skipping job.");
-    //   // Optional: Trigger re-login or alert
-    //   return;
-    // }
-    const token = 'eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiI0U0NLOEsiLCJqdGkiOiI2OTNiYjc1YTcxNzY2OTNkNjFhNDJkMWIiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6dHJ1ZSwiaWF0IjoxNzY1NTIxMjQyLCJpc3MiOiJ1ZGFwaS1nYXRld2F5LXNlcnZpY2UiLCJleHAiOjE3NjU1NzY4MDB9.pS6kbheVK0AlKT41sw-pekjFTrVEsUFH0ZQx0JRM6eo';
+    // 1. Get Access Token (Must be valid)
+    const token = await upstoxAuthService.getAccessToken(); // Use service!
+    if (!token) {
+      console.error("? No Upstox Access Token available. Skipping job.");
+      // Optional: Trigger re-login or alert
+      return;
+    }
+    // const token = '...'; // Removed hardcoded token
 
     // 2. Get Active Instruments
     const instruments = await getActiveOptions();

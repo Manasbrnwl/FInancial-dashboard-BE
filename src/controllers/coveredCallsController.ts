@@ -53,6 +53,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         SELECT DISTINCT ON ("instrumentId")
             "instrumentId", ltp, volume, time
         FROM periodic_market_data."ticksDataNSEOPT"
+        WHERE time >= CURRENT_DATE - INTERVAL '2 days'
         ORDER BY "instrumentId", id DESC
     ),
     latest_tick_eq AS (
@@ -60,7 +61,9 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
        		"instrumentId", ltp, time, time_bucket
 		FROM (
     		SELECT * FROM periodic_market_data."ticksDataNSEEQ"
-		) t ORDER BY "instrumentId", time_bucket, time DESC
+		) t 
+     WHERE time >= CURRENT_DATE - INTERVAL '2 days'
+     ORDER BY "instrumentId", time_bucket, time DESC
     ),
     strike_extraction AS (
         SELECT
@@ -135,6 +138,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         SELECT DISTINCT ON ("instrumentId")
             "instrumentId", ltp, volume, time
         FROM periodic_market_data."ticksDataNSEOPT"
+        WHERE time >= CURRENT_DATE - INTERVAL '2 days'
         ORDER BY "instrumentId", id DESC
     ),
     latest_tick_eq AS (
@@ -142,7 +146,9 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
        		"instrumentId", ltp, time, time_bucket
 		FROM (
     		SELECT * FROM periodic_market_data."ticksDataNSEEQ"
-		) t ORDER BY "instrumentId", time_bucket, time DESC
+		) t 
+     WHERE time >= CURRENT_DATE - INTERVAL '2 days'
+     ORDER BY "instrumentId", time_bucket, time DESC
     ),
     strike_extraction AS (
         SELECT

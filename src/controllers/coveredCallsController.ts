@@ -107,7 +107,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     		LIMIT 1
 		) e ON true
  	)
-    SELECT COUNT(*) as count, 1 as avg_premium, json_agg(distinct expiry_month) expiry_month
+    SELECT COUNT(*) as count, 1 as avg_premium, json_agg(distinct trim(expiry_month)) expiry_month
     FROM with_calcs
     WHERE 1=1 ${Prisma.raw(filterCondition)}
     `;

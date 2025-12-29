@@ -348,16 +348,16 @@ ranked_symbols AS (
     // Add date range filtering
     if (startDate) {
       if (timeRange === "hour") {
-        filterConditions += ` AND date >= '${startDate}'::timestamp`;
+        filterConditions += ` AND date::date >= '${startDate}'::date`;
       } else {
-        filterConditions += ` AND date >= '${startDate}'::date`;
+        filterConditions += ` AND date::date >= '${startDate}'::date`;
       }
     }
     if (endDate) {
       if (timeRange === "hour") {
-        filterConditions += ` AND date <= '${endDate}'::timestamp + interval '1 day'`;
+        filterConditions += ` AND date::date <= '${endDate}'::date + interval '1 day'`;
       } else {
-        filterConditions += ` AND date <= '${endDate}'::date`;
+        filterConditions += ` AND date::date <= '${endDate}'::date`;
       }
     }
 

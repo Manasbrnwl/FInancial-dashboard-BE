@@ -53,7 +53,8 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         SELECT DISTINCT ON ("instrumentId")
             "instrumentId", ltp, volume, time
         FROM periodic_market_data."ticksDataNSEOPT"
-        WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+        where date(time) = '2026-01-08'
+        -- WHERE time >= CURRENT_DATE - INTERVAL '3 days'
         ORDER BY "instrumentId", id DESC
     ),
     latest_tick_eq AS (
@@ -62,7 +63,8 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
 		FROM (
     		SELECT * FROM periodic_market_data."ticksDataNSEEQ"
 		) t 
-     WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+     where date(time) = '2026-01-08'
+     -- WHERE time >= CURRENT_DATE - INTERVAL '3 days'
      ORDER BY "instrumentId", time_bucket, time DESC
     ),
     strike_extraction AS (
@@ -138,7 +140,8 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         SELECT DISTINCT ON ("instrumentId")
             "instrumentId", ltp, volume, time
         FROM periodic_market_data."ticksDataNSEOPT"
-        WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+        where date(time) = '2026-01-08'
+        -- WHERE time >= CURRENT_DATE - INTERVAL '3 days'
         ORDER BY "instrumentId", id DESC
     ),
     latest_tick_eq AS (
@@ -147,7 +150,8 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
 		FROM (
     		SELECT * FROM periodic_market_data."ticksDataNSEEQ"
 		) t 
-     WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+     where date(time) = '2026-01-08'
+     -- WHERE time >= CURRENT_DATE - INTERVAL '3 days'
      ORDER BY "instrumentId", time_bucket, time DESC
     ),
     strike_extraction AS (

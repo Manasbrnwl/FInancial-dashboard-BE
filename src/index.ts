@@ -76,18 +76,18 @@ app.get("/callback", async (req, res) => {
 });
 
 
-initializeDhanToken().then(() => {
-  initializeBseEquityJob();
-  initializeWeeklyMarginCalculatorJob();
-}).catch(err => console.error("Failed to initialize Dhan token:", err));
+// initializeDhanToken().then(() => {
+//   initializeBseEquityJob();
+//   initializeWeeklyMarginCalculatorJob();
+// }).catch(err => console.error("Failed to initialize Dhan token:", err));
 
-initializeLoginJob();
+// initializeLoginJob();
 
 import { fetchAccessToken } from "./jobs/loginJob";
 
 import { syncUpstoxIds } from "./jobs/upstoxSyncJob";
 
-initializeHourlyTicksNseFutJob();
+// initializeHourlyTicksNseFutJob();
 
 // (async () => {
 // try {
@@ -101,9 +101,9 @@ initializeHourlyTicksNseFutJob();
 
 initializeHourlyTicksNseOptJob();
 
-initializeHourlyTicksNseEqJob();
+// initializeHourlyTicksNseEqJob();
 
-initializeDailyNseJob();
+// initializeDailyNseJob();
 
 initializeGapAverageLoader();
 initializeGapHistoryCleanupJob();
@@ -123,7 +123,7 @@ async function initializeWebSocketService() {
 }
 
 // Start WebSocket service
-initializeWebSocketService();
+// initializeWebSocketService();
 
 // Graceful shutdown handling
 process.on("SIGTERM", () => {

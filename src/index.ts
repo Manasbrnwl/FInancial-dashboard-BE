@@ -24,6 +24,12 @@ import authRouter from "./routes/auth";
 import { authenticateRequest } from "./middleware/authMiddleware";
 import { backfillGapsForDate } from "./services/manualBackfillService";
 
+import { initializeHourlyTicksNseEqUpstoxJob } from "./jobs/hourlyTicksNseEqUpstoxJob";
+import { initializeHourlyTicksNseFutUpstoxJob } from "./jobs/hourlyTicksNseFutUpstoxJob";
+import { upstoxInstrumentService } from "./services/upstoxInstrumentService";
+import { initializeLoginReminderJob } from "./jobs/dailyLoginEmailJob";
+import { fetchAccessToken } from "./jobs/loginJob";
+
 dotenv.config();
 loadEnv();
 
@@ -75,6 +81,10 @@ app.get("/callback", async (req, res) => {
   }
 });
 
+// (async () => {
+// await upstoxInstrumentService.loadNseEqInstruments();
+// })()
+
 
 // initializeDhanToken().then(() => {
 //   initializeBseEquityJob();
@@ -83,33 +93,30 @@ app.get("/callback", async (req, res) => {
 
 // initializeLoginJob();
 
-import { fetchAccessToken } from "./jobs/loginJob";
-
-import { syncUpstoxIds } from "./jobs/upstoxSyncJob";
-
 // initializeHourlyTicksNseFutJob();
 
 // (async () => {
 // try {
-// await fetchAccessToken();
-// await syncUpstoxIds();
 // await backfillGapsForDate('2025-12-08');
 //   } catch (err) {
 //     console.error("Initialization failed:", err);
 //   }
-// })();
+// }
+// )();
 
-initializeHourlyTicksNseOptJob();
+// initializeHourlyTicksNseOptJob();
+
+initializeHourlyTicksNseEqUpstoxJob();
+// initializeHourlyTicksNseFutUpstoxJob();
 
 // initializeHourlyTicksNseEqJob();
 
 // initializeDailyNseJob();
 
-initializeGapAverageLoader();
-initializeGapHistoryCleanupJob();
+// initializeGapAverageLoader();
+// initializeGapHistoryCleanupJob();
 
-import { initializeLoginReminderJob } from "./jobs/dailyLoginEmailJob";
-initializeLoginReminderJob();
+// initializeLoginReminderJob();
 
 
 
@@ -127,13 +134,11 @@ async function initializeWebSocketService() {
 
 // Graceful shutdown handling
 process.on("SIGTERM", () => {
-  console.log("🛑 SIGTERM received, shutting down gracefully...");
   WebSocketManager.stop();
   process.exit(0);
 });
 
 process.on("SIGINT", () => {
-  console.log("🛑 SIGINT received, shutting down gracefully...");
   WebSocketManager.stop();
   process.exit(0);
 });

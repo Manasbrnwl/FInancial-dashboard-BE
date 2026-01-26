@@ -7,30 +7,21 @@ import cron from "node-cron";
 // import healthRouter from "./routes/health";
 import websocketRouter from "./routes/websocket";
 import { loadEnv } from "./config/env";
-import { initializeLoginJob } from "./jobs/loginJob";
-import { initializeHourlyTicksNseFutJob } from "./jobs/hourlyTicksNseFutJob";
-import { initializeDailyNseJob } from "./jobs/dailyNseOhlcJob";
-import { initializeBseEquityJob } from "./jobs/dailyBseEquityJob";
-import { initializeDhanToken } from "./jobs/dhanTokenInitJob";
-import { initializeWeeklyMarginCalculatorJob } from "./jobs/weeklyMarginCalculatorJob";
 import { upstoxWebSocketService } from "./services/upstoxWebsocketService";
 import { WebSocketManager } from "./utils/websocketManager";
 import { initializeHourlyTicksNseOptJob } from "./jobs/hourlyTicksNseOptJob";
-import { initializeHourlyTicksNseEqJob } from "./jobs/hourlyTicksNseEqJob";
 import { initializeGapAverageLoader } from "./jobs/gapAverageLoader";
 import { initializeGapHistoryCleanupJob } from "./jobs/gapHistoryCleanup";
 import apiRouter from "./routes/api";
 import { socketIOService } from "./services/socketioService";
 import authRouter from "./routes/auth";
 import { authenticateRequest } from "./middleware/authMiddleware";
-import { backfillGapsForDate } from "./services/manualBackfillService";
 
 import { initializeHourlyTicksNseEqUpstoxJob } from "./jobs/hourlyTicksNseEqUpstoxJob";
 import { initializeHourlyTicksNseFutUpstoxJob } from "./jobs/hourlyTicksNseFutUpstoxJob";
 import { initializeDailyOhlcUpstoxJob } from "./jobs/dailyOhlcUpstoxJob";
 import { upstoxInstrumentService } from "./services/upstoxInstrumentService";
 import { initializeLoginReminderJob } from "./jobs/dailyLoginEmailJob";
-import { fetchAccessToken } from "./jobs/loginJob";
 
 dotenv.config();
 loadEnv();
@@ -106,25 +97,6 @@ console.log("📅 Weekly Upstox Instrument Sync scheduled (Every Tuesday 6 AM IS
 if (process.env.NODE_ENV === "development") {
   syncUpstoxInstruments();
 }
-
-
-// initializeDhanToken().then(() => {
-//   initializeBseEquityJob();
-//   initializeWeeklyMarginCalculatorJob();
-// }).catch(err => console.error("Failed to initialize Dhan token:", err));
-
-// initializeLoginJob();
-
-// initializeHourlyTicksNseFutJob();
-
-// (async () => {
-// try {
-// await backfillGapsForDate('2025-12-08');
-//   } catch (err) {
-//     console.error("Initialization failed:", err);
-//   }
-// }
-// )();
 
 initializeHourlyTicksNseOptJob();
 

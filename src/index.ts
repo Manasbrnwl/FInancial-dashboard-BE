@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { createServer } from "http";
 import morgan from "morgan";
+import cron from "node-cron";
 // import healthRouter from "./routes/health";
 import websocketRouter from "./routes/websocket";
 import { loadEnv } from "./config/env";
@@ -12,7 +13,7 @@ import { initializeDailyNseJob } from "./jobs/dailyNseOhlcJob";
 import { initializeBseEquityJob } from "./jobs/dailyBseEquityJob";
 import { initializeDhanToken } from "./jobs/dhanTokenInitJob";
 import { initializeWeeklyMarginCalculatorJob } from "./jobs/weeklyMarginCalculatorJob";
-import { webSocketService } from "./services/websocketService";
+import { upstoxWebSocketService } from "./services/upstoxWebsocketService";
 import { WebSocketManager } from "./utils/websocketManager";
 import { initializeHourlyTicksNseOptJob } from "./jobs/hourlyTicksNseOptJob";
 import { initializeHourlyTicksNseEqJob } from "./jobs/hourlyTicksNseEqJob";
@@ -26,6 +27,7 @@ import { backfillGapsForDate } from "./services/manualBackfillService";
 
 import { initializeHourlyTicksNseEqUpstoxJob } from "./jobs/hourlyTicksNseEqUpstoxJob";
 import { initializeHourlyTicksNseFutUpstoxJob } from "./jobs/hourlyTicksNseFutUpstoxJob";
+import { initializeDailyOhlcUpstoxJob } from "./jobs/dailyOhlcUpstoxJob";
 import { upstoxInstrumentService } from "./services/upstoxInstrumentService";
 import { initializeLoginReminderJob } from "./jobs/dailyLoginEmailJob";
 import { fetchAccessToken } from "./jobs/loginJob";
@@ -81,9 +83,29 @@ app.get("/callback", async (req, res) => {
   }
 });
 
-// (async () => {
-// await upstoxInstrumentService.loadNseEqInstruments();
-// })()
+// Weekly Upstox Instrument Sync - Runs every Tuesday at 6 AM IST
+async function syncUpstoxInstruments() {
+  console.log("📊 Starting weekly Upstox instrument sync...");
+  try {
+    await upstoxInstrumentService.loadNseEqInstruments();
+    await upstoxInstrumentService.loadNseFutInstruments();
+    await upstoxInstrumentService.loadNseOptInstruments();
+    console.log("✅ Weekly Upstox instrument sync completed");
+  } catch (error: any) {
+    console.error("❌ Failed to sync Upstox instruments:", error.message);
+  }
+}
+
+// Schedule to run every Tuesday at 6 AM (cron: 0 6 * * 2)
+cron.schedule("0 6 * * 2", syncUpstoxInstruments, {
+  timezone: "Asia/Kolkata",
+});
+console.log("📅 Weekly Upstox Instrument Sync scheduled (Every Tuesday 6 AM IST)");
+
+// Run immediately on startup in development mode
+if (process.env.NODE_ENV === "development") {
+  syncUpstoxInstruments();
+}
 
 
 // initializeDhanToken().then(() => {
@@ -104,33 +126,31 @@ app.get("/callback", async (req, res) => {
 // }
 // )();
 
-// initializeHourlyTicksNseOptJob();
+initializeHourlyTicksNseOptJob();
 
 initializeHourlyTicksNseEqUpstoxJob();
-// initializeHourlyTicksNseFutUpstoxJob();
+initializeHourlyTicksNseFutUpstoxJob();
 
-// initializeHourlyTicksNseEqJob();
+initializeDailyOhlcUpstoxJob(); // New: Daily OHLC using Upstox V3 API (replaces TrueData Bhavcopy)
 
-// initializeDailyNseJob();
+initializeGapAverageLoader();
+initializeGapHistoryCleanupJob();
 
-// initializeGapAverageLoader();
-// initializeGapHistoryCleanupJob();
-
-// initializeLoginReminderJob();
+initializeLoginReminderJob();
 
 
 
-// Initialize WebSocket service for real-time data (arbitrage monitoring)
+// Initialize Upstox WebSocket service for real-time data (arbitrage monitoring)
 async function initializeWebSocketService() {
   try {
-    await webSocketService.start();
+    await upstoxWebSocketService.start();
   } catch (error: any) {
-    console.error("❌ Failed to initialize WebSocket service:", error.message);
+    console.error("❌ Failed to initialize Upstox WebSocket service:", error.message);
   }
 }
 
 // Start WebSocket service
-// initializeWebSocketService();
+initializeWebSocketService();
 
 // Graceful shutdown handling
 process.on("SIGTERM", () => {

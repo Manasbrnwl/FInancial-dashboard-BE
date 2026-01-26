@@ -42,9 +42,9 @@ async function sendLoginReminder() {
 export function initializeLoginReminderJob(): void {
     // Run at 8:00 AM on Weekdays (Mon-Fri)
     const schedule = "0 8 * * 1-5";
-    if (process.env.NODE_ENV === "production") {
-        sendLoginReminder();
-    }
+    // if (process.env.NODE_ENV === "development") {
+        // sendLoginReminder();
+    // }
     cron.schedule(schedule, sendLoginReminder, {
         timezone: "Asia/Kolkata",
     });

@@ -1,53 +1,61 @@
-import { webSocketService } from '../services/websocketService';
+import { upstoxWebSocketService } from '../services/upstoxWebsocketService';
 
 /**
  * WebSocket Manager - Arbitrage functionality
- * Subscribe/unsubscribe to specific symbols for arbitrage monitoring
+ * Subscribe/unsubscribe to specific symbols (instrument keys) for monitoring
+ * Now uses Upstox WebSocket API
  */
 export class WebSocketManager {
 
   /**
-   * Subscribe to a list of symbols
+   * Subscribe to a list of instrument keys (e.g., "NSE_EQ|INE848E01016")
    */
-  public static subscribeToSymbols(symbols: string[]): void {
-    const status = webSocketService.getStatus();
+  public static subscribeToSymbols(instrumentKeys: string[]): void {
+    const status = upstoxWebSocketService.getStatus();
 
     if (!status.isConnected) {
-      console.error('❌ Cannot subscribe: WebSocket not connected');
+      console.error('❌ Cannot subscribe: Upstox WebSocket not connected');
       return;
     }
 
-    webSocketService.subscribeToSymbols(symbols);
-    console.log('📡 Subscription request sent for symbols:', symbols);
+    upstoxWebSocketService.subscribeToSymbols(instrumentKeys);
+    console.log('📡 Subscription request sent for instruments:', instrumentKeys);
   }
 
   /**
-   * Unsubscribe from a list of symbols
+   * Unsubscribe from a list of instrument keys
    */
-  public static unsubscribeFromSymbols(symbols: string[]): void {
-    const status = webSocketService.getStatus();
+  public static unsubscribeFromSymbols(instrumentKeys: string[]): void {
+    const status = upstoxWebSocketService.getStatus();
 
     if (!status.isConnected) {
-      console.error('❌ Cannot unsubscribe: WebSocket not connected');
+      console.error('❌ Cannot unsubscribe: Upstox WebSocket not connected');
       return;
     }
 
-    webSocketService.unsubscribeFromSymbols(symbols);
-    console.log('📡 Unsubscription request sent for symbols:', symbols);
+    upstoxWebSocketService.unsubscribeFromSymbols(instrumentKeys);
+    console.log('📡 Unsubscription request sent for instruments:', instrumentKeys);
   }
 
   /**
    * Get current WebSocket status
    */
-  public static getStatus(): { isConnected: boolean; reconnectAttempts: number } {
-    return webSocketService.getStatus();
+  public static getStatus(): { isConnected: boolean; reconnectAttempts: number; subscribedCount: number } {
+    return upstoxWebSocketService.getStatus();
   }
 
   /**
    * Stop WebSocket service
    */
   public static stop(): void {
-    webSocketService.stop();
+    upstoxWebSocketService.stop();
+  }
+
+  /**
+   * Start WebSocket service
+   */
+  public static async start(): Promise<void> {
+    await upstoxWebSocketService.start();
   }
 }
 

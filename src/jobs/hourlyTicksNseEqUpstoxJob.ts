@@ -288,7 +288,7 @@ export function initializeHourlyTicksNseEqUpstoxJob(): void {
 
     console.log(`? 5-Minute NSE Equity Upstox Job Scheduled (${schedule})`);
 
-    // if (process.env.NODE_ENV === "development") {
-    executeHourlyJob();
-    // }
+    if (process.env.NODE_ENV === "development") {
+        executeHourlyJob();
+    }
 }

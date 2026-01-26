@@ -493,7 +493,7 @@ export function initializeHourlyTicksNseFutUpstoxJob(): void {
     console.log(`📈 5-Minute NSE Futures Upstox Job Scheduled (${schedule})`);
 
     // Run immediately in development mode
-    // if (process.env.NODE_ENV === "development") {
-    executeHourlyFutJob();
-    // }
+    if (process.env.NODE_ENV === "development") {
+        executeHourlyFutJob();
+    }
 }

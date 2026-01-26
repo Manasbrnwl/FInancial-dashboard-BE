@@ -1,6 +1,6 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
-import { webSocketService } from './websocketService';
+import { upstoxWebSocketService } from './upstoxWebsocketService';
 
 interface MarketData {
   symbol?: string;
@@ -82,8 +82,8 @@ export class SocketIOService {
           socket.join(`symbol:${symbol}`);
         });
 
-        // Forward subscription to TrueData WebSocket
-        webSocketService.subscribeToSymbols(symbols);
+        // Forward subscription to Upstox WebSocket
+        upstoxWebSocketService.subscribeToSymbols(symbols);
 
         socket.emit('subscription-confirmed', {
           symbols,
@@ -101,8 +101,8 @@ export class SocketIOService {
           socket.leave(`symbol:${symbol}`);
         });
 
-        // Forward unsubscription to TrueData WebSocket
-        webSocketService.unsubscribeFromSymbols(symbols);
+        // Forward unsubscription to Upstox WebSocket
+        upstoxWebSocketService.unsubscribeFromSymbols(symbols);
 
         socket.emit('unsubscription-confirmed', {
           symbols,

@@ -15,13 +15,11 @@ export const getArbitrageData = async (req: Request, res: Response) => {
   WITH latest_tick_fut AS (
     SELECT *, ROW_NUMBER() OVER (PARTITION BY "instrumentId" ORDER BY id DESC) rn
     FROM periodic_market_data."ticksDataNSEFUT" 
-    WHERE date(time) = '2026-01-08'
-    -- WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+    WHERE time >= CURRENT_DATE - INTERVAL '3 days'
   ), latest_tick_eq AS (
     SELECT *, ROW_NUMBER() OVER (PARTITION BY "instrumentId" ORDER BY id DESC) rn
     FROM periodic_market_data."ticksDataNSEEQ" 
-    WHERE date(time) = '2026-01-08'
-    -- WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+    WHERE time >= CURRENT_DATE - INTERVAL '3 days'
   )
   SELECT
     il.id AS instrumentid,

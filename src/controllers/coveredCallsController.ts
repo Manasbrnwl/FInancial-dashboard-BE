@@ -736,7 +736,7 @@ export const getCoveredCallsTrendDaily = async (
 
     const dataQuery = `
       SELECT 
-        ne.symbol AS underlying, 
+        il.instrument_type AS underlying,
         TO_CHAR(ne."date", 'yyyy-mm-dd') AS time, 
         ne."close"::numeric AS underlying_price, 
         no2.strike,
@@ -751,7 +751,7 @@ export const getCoveredCallsTrendDaily = async (
       INNER JOIN market_data.instrument_lists il 
         ON no2.underlying = il.id  
       INNER JOIN market_data.nse_equity ne 
-        ON ne.symbol = il.instrument_type 
+        ON ne.symbol_id = il.id 
         AND no2."date" = ne."date"
       WHERE no2.underlying = ${instrumentId}
       ${filterConditions} ${expiryMonth !== null &&
@@ -771,7 +771,7 @@ export const getCoveredCallsTrendDaily = async (
       INNER JOIN market_data.instrument_lists il 
         ON no2.underlying = il.id  
       INNER JOIN market_data.nse_equity ne 
-        ON ne.symbol = il.instrument_type 
+        ON ne.symbol_id = il.id 
         AND no2."date" = ne."date"
       WHERE no2.underlying = ${instrumentId}
       ${filterConditions}

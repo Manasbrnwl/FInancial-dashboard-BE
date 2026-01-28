@@ -281,7 +281,7 @@ async function processEquityOhlc(
         if (ohlc.open === 0 && ohlc.high === 0 && ohlc.low === 0 && ohlc.close === 0) continue;
 
         equityRecords.push({
-            symbol_id: inst.id.toString(),
+            symbol_id: inst.id,
             symbol: inst.id.toString(),
             date: today,
             open: ohlc.open,

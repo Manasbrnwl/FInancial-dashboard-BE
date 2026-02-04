@@ -5,6 +5,7 @@ interface EquityRow {
   id: number;
   instrument_type: string;
   exchange: string;
+  upstox_id?: string;
 }
 
 interface SymbolRow {
@@ -15,6 +16,7 @@ interface SymbolRow {
   strike: string | null;
   option_type: string | null;
   expiry_month: string | null;
+  upstox_id?: string;
 }
 
 export const getEquitiesWithDerivatives = async (
@@ -23,14 +25,14 @@ export const getEquitiesWithDerivatives = async (
 ) => {
   try {
     const equities = await prisma.$queryRaw<EquityRow[]>`
-      SELECT il.id, il.instrument_type, il.exchange
+      SELECT il.id, il.instrument_type, il.upstox_id, il.exchange
       FROM market_data.instrument_lists il
       WHERE EXISTS (
         SELECT 1
         FROM market_data.symbols_list sl
         WHERE sl.instrument_id = il.id
           AND sl.segment IN ('FUT','OPT')
-      )
+      ) and upstox_id is not null
       ORDER BY il.instrument_type ASC
     `;
 
@@ -39,6 +41,7 @@ export const getEquitiesWithDerivatives = async (
       data: equities.map((equity) => ({
         id: equity.id,
         instrumentType: equity.instrument_type,
+        upstoxId: equity.upstox_id,
         exchange: equity.exchange,
       })),
     });
@@ -64,7 +67,7 @@ export const getSymbolsForEquity = async (req: Request, res: Response) => {
 
   try {
     const symbols = await prisma.$queryRaw<SymbolRow[]>`
-      SELECT id, symbol, segment, expiry_date, strike, option_type, expiry_month
+      SELECT id, symbol, segment, expiry_date, strike, option_type, expiry_month, upstox_id
       FROM market_data.symbols_list
       WHERE instrument_id = ${instrumentId}
         AND segment IN ('FUT','OPT')
@@ -77,6 +80,7 @@ export const getSymbolsForEquity = async (req: Request, res: Response) => {
       data: symbols.map((row) => ({
         id: row.id,
         symbol: row.symbol,
+        upstoxId: row.upstox_id,
         segment: row.segment,
         expiryDate: row.expiry_date,
         strike: row.strike,

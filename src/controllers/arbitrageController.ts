@@ -30,6 +30,7 @@ export const getArbitrageData = async (req: Request, res: Response) => {
       json_build_object(
         'expiry_date', sl.expiry_date,
         'symbol', sl.symbol,
+        'upstox_id', sl.upstox_id,
         'ltp', tf.ltp,
         'volume', tf.volume,
         'time', TO_CHAR(tf.time, 'yyyy-mm-dd HH12:MI AM')
@@ -58,18 +59,21 @@ export const getArbitrageData = async (req: Request, res: Response) => {
         time: item.time,
         nearFutureSymbol: symbols[0]?.symbol || null,
         nearFuturePrice: symbols[0]?.ltp ? parseFloat(symbols[0].ltp) : null,
+        nearFutureUpstoxId: symbols[0]?.upstox_id || null,
         nearFutureVolume: symbols[0]?.volume
           ? parseInt(symbols[0].volume)
           : null,
         nearFutureTime: symbols[0]?.time,
         nextFutureSymbol: symbols[1]?.symbol || null,
         nextFuturePrice: symbols[1]?.ltp ? parseFloat(symbols[1].ltp) : null,
+        nextFutureUpstoxId: symbols[1]?.upstox_id || null,
         nextFutureVolume: symbols[1]?.volume
           ? parseInt(symbols[1].volume)
           : null,
         nextFutureTime: symbols[1]?.time,
         farFutureSymbol: symbols[2]?.symbol || null,
         farFuturePrice: symbols[2]?.ltp ? parseFloat(symbols[2].ltp) : null,
+        farFutureUpstoxId: symbols[2]?.upstox_id || null,
         farFutureVolume: symbols[2]?.volume
           ? parseInt(symbols[2].volume)
           : null,

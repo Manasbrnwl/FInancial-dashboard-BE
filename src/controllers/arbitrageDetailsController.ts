@@ -35,6 +35,7 @@ export const getArbitrageDetails = async (req: Request, res: Response) => {
               ${date ? `DATE(tf.time)` : "tf.time"} AS tick_date,
               substring(sl.symbol from '[0-9]{2}([A-Z]{3})FUT') AS expiry_month,
               sl.symbol,
+              sl.upstox_id,
               tf.ltp,
               sl.expiry_date as expiry_order
           FROM market_data.symbols_list sl
@@ -42,7 +43,7 @@ export const getArbitrageDetails = async (req: Request, res: Response) => {
               ON sl.instrument_id = il.id
           INNER JOIN latest_tick_fut tf
               ON sl.id = tf."instrumentId" AND tf.rn = 1
-          WHERE sl.segment = 'FUT' AND il.id = ${instrumentId}
+          WHERE sl.segment = 'FUT' AND il.id = ${instrumentId} and sl.upstox_id is not null
       ),
       ranked_symbols AS (
           SELECT *,
@@ -58,10 +59,13 @@ export const getArbitrageDetails = async (req: Request, res: Response) => {
               name,
               tick_date AS date,
               MAX(CASE WHEN symbol_rank = 1 THEN symbol END) AS symbol_1,
+              MAX(CASE WHEN symbol_rank = 1 THEN upstox_id END) AS upstox_id_1,
               MAX(CASE WHEN symbol_rank = 1 THEN ltp END) AS price_1,
               MAX(CASE WHEN symbol_rank = 2 THEN symbol END) AS symbol_2,
+              MAX(CASE WHEN symbol_rank = 2 THEN upstox_id END) AS upstox_id_2,
               MAX(CASE WHEN symbol_rank = 2 THEN ltp END) AS price_2,
               MAX(CASE WHEN symbol_rank = 3 THEN symbol END) AS symbol_3,
+              MAX(CASE WHEN symbol_rank = 3 THEN upstox_id END) AS upstox_id_3,
               MAX(CASE WHEN symbol_rank = 3 THEN ltp END) AS price_3
           FROM ranked_symbols
           GROUP BY instrumentid, name, tick_date
@@ -141,7 +145,7 @@ export const getLiveDataForSymbols = async (req: Request, res: Response) => {
       FROM latest_ticks lt
       INNER JOIN market_data.symbols_list sl
           ON lt."instrumentId" = sl.id
-      WHERE lt.rn = 1
+      WHERE lt.rn = 1 and sl.upstox_id is not null
       ORDER BY ARRAY_POSITION($1, sl.symbol);
     `;
 
@@ -200,6 +204,7 @@ export const getFilteredArbitrageData = async (req: Request, res: Response) => {
               DATE(tf.date) AS tick_date,
               substring(sl.symbol from '[0-9]{2}([A-Z]{3})FUT') AS expiry_month,
               sl.symbol,
+              sl.upstox_id,
               tf.close ltp,
               sl.expiry_date as expiry_order
           FROM market_data.symbols_list sl
@@ -207,7 +212,7 @@ export const getFilteredArbitrageData = async (req: Request, res: Response) => {
               ON sl.instrument_id = il.id
           INNER JOIN latest_tick_fut tf
               ON sl.id = tf.symbol::numeric AND tf.rn = 1
-          WHERE sl.segment = 'FUT' AND il.id = ${instrumentId}
+          WHERE sl.segment = 'FUT' AND il.id = ${instrumentId} and sl.upstox_id is not null
       ),
 ranked_symbols AS (
     SELECT *,
@@ -223,10 +228,13 @@ SELECT
     name,
     TO_CHAR(tick_date, 'yyyy-mm-dd HH12:MI AM') AS date,
     MAX(CASE WHEN symbol_rank = 1 THEN symbol END) as symbol_1,
+    MAX(CASE WHEN symbol_rank = 1 THEN upstox_id END) as upstox_id_1,
     MAX(CASE WHEN symbol_rank = 1 THEN ltp END) as price_1,
     MAX(CASE WHEN symbol_rank = 2 THEN symbol END) as symbol_2,
+    MAX(CASE WHEN symbol_rank = 2 THEN upstox_id END) as upstox_id_2,
     MAX(CASE WHEN symbol_rank = 2 THEN ltp END) as price_2,
     MAX(CASE WHEN symbol_rank = 3 THEN symbol END) as symbol_3,
+    MAX(CASE WHEN symbol_rank = 3 THEN upstox_id END) as upstox_id_3,
     MAX(CASE WHEN symbol_rank = 3 THEN ltp END) as price_3
 FROM ranked_symbols
 GROUP BY instrumentid, name, tick_date
@@ -257,6 +265,7 @@ GROUP BY instrumentid, name, tick_date
               substring(sl.symbol from '[0-9]{2}([A-Z]{3})FUT') AS expiry_month,
               substring(sl.symbol from '([0-9]{2})[A-Z]{3}FUT') AS expiry_year,
               sl.symbol,
+              sl.upstox_id,
               tf.ltp,
               sl.expiry_date as expiry_order
           FROM market_data.symbols_list sl
@@ -264,7 +273,7 @@ GROUP BY instrumentid, name, tick_date
               ON sl.instrument_id = il.id
           INNER JOIN latest_tick_fut tf
               ON sl.id = tf."instrumentId" AND tf.rn = 1
-          WHERE sl.segment = 'FUT' AND il.id = ${instrumentId}
+          WHERE sl.segment = 'FUT' AND il.id = ${instrumentId} and sl.upstox_id is not null
       ),
       prepared AS (
     SELECT *,
@@ -299,12 +308,15 @@ ranked_symbols AS (
               name,
               TO_CHAR(DATE_TRUNC('minute', tick_date) - ((EXTRACT(MINUTE FROM tick_date)::int % 5) * INTERVAL '1 minute'), 'yyyy-mm-dd HH12:MI AM') AS date,
               MAX(CASE WHEN symbol_rank = 1 THEN symbol END) as symbol_1,
+              MAX(CASE WHEN symbol_rank = 1 THEN upstox_id END) as upstox_id_1,
               MAX(CASE WHEN symbol_rank = 1 THEN correct_time END) as rtime_1,
               MAX(CASE WHEN symbol_rank = 1 THEN ltp END) as price_1,
               MAX(CASE WHEN symbol_rank = 2 THEN symbol END) as symbol_2,
+              MAX(CASE WHEN symbol_rank = 2 THEN upstox_id END) as upstox_id_2,
               MAX(CASE WHEN symbol_rank = 2 THEN correct_time END) as rtime_2,
               MAX(CASE WHEN symbol_rank = 2 THEN ltp END) as price_2,
               MAX(CASE WHEN symbol_rank = 3 THEN symbol END) as symbol_3,
+              MAX(CASE WHEN symbol_rank = 3 THEN upstox_id END) as upstox_id_3,
               MAX(CASE WHEN symbol_rank = 3 THEN correct_time END) as rtime_3,
               MAX(CASE WHEN symbol_rank = 3 THEN ltp END) as price_3
           FROM ranked_symbols
@@ -372,7 +384,7 @@ ranked_symbols AS (
       LIMIT ${limitNum}
       OFFSET ${offset}
     `;
-    
+
     // Execute both queries
     const [data, countResult] = await Promise.all([
       prisma.$queryRawUnsafe(dataQuery),
@@ -385,20 +397,20 @@ ranked_symbols AS (
     // Calculate summary statistics - count individual gaps from both columns
     const positiveGapCount = Array.isArray(countResult)
       ? countResult.reduce((count: number, row: any) => {
-          let gaps = 0;
-          if (row.gap_1 > 0) gaps++;
-          if (row.gap_2 > 0) gaps++;
-          return count + gaps;
-        }, 0)
+        let gaps = 0;
+        if (row.gap_1 > 0) gaps++;
+        if (row.gap_2 > 0) gaps++;
+        return count + gaps;
+      }, 0)
       : 0;
 
     const negativeGapCount = Array.isArray(countResult)
       ? countResult.reduce((count: number, row: any) => {
-          let gaps = 0;
-          if (row.gap_1 < 0) gaps++;
-          if (row.gap_2 < 0) gaps++;
-          return count + gaps;
-        }, 0)
+        let gaps = 0;
+        if (row.gap_1 < 0) gaps++;
+        if (row.gap_2 < 0) gaps++;
+        return count + gaps;
+      }, 0)
       : 0;
 
     return res.status(200).json({

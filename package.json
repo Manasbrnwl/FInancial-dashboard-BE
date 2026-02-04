@@ -42,6 +42,7 @@
     "prisma": "^6.15.0",
     "protobufjs": "^8.0.0",
     "socket.io": "^4.8.1",
+    "upstox-js-sdk": "^2.21.0",
     "ws": "^8.18.3"
   }
 }

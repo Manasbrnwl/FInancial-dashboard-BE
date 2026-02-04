@@ -68,6 +68,7 @@ app.use("/api", apiRouter);
 
 // Temporary Upstox Callback Route
 import { upstoxAuthService } from "./services/upstoxAuthService";
+// import { runJanuary2026Backfill } from "./scripts/historicalOhlcBackfill";
 app.get("/callback", async (req, res) => {
   const code = req.query.code as string;
   if (code) {
@@ -126,19 +127,19 @@ if (process.env.NODE_ENV === "development") {
 // }
 // )();
 
-initializeHourlyTicksNseOptJob();
+// initializeHourlyTicksNseOptJob();
 
-initializeHourlyTicksNseEqUpstoxJob();
-initializeHourlyTicksNseFutUpstoxJob();
+// initializeHourlyTicksNseEqUpstoxJob();
+// initializeHourlyTicksNseFutUpstoxJob();
 
 initializeDailyOhlcUpstoxJob(); // New: Daily OHLC using Upstox V3 API (replaces TrueData Bhavcopy)
 
-initializeGapAverageLoader();
-initializeGapHistoryCleanupJob();
+// initializeGapAverageLoader();
+// initializeGapHistoryCleanupJob();
 
-initializeLoginReminderJob();
+// initializeLoginReminderJob();
 
-
+// runJanuary2026Backfill()
 
 // Initialize Upstox WebSocket service for real-time data (arbitrage monitoring)
 async function initializeWebSocketService() {

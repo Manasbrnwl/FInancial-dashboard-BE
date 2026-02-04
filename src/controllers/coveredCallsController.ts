@@ -79,6 +79,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         FROM market_data.symbols_list s
         WHERE s.segment = 'OPT'
         AND s.expiry_date >= CURRENT_DATE
+        AND s.upstox_id is not null
     ),
     with_calcs AS (
         SELECT
@@ -164,6 +165,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         FROM market_data.symbols_list s
         WHERE s.segment = 'OPT'
         AND s.expiry_date >= CURRENT_DATE
+        AND s.upstox_id is not null
     ),
     with_calcs AS (
         SELECT
@@ -208,14 +210,13 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         premium_percentage,
         monthly_premium
     FROM with_calcs
-    WHERE rn=1 ${Prisma.raw(filterCondition)} ${
-      Prisma.raw(expiryMonth !== null &&
+    WHERE rn=1 ${Prisma.raw(filterCondition)} ${Prisma.raw(expiryMonth !== null &&
       expiryMonth !== undefined &&
       expiryMonth !== "" &&
       expiryMonth !== "ALL"
-        ? ` AND trim(expiry_month) = '${expiryMonth}'`
-        : " AND 1 = 1")
-    }
+      ? ` AND trim(expiry_month) = '${expiryMonth}'`
+      : " AND 1 = 1")
+      }
     ORDER BY underlying, strike
     LIMIT ${limit}
     OFFSET ${offset}
@@ -294,7 +295,7 @@ export const getCoveredCallsByUnderlying = async (
           ROW_NUMBER() OVER (PARTITION BY sl.id ORDER BY t.id DESC) AS rn
         FROM periodic_market_data."ticksDataNSEOPT" t
         INNER JOIN market_data.symbols_list sl ON t."instrumentId" = sl.id
-        WHERE sl.segment = 'OPT'
+        WHERE sl.segment = 'OPT' and sl.upstox_id is not null
       ),
       latest_eq_ticks AS (
         SELECT
@@ -303,7 +304,7 @@ export const getCoveredCallsByUnderlying = async (
           ROW_NUMBER() OVER (PARTITION BY sl.id ORDER BY t.id DESC) AS rn
         FROM periodic_market_data."ticksDataNSEEQ" t
         INNER JOIN market_data.symbols_list sl ON t."instrumentId" = sl.id
-        WHERE sl.segment = 'EQ'
+        WHERE sl.segment = 'EQ' and sl.upstox_id is not null
       )
       SELECT DISTINCT
         opt.underlying,
@@ -370,15 +371,15 @@ export const getCoveredCallsSymbolsExpiry = async (
     }
 
     const query = `
-      SELECT DISTINCT sl.symbol, sl.expiry_date, sl.strike, TO_CHAR(sl.expiry_date, 'Month') expiry_month
+      SELECT DISTINCT sl.symbol, sl.expiry_date, sl.strike, sl.upstox_id, TO_CHAR(sl.expiry_date, 'Month') expiry_month
       FROM market_data.symbols_list sl
       WHERE sl.instrument_id = ${instrumentId}
         AND sl.expiry_date >= CURRENT_DATE
-        AND sl.segment = 'OPT' ${
-          option_type && option_type !== "ALL"
-            ? `AND option_type = '${option_type}'`
-            : "AND 1=1"
-        }
+        AND sl.upstox_id is not null
+        AND sl.segment = 'OPT' ${option_type && option_type !== "ALL"
+        ? `AND option_type = '${option_type}'`
+        : "AND 1=1"
+      }
       ORDER BY sl.expiry_date, sl.symbol;
     `;
 
@@ -449,7 +450,7 @@ export const getFilteredCoveredCallsDetails = async (
               op.id, "instrumentId", ltp, volume, time
           FROM periodic_market_data."ticksDataNSEOPT" op
           INNER JOIN market_data.symbols_list sl ON sl.id = op."instrumentId"
-          WHERE sl.instrument_id = ${instrumentId}
+          WHERE sl.instrument_id = ${instrumentId} and sl.upstox_id is not null
           ORDER BY "instrumentId", op.id DESC
       ),
       latest_tick_eq AS (
@@ -465,7 +466,8 @@ export const getFilteredCoveredCallsDetails = async (
               s.symbol,
               s.strike::numeric strike,
               option_type,
-              s.expiry_date
+              s.expiry_date,
+              s.upstox_id
           FROM market_data.symbols_list s
           WHERE s.segment = 'OPT'
       ),
@@ -473,6 +475,7 @@ export const getFilteredCoveredCallsDetails = async (
           SELECT
               i.id AS id,
               i.instrument_type AS underlying,
+              se.upstox_id AS underlying_upstox_id,
               se.symbol AS option_symbol,
               e.ltp::numeric AS underlying_price,
               TO_CHAR(o.time, 'DD Mon, YYYY HH12:MI AM') AS time,
@@ -492,6 +495,7 @@ export const getFilteredCoveredCallsDetails = async (
       SELECT
           id,
           underlying,
+          underlying_upstox_id,
           option_symbol,
           time,
           underlying_price,
@@ -540,10 +544,10 @@ export const getFilteredCoveredCallsDetails = async (
     const avgPremiumPercentage =
       Array.isArray(countResult) && countResult.length > 0
         ? countResult.reduce(
-            (sum: number, row: any) =>
-              sum + (parseFloat(row.premium_percentage) || 0),
-            0
-          ) / countResult.length
+          (sum: number, row: any) =>
+            sum + (parseFloat(row.premium_percentage) || 0),
+          0
+        ) / countResult.length
         : 0;
 
     return res.status(200).json({
@@ -610,6 +614,7 @@ export const getLatestOptionsTicksByInstrument = async (
           tdn.ask,
           tdn.askqty,
           sl.symbol,
+          sl.upstox_id,
           sl.strike,
           ROW_NUMBER() OVER (
             PARTITION BY tdn."instrumentId"
@@ -623,7 +628,7 @@ export const getLatestOptionsTicksByInstrument = async (
           ON tdn."instrumentId" = sl.id
         INNER JOIN market_data.instrument_lists il
           ON sl.instrument_id = il.id
-        WHERE il.id = ${instrumentId}
+        WHERE il.id = ${instrumentId} and sl.upstox_id is not null
           ${expiryFilter}
       )
       SELECT *
@@ -636,12 +641,12 @@ export const getLatestOptionsTicksByInstrument = async (
     // Convert any BigInt fields to strings to avoid JSON serialization errors
     const safe = Array.isArray(result)
       ? (result as any[]).map((r) =>
-          JSON.parse(
-            JSON.stringify(r, (_key, value) =>
-              typeof value === "bigint" ? value.toString() : value
-            )
+        JSON.parse(
+          JSON.stringify(r, (_key, value) =>
+            typeof value === "bigint" ? value.toString() : value
           )
         )
+      )
       : result;
     return res.status(200).json({ success: true, data: safe });
   } catch (error: any) {
@@ -679,7 +684,7 @@ export const getCoveredCallsTrendDaily = async (
       maxPremium?: string;
       startDate?: string;
       endDate?: string;
-      expiryMonth? : string;
+      expiryMonth?: string;
     };
 
     if (!instrumentId) {
@@ -755,9 +760,9 @@ export const getCoveredCallsTrendDaily = async (
         AND no2."date" = ne."date"
       WHERE no2.underlying = ${instrumentId}
       ${filterConditions} ${expiryMonth !== null &&
-      expiryMonth !== undefined &&
-      expiryMonth !== "" &&
-      expiryMonth !== "ALL"
+        expiryMonth !== undefined &&
+        expiryMonth !== "" &&
+        expiryMonth !== "ALL"
         ? ` AND trim(no2.expiry_month) = '${expiryMonth.trim()}'`
         : " AND 1 = 1"}
       ORDER BY ne."date" DESC
@@ -773,13 +778,13 @@ export const getCoveredCallsTrendDaily = async (
       INNER JOIN market_data.nse_equity ne 
         ON ne.symbol_id = il.id 
         AND no2."date" = ne."date"
-      WHERE no2.underlying = ${instrumentId}
+      WHERE no2.underlying = ${instrumentId} and upstox_id is not null
       ${filterConditions}
     `;
 
     const [rows, countResult] = await Promise.all([
       prisma.$queryRawUnsafe<any[]>(dataQuery),
-      prisma.$queryRawUnsafe<Array<{ count: bigint, expiry_month: string[]}>>(countQuery),
+      prisma.$queryRawUnsafe<Array<{ count: bigint, expiry_month: string[] }>>(countQuery),
     ]);
 
     const totalCount = Number(countResult?.[0]?.count || 0);
@@ -901,7 +906,7 @@ export const getCoveredCallsTrendHourly = async (
               op.time
           FROM periodic_market_data."ticksDataNSEOPT" op
           INNER JOIN market_data.symbols_list sl ON sl.id = op."instrumentId"
-          WHERE sl.instrument_id = ${instrumentId}
+          WHERE sl.instrument_id = ${instrumentId} and upstox_id is not null
           ORDER BY op."instrumentId", op.id DESC
       ),
       latest_tick_eq AS (
@@ -971,9 +976,9 @@ export const getCoveredCallsTrendHourly = async (
       FROM with_calcs
       WHERE id = ${instrumentId}
       ${filterConditions} ${expiryMonth !== null &&
-      expiryMonth !== undefined &&
-      expiryMonth !== "" &&
-      expiryMonth !== "ALL"
+        expiryMonth !== undefined &&
+        expiryMonth !== "" &&
+        expiryMonth !== "ALL"
         ? ` AND trim(expiry_month) = '${expiryMonth.trim()}'`
         : " AND 1 = 1"}
       ORDER BY time DESC
@@ -990,7 +995,7 @@ export const getCoveredCallsTrendHourly = async (
               op.time
           FROM periodic_market_data."ticksDataNSEOPT" op
           INNER JOIN market_data.symbols_list sl ON sl.id = op."instrumentId"
-          WHERE sl.instrument_id = ${instrumentId}
+          WHERE sl.instrument_id = ${instrumentId} and upstox_id is not null
           ORDER BY op."instrumentId", op.id DESC
       ),
       latest_tick_eq AS (
@@ -1052,7 +1057,7 @@ export const getCoveredCallsTrendHourly = async (
 
     const [rowsRaw, countResult] = await Promise.all([
       prisma.$queryRawUnsafe<any[]>(dataQuery),
-      prisma.$queryRawUnsafe<Array<{ count: bigint, expiry_month: string}>>(countQuery),
+      prisma.$queryRawUnsafe<Array<{ count: bigint, expiry_month: string }>>(countQuery),
     ]);
 
     const totalCount = Number(countResult?.[0]?.count || 0);

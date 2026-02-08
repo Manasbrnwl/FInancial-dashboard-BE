@@ -212,7 +212,7 @@ async function backfillEquityOhlc(
             const records = candles
                 .filter((c) => c.open !== 0 || c.high !== 0 || c.low !== 0 || c.close !== 0)
                 .map((c) => ({
-                    symbol_id: inst.id.toString(),
+                    symbol_id: inst.id,
                     symbol: inst.id.toString(),
                     date: new Date(c.timestamp),
                     open: c.open,

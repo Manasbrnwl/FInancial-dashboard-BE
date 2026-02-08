@@ -45,82 +45,6 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
       filterCondition += ` AND monthly_premium <= ${maxPremium}`;
     }
 
-    // Get total count with filters
-    const countResult = await prisma.$queryRaw<
-      Array<{ count: bigint; avg_premium: string; expiry_month: string[] }>
-    >`
-    WITH latest_tick_opt AS (
-        SELECT DISTINCT ON ("instrumentId")
-            "instrumentId", ltp, volume, time
-        FROM periodic_market_data."ticksDataNSEOPT"
-        where date(time) = '2026-01-08'
-        -- WHERE time >= CURRENT_DATE - INTERVAL '3 days'
-        ORDER BY "instrumentId", id DESC
-    ),
-    latest_tick_eq AS (
-        SELECT DISTINCT ON ("instrumentId", time_bucket)
-       		"instrumentId", ltp, time, time_bucket
-		FROM (
-    		SELECT * FROM periodic_market_data."ticksDataNSEEQ"
-		) t 
-     where date(time) = '2026-01-08'
-     -- WHERE time >= CURRENT_DATE - INTERVAL '3 days'
-     ORDER BY "instrumentId", time_bucket, time DESC
-    ),
-    strike_extraction AS (
-        SELECT
-            s.id,
-            s.instrument_id,
-            s.symbol,
-            s.strike::numeric strike,
-            s.option_type,
-            s.expiry_month,
-            s.expiry_date
-        FROM market_data.symbols_list s
-        WHERE s.segment = 'OPT'
-        AND s.expiry_date >= CURRENT_DATE
-        AND s.upstox_id is not null
-    ),
-    with_calcs AS (
-        SELECT
-            i.id as id,
-            i.instrument_type AS underlying,
-            se.expiry_month AS expiry_month,
-            e.ltp::numeric AS underlying_price,
-            TO_CHAR(o.time, 'yyyy-mm-dd HH12:MI AM') AS time,
-            o.ltp::numeric AS premium,
-            o.volume,
-            se.strike,
-            se.option_type,
-            ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) * -1 AS otm,
-            ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage,
-            COALESCE(ROUND((((o.ltp::numeric / e.ltp::numeric) * 100) * 30)/NULLIF((se.expiry_date - date(o.time)), 0),2),0) AS monthly_premium,
-            dense_rank() over (partition by i.instrument_type order by date(o.time) desc) rn
-        FROM market_data.instrument_lists i
-        JOIN strike_extraction se ON i.id = se.instrument_id
-        JOIN latest_tick_opt o ON se.id = o."instrumentId"       
-		JOIN LATERAL (
-        SELECT * FROM latest_tick_eq e
-    		WHERE e."instrumentId" = i.id 
-        AND e.time_bucket IN (
-              date_trunc('hour', o.time) + floor(EXTRACT(minute FROM o.time)::int / 5) * interval '5 minutes',
-              date_trunc('hour', o.time) + (floor(EXTRACT(minute FROM o.time)::int / 5) + 4) * interval '5 minutes'
-          )
-        ORDER BY ABS(EXTRACT(EPOCH FROM (e.time - o.time)))
-    		LIMIT 1
-		) e ON true
- 	)
-    SELECT COUNT(*) as count, 1 as avg_premium, json_agg(distinct trim(expiry_month)) expiry_month
-    FROM with_calcs
-    WHERE 1=1 ${Prisma.raw(filterCondition)}
-    `;
-
-    const totalCount = Number(countResult[0]?.count || 0);
-    const avg_premium = Number(countResult[0]?.avg_premium || 0.0);
-    const expiry_month = Array.isArray(countResult[0]?.expiry_month)
-      ? countResult[0]?.expiry_month
-      : [];
-
     // Get paginated and filtered data
     const coveredCallsData = await prisma.$queryRaw<
       Array<{
@@ -242,19 +166,144 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
       success: true,
       data: transformedData,
       count: transformedData.length,
-      avg_premium,
-      expiry_month,
-      total: totalCount,
       page,
       limit,
-      totalPages: Math.ceil(totalCount / limit),
-      hasMore: page < Math.ceil(totalCount / limit),
     });
   } catch (error: any) {
     console.error("Error fetching Covered Calls data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch Covered Calls data",
+      message: error.message,
+    });
+  }
+};
+
+export const getCoveredCallsStats = async (req: Request, res: Response) => {
+  try {
+    const underlying = req.query.underlying as string;
+    const optionType = req.query.optionType as string;
+    const minOtm = req.query.minOtm
+      ? parseFloat(req.query.minOtm as string)
+      : null;
+    const maxOtm = req.query.maxOtm
+      ? parseFloat(req.query.maxOtm as string)
+      : null;
+    const minPremium = req.query.minPremium
+      ? parseFloat(req.query.minPremium as string)
+      : null;
+    const maxPremium = req.query.maxPremium
+      ? parseFloat(req.query.maxPremium as string)
+      : null;
+
+    // Build filter conditions
+    let filterCondition = "";
+    if (underlying) {
+      filterCondition += ` AND underlying ILIKE '%${underlying}%'`;
+    }
+    if (optionType) {
+      filterCondition += ` AND option_type = '${optionType}'`;
+    }
+    if (minOtm !== null) {
+      filterCondition += ` AND otm >= ${minOtm}`;
+    }
+    if (maxOtm !== null) {
+      filterCondition += ` AND otm <= ${maxOtm}`;
+    }
+    if (minPremium !== null) {
+      filterCondition += ` AND monthly_premium >= ${minPremium}`;
+    }
+    if (maxPremium !== null) {
+      filterCondition += ` AND monthly_premium <= ${maxPremium}`;
+    }
+
+    // Get total count with filters
+    const countResult = await prisma.$queryRaw<
+      Array<{ count: bigint; avg_premium: string; expiry_month: string[] }>
+    >`
+    WITH latest_tick_opt AS (
+        SELECT DISTINCT ON ("instrumentId")
+            "instrumentId", ltp, volume, time
+        FROM periodic_market_data."ticksDataNSEOPT"
+        WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+        ORDER BY "instrumentId", id DESC
+    ),
+    latest_tick_eq AS (
+        SELECT DISTINCT ON ("instrumentId", time_bucket)
+       		"instrumentId", ltp, time, time_bucket
+		FROM (
+    		SELECT * FROM periodic_market_data."ticksDataNSEEQ"
+		) t 
+     WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+     ORDER BY "instrumentId", time_bucket, time DESC
+    ),
+    strike_extraction AS (
+        SELECT
+            s.id,
+            s.instrument_id,
+            s.symbol,
+            s.strike::numeric strike,
+            s.option_type,
+            s.expiry_month,
+            s.expiry_date
+        FROM market_data.symbols_list s
+        WHERE s.segment = 'OPT'
+        AND s.expiry_date >= CURRENT_DATE
+        AND s.upstox_id is not null
+    ),
+    with_calcs AS (
+        SELECT
+            i.id as id,
+            i.instrument_type AS underlying,
+            se.expiry_month AS expiry_month,
+            e.ltp::numeric AS underlying_price,
+            TO_CHAR(o.time, 'yyyy-mm-dd HH12:MI AM') AS time,
+            o.ltp::numeric AS premium,
+            o.volume,
+            se.strike,
+            se.option_type,
+            ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) * -1 AS otm,
+            ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage,
+            COALESCE(ROUND((((o.ltp::numeric / e.ltp::numeric) * 100) * 30)/NULLIF((se.expiry_date - date(o.time)), 0),2),0) AS monthly_premium,
+            dense_rank() over (partition by i.instrument_type order by date(o.time) desc) rn
+        FROM market_data.instrument_lists i
+        JOIN strike_extraction se ON i.id = se.instrument_id
+        JOIN latest_tick_opt o ON se.id = o."instrumentId"       
+		JOIN LATERAL (
+        SELECT * FROM latest_tick_eq e
+    		WHERE e."instrumentId" = i.id 
+        AND e.time_bucket IN (
+              date_trunc('hour', o.time) + floor(EXTRACT(minute FROM o.time)::int / 5) * interval '5 minutes',
+              date_trunc('hour', o.time) + (floor(EXTRACT(minute FROM o.time)::int / 5) + 4) * interval '5 minutes'
+          )
+        ORDER BY ABS(EXTRACT(EPOCH FROM (e.time - o.time)))
+    		LIMIT 1
+		) e ON true
+ 	)
+    SELECT COUNT(*) as count, 1 as avg_premium, json_agg(distinct trim(expiry_month)) expiry_month
+    FROM with_calcs
+    WHERE 1=1 ${Prisma.raw(filterCondition)}
+    `;
+
+    const totalCount = Number(countResult[0]?.count || 0);
+    const avg_premium = Number(countResult[0]?.avg_premium || 0.0);
+    const expiry_month = Array.isArray(countResult[0]?.expiry_month)
+      ? countResult[0]?.expiry_month
+      : [];
+
+    res.json({
+      success: true,
+      data: {
+        total: totalCount,
+        avg_premium,
+        expiry_month,
+      }
+    });
+  } catch (error: any) {
+    console.error("Error fetching Covered Calls stats:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch Covered Calls stats",
       message: error.message,
     });
   }

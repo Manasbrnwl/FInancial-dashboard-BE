@@ -5,6 +5,12 @@ import { upstoxAuthService } from './upstoxAuthService';
 
 loadEnv();
 
+// Helper functions for dev-only logging
+const isDev = process.env.NODE_ENV === 'development';
+const devLog = (...args: any[]) => { if (isDev) console.log(...args); };
+const devWarn = (...args: any[]) => { if (isDev) console.warn(...args); };
+const devError = (...args: any[]) => { if (isDev) console.error(...args); };
+
 interface MarketData {
     symbol?: string;
     instrumentKey?: string;
@@ -51,8 +57,7 @@ export class UpstoxWebSocketService {
         // Market hours: 9:00 AM (540 minutes) to 3:30 PM (930 minutes)
         const marketOpenMinutes = 9 * 60; // 9:00 AM = 540 minutes
         const marketCloseMinutes = 15 * 60 + 30; // 3:30 PM = 930 minutes
-
-        const isWithinHours = true // currentTimeInMinutes >= marketOpenMinutes && currentTimeInMinutes <= marketCloseMinutes;
+        const isWithinHours = currentTimeInMinutes >= marketOpenMinutes && currentTimeInMinutes <= marketCloseMinutes;
 
         // Check if it's a weekday (Monday = 1, Friday = 5)
         const dayOfWeek = istTime.getDay();
@@ -99,11 +104,11 @@ export class UpstoxWebSocketService {
         this.clearMarketOpenTimer();
 
         this.marketOpenTimer = setTimeout(() => {
-            console.log(`Starting Upstox WebSocket service at scheduled market open: ${nextOpen.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}`);
+            devLog(`Starting Upstox WebSocket service at scheduled market open: ${nextOpen.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}`);
             this.start();
         }, delay);
 
-        console.log(`Next WebSocket start scheduled for ${nextOpen.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}`);
+        devLog(`Next WebSocket start scheduled for ${nextOpen.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}`);
     }
 
     /**
@@ -115,7 +120,7 @@ export class UpstoxWebSocketService {
         // Check every minute if we should disconnect due to market hours
         this.marketHoursCheckTimer = setInterval(() => {
             if (this.isConnected && !this.isWithinMarketHours()) {
-                console.log('🕐 Market hours ended. Disconnecting Upstox WebSocket...');
+                devLog('🕐 Market hours ended. Disconnecting Upstox WebSocket...');
                 this.stop();
             }
         }, 60000); // Check every minute
@@ -139,13 +144,13 @@ export class UpstoxWebSocketService {
             this.clearMarketOpenTimer();
 
             if (this.isConnected) {
-                console.log('✅ Upstox WebSocket service is already running');
+                devLog('✅ Upstox WebSocket service is already running');
                 return;
             }
 
             if (!this.isWithinMarketHours()) {
                 const istTime = this.getISTNow();
-                console.log(`📅 Current IST time: ${istTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`);
+                devLog(`📅 Current IST time: ${istTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`);
                 this.scheduleNextMarketOpen();
                 return;
             }
@@ -153,7 +158,7 @@ export class UpstoxWebSocketService {
             // Get access token
             const token = await upstoxAuthService.getAccessToken();
             if (!token) {
-                console.error("❌ No Upstox Access Token available. Cannot start WebSocket.");
+                devError("❌ No Upstox Access Token available. Cannot start WebSocket.");
                 return;
             }
 
@@ -161,7 +166,7 @@ export class UpstoxWebSocketService {
             const apiClient = ApiClient.instance;
             apiClient.authentications['OAUTH2'].accessToken = token;
 
-            console.log('🔗 Initializing Upstox MarketDataStreamer...');
+            devLog('🔗 Initializing Upstox MarketDataStreamer...');
 
             // Initialize Streamer (re-create if needed to ensure fresh state/token usage if SDK reads instance on init)
             // Note: MarketDataStreamerV3 constructor takes instrumentKeys and mode.
@@ -171,7 +176,7 @@ export class UpstoxWebSocketService {
 
             // Setup Event Listeners
             this.streamer.on("open", () => {
-                console.log('✅ Upstox WebSocket connection established');
+                devLog('✅ Upstox WebSocket connection established');
                 this.isConnected = true;
                 this.reconnectAttempts = 0;
                 socketIOService.broadcastConnectionStatus('connected');
@@ -181,13 +186,13 @@ export class UpstoxWebSocketService {
             });
 
             this.streamer.on("close", () => {
-                console.log('⚠️ Upstox WebSocket connection closed');
+                devLog('⚠️ Upstox WebSocket connection closed');
                 this.isConnected = false;
                 socketIOService.broadcastConnectionStatus('disconnected');
             });
 
             this.streamer.on("error", (error: any) => {
-                console.error('❌ Upstox WebSocket error:', error);
+                devError('❌ Upstox WebSocket error:', error);
 
                 // If error is related to authentication, we might want to refresh token and restart?
                 // The SDK's auto-reconnect might try again.
@@ -198,13 +203,21 @@ export class UpstoxWebSocketService {
             });
 
             this.streamer.on("reconnecting", (msg: string) => {
-                console.log(`🔄 Upstox WebSocket Reconnecting: ${msg}`);
+                devLog(`🔄 Upstox WebSocket Reconnecting: ${msg}`);
                 this.reconnectAttempts++;
                 socketIOService.broadcastConnectionStatus('reconnecting');
             });
 
             this.streamer.on("autoReconnectStopped", (msg: string) => {
-                console.log(`🛑 Upstox WebSocket Auto Reconnect Stopped: ${msg}`);
+                devLog(`🛑 Upstox WebSocket Auto Reconnect Stopped: ${msg}`);
+                // Clean up to prevent SDK crash on clearSubscriptions
+                this.isConnected = false;
+                this.streamer = null;
+                socketIOService.broadcastConnectionStatus('disconnected');
+
+                // Schedule retry at next market open
+                devLog('📅 Will retry connection at next market open...');
+                this.scheduleNextMarketOpen();
             });
 
             // Enable Auto Reconnect
@@ -216,7 +229,7 @@ export class UpstoxWebSocketService {
             this.startMarketHoursMonitoring();
 
         } catch (error: any) {
-            console.error('❌ Failed to start Upstox WebSocket service:', error.message);
+            devError('❌ Failed to start Upstox WebSocket service:', error.message);
         }
     }
 
@@ -242,11 +255,11 @@ export class UpstoxWebSocketService {
             } else {
                 // Initial feed or other messages
                 if (feedData.type === 'initial_feed') {
-                    console.log('🆕 Initial feed received (subscription confirmed)');
+                    devLog('🆕 Initial feed received (subscription confirmed)');
                 }
             }
         } catch (error: any) {
-            console.error('❌ Error processing message:', error.message);
+            devError('❌ Error processing message:', error.message);
         }
     }
 
@@ -342,7 +355,7 @@ export class UpstoxWebSocketService {
             }
 
         } catch (error: any) {
-            console.error('❌ Error processing feed:', error.message);
+            devError('❌ Error processing feed:', error.message);
         }
     }
 
@@ -368,13 +381,13 @@ export class UpstoxWebSocketService {
 
             // Only broadcast if we have at least LTP or relevant data
             if (formattedData.ltp !== undefined) {
-                // console.log(`📤 Broadcasting market data for ${formattedData.symbol}`);
+                devLog(`📤 Broadcasting market data for ${formattedData.symbol}`);
                 socketIOService.broadcastMarketData(formattedData);
             }
 
 
         } catch (error: any) {
-            console.error('❌ Error processing market data:', error.message);
+            devError('❌ Error processing market data:', error.message);
         }
     }
 
@@ -382,7 +395,7 @@ export class UpstoxWebSocketService {
      * Subscribe to symbols
      */
     public subscribeToSymbols(instrumentKeys: string[]): void {
-        console.log(`🔔 subscribeToSymbols called with: ${instrumentKeys.join(', ')}`);
+        devLog(`🔔 subscribeToSymbols called with: ${instrumentKeys.join(', ')}`);
 
         // Update local set
         instrumentKeys.forEach(k => this.subscribedInstruments.add(k));
@@ -390,7 +403,7 @@ export class UpstoxWebSocketService {
         if (this.streamer && this.isConnected) {
             this.streamer.subscribe(instrumentKeys, "full");
         } else {
-            console.log(`⏳ Upstox WebSocket not connected. Queued ${instrumentKeys.length} instruments.`);
+            devLog(`⏳ Upstox WebSocket not connected. Queued ${instrumentKeys.length} instruments.`);
         }
     }
 
@@ -398,7 +411,7 @@ export class UpstoxWebSocketService {
      * Unsubscribe from symbols
      */
     public unsubscribeFromSymbols(instrumentKeys: string[]): void {
-        console.log(`📡 Unsubscribe called for: ${instrumentKeys.join(', ')}`);
+        devLog(`📡 Unsubscribe called for: ${instrumentKeys.join(', ')}`);
 
         instrumentKeys.forEach(k => this.subscribedInstruments.delete(k));
 
@@ -422,14 +435,18 @@ export class UpstoxWebSocketService {
      * Stop the WebSocket service
      */
     public stop(): void {
-        console.log('🛑 Stopping Upstox WebSocket service...');
+        devLog('🛑 Stopping Upstox WebSocket service...');
 
         this.stopMarketHoursMonitoring();
         this.clearMarketOpenTimer();
 
         if (this.streamer) {
-            this.streamer.disconnect();
-            // this.streamer = null; // Keep instance or null? Disconnect stops auto-reconnect usually.
+            try {
+                this.streamer.disconnect();
+            } catch (error: any) {
+                devWarn('⚠️ Error during streamer disconnect:', error.message);
+            }
+            this.streamer = null;
         }
 
         this.isConnected = false;

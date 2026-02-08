@@ -7,30 +7,22 @@ import cron from "node-cron";
 // import healthRouter from "./routes/health";
 import websocketRouter from "./routes/websocket";
 import { loadEnv } from "./config/env";
-import { initializeLoginJob } from "./jobs/loginJob";
-import { initializeHourlyTicksNseFutJob } from "./jobs/hourlyTicksNseFutJob";
-import { initializeDailyNseJob } from "./jobs/dailyNseOhlcJob";
-import { initializeBseEquityJob } from "./jobs/dailyBseEquityJob";
-import { initializeDhanToken } from "./jobs/dhanTokenInitJob";
-import { initializeWeeklyMarginCalculatorJob } from "./jobs/weeklyMarginCalculatorJob";
 import { upstoxWebSocketService } from "./services/upstoxWebsocketService";
 import { WebSocketManager } from "./utils/websocketManager";
 import { initializeHourlyTicksNseOptJob } from "./jobs/hourlyTicksNseOptJob";
-import { initializeHourlyTicksNseEqJob } from "./jobs/hourlyTicksNseEqJob";
 import { initializeGapAverageLoader } from "./jobs/gapAverageLoader";
 import { initializeGapHistoryCleanupJob } from "./jobs/gapHistoryCleanup";
 import apiRouter from "./routes/api";
 import { socketIOService } from "./services/socketioService";
 import authRouter from "./routes/auth";
 import { authenticateRequest } from "./middleware/authMiddleware";
-import { backfillGapsForDate } from "./services/manualBackfillService";
 
 import { initializeHourlyTicksNseEqUpstoxJob } from "./jobs/hourlyTicksNseEqUpstoxJob";
 import { initializeHourlyTicksNseFutUpstoxJob } from "./jobs/hourlyTicksNseFutUpstoxJob";
 import { initializeDailyOhlcUpstoxJob } from "./jobs/dailyOhlcUpstoxJob";
+import { initializeCoveredCallAlertJob } from "./jobs/coveredCallAlertJob";
 import { upstoxInstrumentService } from "./services/upstoxInstrumentService";
 import { initializeLoginReminderJob } from "./jobs/dailyLoginEmailJob";
-import { fetchAccessToken } from "./jobs/loginJob";
 
 dotenv.config();
 loadEnv();
@@ -41,7 +33,6 @@ const PORT = process.env.PORT || 3000;
 
 // Initialize Socket.io server for frontend connections
 socketIOService.initialize(httpServer);
-// console.log("🔌 Socket.io server initialized for frontend connections");
 
 // CORS configuration - allow requests from frontend
 app.use(
@@ -68,7 +59,7 @@ app.use("/api", apiRouter);
 
 // Temporary Upstox Callback Route
 import { upstoxAuthService } from "./services/upstoxAuthService";
-// import { runJanuary2026Backfill } from "./scripts/historicalOhlcBackfill";
+
 app.get("/callback", async (req, res) => {
   const code = req.query.code as string;
   if (code) {
@@ -108,38 +99,20 @@ if (process.env.NODE_ENV === "development") {
   syncUpstoxInstruments();
 }
 
-
-// initializeDhanToken().then(() => {
-//   initializeBseEquityJob();
-//   initializeWeeklyMarginCalculatorJob();
-// }).catch(err => console.error("Failed to initialize Dhan token:", err));
-
-// initializeLoginJob();
-
-// initializeHourlyTicksNseFutJob();
-
-// (async () => {
-// try {
-// await backfillGapsForDate('2025-12-08');
-//   } catch (err) {
-//     console.error("Initialization failed:", err);
-//   }
-// }
-// )();
-
 // initializeHourlyTicksNseOptJob();
 
 // initializeHourlyTicksNseEqUpstoxJob();
 // initializeHourlyTicksNseFutUpstoxJob();
 
-initializeDailyOhlcUpstoxJob(); // New: Daily OHLC using Upstox V3 API (replaces TrueData Bhavcopy)
+// initializeDailyOhlcUpstoxJob(); // New: Daily OHLC using Upstox V3 API (replaces TrueData Bhavcopy)
+
+// Initialize Covered Call Alert Job (5-minute check for alert criteria)
+initializeCoveredCallAlertJob();
 
 // initializeGapAverageLoader();
 // initializeGapHistoryCleanupJob();
 
 // initializeLoginReminderJob();
-
-// runJanuary2026Backfill()
 
 // Initialize Upstox WebSocket service for real-time data (arbitrage monitoring)
 async function initializeWebSocketService() {

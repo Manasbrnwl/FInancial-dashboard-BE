@@ -398,3 +398,42 @@ model app_config {
 
   @@schema("market_data")
 }
+
+model covered_call_alerts {
+  id               BigInt   @id @default(autoincrement())
+  instrument_id    Int
+  instrument_name  String
+  symbol           String   @db.VarChar(100)
+  strike           Float
+  option_type      String   @db.VarChar(2)
+  expiry_date      DateTime @db.Date
+  time_slot        String   @db.VarChar(5)
+  underlying_price Float
+  premium          Float
+  otm_percent      Float
+  premium_percent  Float
+  max_upside       Float
+  triggered_at     DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([instrument_id], map: "idx_cc_alerts_instrument")
+  @@index([triggered_at], map: "idx_cc_alerts_triggered")
+  @@schema("market_data")
+}
+
+model covered_call_alert_config {
+  id                  Int      @id @default(autoincrement())
+  instrument_id       Int?     @unique(map: "cc_alert_config_instrument_unique")
+  is_active           Boolean  @default(true)
+  min_otm_percent     Float    @default(4)
+  max_otm_percent     Float    @default(5)
+  min_premium_percent Float    @default(2)
+  max_premium_percent Float    @default(2.5)
+  min_upside_percent  Float    @default(6)
+  max_upside_percent  Float    @default(7)
+  consecutive_count   Int      @default(10)
+  cooldown_minutes    Int      @default(60)
+  created_at          DateTime @default(now()) @db.Timestamp(6)
+  updated_at          DateTime @updatedAt @db.Timestamp(6)
+
+  @@schema("market_data")
+}

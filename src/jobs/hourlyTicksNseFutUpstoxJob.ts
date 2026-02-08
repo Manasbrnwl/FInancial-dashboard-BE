@@ -69,6 +69,7 @@ async function getActiveFuturesInstruments(): Promise<SymbolInstruments[]> {
             WHERE sl.expiry_date >= CURRENT_DATE 
                 AND sl.segment = 'FUT'
                 AND sl.upstox_id IS NOT NULL
+                and sl.instrument_id = 9128
             ORDER BY symbolId ASC, expiry_date ASC
         `;
 
@@ -265,6 +266,7 @@ export async function executeHourlyFutJob() {
 
         // 2. Get Active Instruments (grouped by symbol with near/next/far legs)
         const symbolGroups = await getActiveFuturesInstruments();
+        console.log(`✅ Found ${symbolGroups.length} symbol`);
         if (symbolGroups.length === 0) {
             console.log("⚠️ No active futures instruments with Upstox IDs found.");
             await sendHourlyJobEmail("completed", {
@@ -297,7 +299,6 @@ export async function executeHourlyFutJob() {
                     // Response keys use "NSE_FO:SYMBOL" format for futures
                     const lookupKey = `NSE_FO:${inst.instrumentType}`;
                     const quote = quotes[lookupKey];
-
                     if (!quote) {
                         continue;
                     }
@@ -339,7 +340,7 @@ export async function executeHourlyFutJob() {
                         updatedAt: now,
                     });
                 }
-
+                
                 if (dbRecords.length > 0) {
                     const res = await prisma.ticksDataNSEFUT.createMany({
                         data: dbRecords,

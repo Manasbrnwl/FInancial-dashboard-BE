@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getCoveredCallsData,
+  getCoveredCallsStats,
   getCoveredCallsByUnderlying,
   getCoveredCallsSymbolsExpiry,
   getFilteredCoveredCallsDetails,
@@ -8,8 +9,37 @@ import {
   getCoveredCallsTrendDaily,
   getCoveredCallsTrendHourly,
 } from "../../controllers/coveredCallsController";
+import {
+  getRecentCoveredCallAlerts,
+  getCoveredCallAlertHistory,
+  getCoveredCallAlertConfig,
+  updateCoveredCallAlertConfig,
+} from "../../controllers/coveredCallAlertController";
 
 const router = Router();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Covered Call Alert Routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/covered-calls/alerts/recent - Get recent covered call alerts
+router.get("/alerts/recent", getRecentCoveredCallAlerts);
+
+// GET /api/covered-calls/alerts/history - Get alert history with pagination
+router.get("/alerts/history", getCoveredCallAlertHistory);
+
+// GET /api/covered-calls/alerts/config - Get alert configuration
+router.get("/alerts/config", getCoveredCallAlertConfig);
+
+// POST /api/covered-calls/alerts/config - Update alert configuration
+router.post("/alerts/config", updateCoveredCallAlertConfig);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Covered Calls Data Routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/covered-calls/stats - Get covered calls stats (count, avg premium, expiry months)
+router.get("/stats", getCoveredCallsStats);
 
 // GET /api/covered-calls - Get all covered calls data
 router.get("/", getCoveredCallsData);
@@ -33,3 +63,4 @@ router.get("/:instrumentId/trend/daily", getCoveredCallsTrendDaily);
 router.get("/:instrumentId/trend/hourly", getCoveredCallsTrendHourly);
 
 export default router;
+

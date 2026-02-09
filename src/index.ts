@@ -99,20 +99,20 @@ if (process.env.NODE_ENV === "development") {
   syncUpstoxInstruments();
 }
 
-// initializeHourlyTicksNseOptJob();
+initializeHourlyTicksNseOptJob();
 
-// initializeHourlyTicksNseEqUpstoxJob();
-// initializeHourlyTicksNseFutUpstoxJob();
+initializeHourlyTicksNseEqUpstoxJob();
+initializeHourlyTicksNseFutUpstoxJob();
 
-// initializeDailyOhlcUpstoxJob(); // New: Daily OHLC using Upstox V3 API (replaces TrueData Bhavcopy)
+initializeDailyOhlcUpstoxJob(); // New: Daily OHLC using Upstox V3 API (replaces TrueData Bhavcopy)
 
 // Initialize Covered Call Alert Job (5-minute check for alert criteria)
 initializeCoveredCallAlertJob();
 
-// initializeGapAverageLoader();
-// initializeGapHistoryCleanupJob();
+initializeGapAverageLoader();
+initializeGapHistoryCleanupJob();
 
-// initializeLoginReminderJob();
+initializeLoginReminderJob();
 
 // Initialize Upstox WebSocket service for real-time data (arbitrage monitoring)
 async function initializeWebSocketService() {

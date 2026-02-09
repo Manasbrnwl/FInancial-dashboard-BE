@@ -69,7 +69,6 @@ async function getActiveFuturesInstruments(): Promise<SymbolInstruments[]> {
             WHERE sl.expiry_date >= CURRENT_DATE 
                 AND sl.segment = 'FUT'
                 AND sl.upstox_id IS NOT NULL
-                and sl.instrument_id = 9128
             ORDER BY symbolId ASC, expiry_date ASC
         `;
 

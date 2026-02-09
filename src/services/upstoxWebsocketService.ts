@@ -220,6 +220,13 @@ export class UpstoxWebSocketService {
                 this.scheduleNextMarketOpen();
             });
 
+            // Polyfill for SDK bug: clearSubscriptions method may not exist
+            if (typeof (this.streamer as any).clearSubscriptions !== 'function') {
+                (this.streamer as any).clearSubscriptions = () => {
+                    devLog('⚠️ clearSubscriptions polyfill called');
+                };
+            }
+
             // Enable Auto Reconnect
             this.streamer.autoReconnect(true, 5, 20); // enable, interval(sec), retryCount
 

@@ -3,6 +3,7 @@ import axios from "axios";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { loadEnv } from "../config/env";
+import { logger } from "../utils/logger";
 
 loadEnv();
 const prisma = new PrismaClient();
@@ -83,7 +84,7 @@ async function fetchHistoricalCandles(
     } catch (error: any) {
         // Only log first few errors to avoid spam
         if (error.response?.status !== 429) {
-            console.error(
+            logger.error(
                 `❌ Failed to fetch historical data for ${instrumentKey}:`,
                 error.response?.data?.errors || error.message
             );
@@ -203,7 +204,7 @@ async function backfillEquityOhlc(
     let totalInserted = 0;
     let processed = 0;
 
-    console.log(`📊 Backfilling ${instruments.length} NSE Equity instruments from ${fromDate} to ${toDate}...`);
+    logger.info(`📊 Backfilling ${instruments.length} NSE Equity instruments from ${fromDate} to ${toDate}...`);
 
     for (const inst of instruments) {
         const candles = await fetchHistoricalCandles(inst.upstox_id, token, fromDate, toDate);
@@ -235,13 +236,13 @@ async function backfillEquityOhlc(
 
         processed++;
         if (processed % 100 === 0) {
-            console.log(`✅ Equity: Processed ${processed}/${instruments.length} instruments`);
+            logger.info(`✅ Equity: Processed ${processed}/${instruments.length} instruments`);
         }
 
         await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
     }
 
-    console.log(`✅ NSE Equity backfill complete: ${totalInserted} records inserted`);
+    logger.info(`✅ NSE Equity backfill complete: ${totalInserted} records inserted`);
     return totalInserted;
 }
 
@@ -257,7 +258,7 @@ async function backfillFuturesOhlc(
     let totalInserted = 0;
     let processed = 0;
 
-    console.log(`📊 Backfilling ${symbols.length} NSE Futures symbols from ${fromDate} to ${toDate}...`);
+    logger.info(`📊 Backfilling ${symbols.length} NSE Futures symbols from ${fromDate} to ${toDate}...`);
 
     for (const sym of symbols) {
         const candles = await fetchHistoricalCandles(sym.upstox_id, token, fromDate, toDate);
@@ -290,13 +291,13 @@ async function backfillFuturesOhlc(
 
         processed++;
         if (processed % 100 === 0) {
-            console.log(`✅ Futures: Processed ${processed}/${symbols.length} symbols`);
+            logger.info(`✅ Futures: Processed ${processed}/${symbols.length} symbols`);
         }
 
         await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
     }
 
-    console.log(`✅ NSE Futures backfill complete: ${totalInserted} records inserted`);
+    logger.info(`✅ NSE Futures backfill complete: ${totalInserted} records inserted`);
     return totalInserted;
 }
 
@@ -312,7 +313,7 @@ async function backfillOptionsOhlc(
     let totalInserted = 0;
     let processed = 0;
 
-    console.log(`📊 Backfilling ${symbols.length} NSE Options symbols from ${fromDate} to ${toDate}...`);
+    logger.info(`📊 Backfilling ${symbols.length} NSE Options symbols from ${fromDate} to ${toDate}...`);
 
     for (const sym of symbols) {
         const candles = await fetchHistoricalCandles(sym.upstox_id, token, fromDate, toDate);
@@ -348,13 +349,13 @@ async function backfillOptionsOhlc(
 
         processed++;
         if (processed % 500 === 0) {
-            console.log(`✅ Options: Processed ${processed}/${symbols.length} symbols`);
+            logger.info(`✅ Options: Processed ${processed}/${symbols.length} symbols`);
         }
 
         await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
     }
 
-    console.log(`✅ NSE Options backfill complete: ${totalInserted} records inserted`);
+    logger.info(`✅ NSE Options backfill complete: ${totalInserted} records inserted`);
     return totalInserted;
 }
 
@@ -370,14 +371,14 @@ export async function backfillHistoricalOhlc(
     segments: ("equity" | "futures" | "options")[] = ["equity", "futures", "options"]
 ): Promise<void> {
     const startTime = Date.now();
-    console.log(`🕐 Starting Historical OHLC Backfill from ${fromDate} to ${toDate}`);
-    console.log(`📊 Segments: ${segments.join(", ")}`);
+    logger.info(`🕐 Starting Historical OHLC Backfill from ${fromDate} to ${toDate}`);
+    logger.info(`📊 Segments: ${segments.join(", ")}`);
 
     try {
         // 1. Get Access Token
         const token = await upstoxAuthService.getAccessToken();
         if (!token) {
-            console.error("❌ No Upstox Access Token available. Aborting backfill.");
+            logger.error("❌ No Upstox Access Token available. Aborting backfill.");
             return;
         }
 
@@ -406,16 +407,16 @@ export async function backfillHistoricalOhlc(
         const totalInserted = equityCount + futuresCount + optionsCount;
         const duration = (Date.now() - startTime) / 1000;
 
-        console.log(`\n✅ Historical OHLC Backfill Completed!`);
-        console.log(`📊 Results:`);
-        console.log(`   - Equity: ${equityCount} records`);
-        console.log(`   - Futures: ${futuresCount} records`);
-        console.log(`   - Options: ${optionsCount} records`);
-        console.log(`   - Total: ${totalInserted} records`);
-        console.log(`⏱️ Duration: ${duration.toFixed(2)} seconds`);
+        logger.info(`\n✅ Historical OHLC Backfill Completed!`);
+        logger.info(`📊 Results:`);
+        logger.info(`   - Equity: ${equityCount} records`);
+        logger.info(`   - Futures: ${futuresCount} records`);
+        logger.info(`   - Options: ${optionsCount} records`);
+        logger.info(`   - Total: ${totalInserted} records`);
+        logger.info(`⏱️ Duration: ${duration.toFixed(2)} seconds`);
 
     } catch (error: any) {
-        console.error("❌ Critical Error in Historical OHLC Backfill:", error.message);
+        logger.error("❌ Critical Error in Historical OHLC Backfill:", error.message);
     }
 }
 
@@ -430,11 +431,11 @@ export async function runJanuary2026Backfill(): Promise<void> {
 if (require.main === module) {
     runJanuary2026Backfill()
         .then(() => {
-            console.log("Backfill script completed.");
+            logger.info("Backfill script completed.");
             process.exit(0);
         })
         .catch((err) => {
-            console.error("Backfill script failed:", err);
+            logger.error("Backfill script failed:", err);
             process.exit(1);
         });
 }

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
 
 const normalizeBigInt = (row: Record<string, any>) =>
   Object.fromEntries(
@@ -172,11 +173,11 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error("Error fetching NSE options data:", error);
+    logger.error("Error fetching NSE options data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE options data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -194,11 +195,11 @@ export const getNseOptionsUnderlyings = async (req: Request, res: Response) => {
       data: underlyings.map((u) => u.underlying),
     });
   } catch (error: any) {
-    console.error("Error fetching NSE options underlyings:", error);
+    logger.error("Error fetching NSE options underlyings:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE options underlyings",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -227,11 +228,11 @@ export const getNseOptionsStrikes = async (req: Request, res: Response) => {
       data: strikes.map((s) => s.strike),
     });
   } catch (error: any) {
-    console.error("Error fetching NSE options strikes:", error);
+    logger.error("Error fetching NSE options strikes:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE options strikes",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -257,11 +258,11 @@ export const getNseOptionsExpiries = async (req: Request, res: Response) => {
       data: expiries.map((e) => e.expiry_date),
     });
   } catch (error: any) {
-    console.error("Error fetching NSE options expiries:", error);
+    logger.error("Error fetching NSE options expiries:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE options expiries",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };

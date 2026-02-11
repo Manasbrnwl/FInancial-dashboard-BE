@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
 
 export const getBseEquityData = async (req: Request, res: Response) => {
   try {
@@ -42,11 +43,11 @@ export const getBseEquityData = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error("Error fetching BSE equity data:", error);
+    logger.error("Error fetching BSE equity data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch BSE equity data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -64,11 +65,11 @@ export const getBseEquitySymbols = async (req: Request, res: Response) => {
       data: symbols.map((s) => s.symbol),
     });
   } catch (error: any) {
-    console.error("Error fetching BSE equity symbols:", error);
+    logger.error("Error fetching BSE equity symbols:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch BSE equity symbols",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -94,11 +95,11 @@ export const getBseEquityLatest = async (req: Request, res: Response) => {
       data: latest,
     });
   } catch (error: any) {
-    console.error("Error fetching latest BSE equity data:", error);
+    logger.error("Error fetching latest BSE equity data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch latest BSE equity data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };

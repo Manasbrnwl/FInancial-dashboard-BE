@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 import { loadEnv } from '../config/env';
 import { sendEmailNotification } from '../utils/sendEmail';
 import { socketIOService } from './socketioService';
+import { logger } from "../utils/logger";
 
 loadEnv();
 
@@ -100,11 +101,11 @@ export class TrueDataWebSocketService {
     this.clearMarketOpenTimer();
 
     this.marketOpenTimer = setTimeout(() => {
-      console.log(`Starting WebSocket service at scheduled market open: ${nextOpen.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}`);
+      logger.info(`Starting WebSocket service at scheduled market open: ${nextOpen.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}`);
       this.start();
     }, delay);
 
-    console.log(`Next WebSocket start scheduled for ${nextOpen.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}`);
+    logger.info(`Next WebSocket start scheduled for ${nextOpen.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}`);
   }
 
   /**
@@ -114,7 +115,7 @@ export class TrueDataWebSocketService {
     // Check every minute if we should disconnect due to market hours
     this.marketHoursCheckTimer = setInterval(() => {
       if (this.isConnected && !this.isWithinMarketHours()) {
-        console.log('🕐 Market hours ended. Disconnecting WebSocket...');
+        logger.info('🕐 Market hours ended. Disconnecting WebSocket...');
         this.stop();
       }
     }, 60000); // Check every minute
@@ -143,7 +144,7 @@ export class TrueDataWebSocketService {
 
       if (!this.isWithinMarketHours()) {
         const istTime = this.getISTNow();
-        console.log(`📅 Current IST time: ${istTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`);
+        logger.info(`📅 Current IST time: ${istTime.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`);
         this.scheduleNextMarketOpen();
         return;
       }
@@ -152,7 +153,7 @@ export class TrueDataWebSocketService {
       this.startMarketHoursMonitoring();
       await this.sendNotificationEmail('started', {});
     } catch (error: any) {
-      console.error('❌ Failed to start WebSocket service:', error.message);
+      logger.error('❌ Failed to start WebSocket service:', error.message);
       await this.sendNotificationEmail('failed', { errorMessage: error.message });
     }
   }
@@ -163,13 +164,13 @@ export class TrueDataWebSocketService {
   private async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        // console.log('🔗 Connecting to TrueData WebSocket...');
-        // console.log(`📡 URL: ${this.config.url}`);
+        // logger.info('🔗 Connecting to TrueData WebSocket...');
+        // logger.info(`📡 URL: ${this.config.url}`);
 
         this.ws = new WebSocket(this.config.url);
 
         this.ws.on('open', () => {
-          // console.log('✅ WebSocket connection established');
+          // logger.info('✅ WebSocket connection established');
           this.isConnected = true;
           this.reconnectAttempts = 0;
           this.startHeartbeat();
@@ -186,7 +187,7 @@ export class TrueDataWebSocketService {
         });
 
         this.ws.on('close', (code: number, reason: Buffer) => {
-          console.log(`⚠️ WebSocket connection closed. Code: ${code}, Reason: ${reason.toString()}`);
+          logger.info(`⚠️ WebSocket connection closed. Code: ${code}, Reason: ${reason.toString()}`);
           this.isConnected = false;
           this.stopHeartbeat();
 
@@ -197,7 +198,7 @@ export class TrueDataWebSocketService {
         });
 
         this.ws.on('error', (error: Error) => {
-          console.error('❌ WebSocket error:', error.message);
+          logger.error('❌ WebSocket error:', error.message);
           this.isConnected = false;
           this.stopHeartbeat();
           reject(error);
@@ -228,7 +229,7 @@ export class TrueDataWebSocketService {
         return;
       }
 
-      // console.log('📨 Received WebSocket message:', message);
+      // logger.info('📨 Received WebSocket message:', message);
 
       // Try to parse as JSON
       let parsedData: any;
@@ -236,7 +237,7 @@ export class TrueDataWebSocketService {
         parsedData = JSON.parse(message);
       } catch {
         // If not JSON, treat as plain text
-        console.log('📝 Plain text message:', message);
+        logger.info('📝 Plain text message:', message);
         return;
       }
 
@@ -270,10 +271,10 @@ export class TrueDataWebSocketService {
       }
 
       // Handle other message types if needed
-      // console.log('📝 Unhandled message type:', parsedData);
+      // logger.info('📝 Unhandled message type:', parsedData);
 
     } catch (error: any) {
-      console.error('❌ Error handling WebSocket message:', error.message);
+      logger.error('❌ Error handling WebSocket message:', error.message);
     }
   }
 
@@ -288,11 +289,11 @@ export class TrueDataWebSocketService {
           const instrumentId = symbolData[1]; // Second element is instrument ID
 
           this.instrumentIdToSymbol.set(instrumentId, symbolName);
-          // console.log(`✅ Mapped instrument ID ${instrumentId} to symbol ${symbolName}`);
+          // logger.info(`✅ Mapped instrument ID ${instrumentId} to symbol ${symbolName}`);
         }
       });
     } catch (error: any) {
-      console.error('❌ Error handling subscription response:', error.message);
+      logger.error('❌ Error handling subscription response:', error.message);
     }
   }
 
@@ -326,7 +327,7 @@ export class TrueDataWebSocketService {
       const symbol = this.instrumentIdToSymbol.get(instrumentId);
 
       if (!symbol) {
-        console.warn(`⚠️ Unknown instrument ID: ${instrumentId}`);
+        logger.warn(`⚠️ Unknown instrument ID: ${instrumentId}`);
         return;
       }
 
@@ -362,7 +363,7 @@ export class TrueDataWebSocketService {
       });
 
     } catch (error: any) {
-      console.error('❌ Error handling trade update:', error.message);
+      logger.error('❌ Error handling trade update:', error.message);
     }
   }
 
@@ -383,7 +384,7 @@ export class TrueDataWebSocketService {
       const symbol = this.instrumentIdToSymbol.get(instrumentId);
 
       if (!symbol) {
-        console.warn(`⚠️ Unknown instrument ID: ${instrumentId}`);
+        logger.warn(`⚠️ Unknown instrument ID: ${instrumentId}`);
         return;
       }
 
@@ -412,7 +413,7 @@ export class TrueDataWebSocketService {
       });
 
     } catch (error: any) {
-      console.error('❌ Error handling bid-ask update:', error.message);
+      logger.error('❌ Error handling bid-ask update:', error.message);
     }
   }
 
@@ -429,7 +430,7 @@ export class TrueDataWebSocketService {
       const symbol = this.instrumentIdToSymbol.get(instrumentId);
 
       if (!symbol) {
-        console.warn(`⚠️ Unknown instrument ID: ${instrumentId}`);
+        logger.warn(`⚠️ Unknown instrument ID: ${instrumentId}`);
         return;
       }
 
@@ -456,7 +457,7 @@ export class TrueDataWebSocketService {
       });
 
     } catch (error: any) {
-      console.error('❌ Error handling tick update:', error.message);
+      logger.error('❌ Error handling tick update:', error.message);
     }
   }
 
@@ -476,13 +477,13 @@ export class TrueDataWebSocketService {
 
       // Log brief summary
       // if (data.bid && data.ask) {
-      //   console.log(`💰 ${data.symbol}: Bid ₹${data.bid} | Ask ₹${data.ask} | Mid ₹${data.price?.toFixed(2)} → ${socketIOService.getConnectedClientsCount()} clients`);
+      //   logger.info(`💰 ${data.symbol}: Bid ₹${data.bid} | Ask ₹${data.ask} | Mid ₹${data.price?.toFixed(2)} → ${socketIOService.getConnectedClientsCount()} clients`);
       // } else {
-      //   console.log(`💰 ${data.symbol}: Price ₹${data.price?.toFixed(2)} | Vol ${data.volume} → ${socketIOService.getConnectedClientsCount()} clients`);
+      //   logger.info(`💰 ${data.symbol}: Price ₹${data.price?.toFixed(2)} | Vol ${data.volume} → ${socketIOService.getConnectedClientsCount()} clients`);
       // }
 
     } catch (error: any) {
-      console.error('❌ Error processing market data:', error.message);
+      logger.error('❌ Error processing market data:', error.message);
     }
   }
 
@@ -491,7 +492,7 @@ export class TrueDataWebSocketService {
    */
   public subscribeToSymbols(symbols: string[]): void {
     if (!this.isConnected || !this.ws) {
-      console.error('❌ Cannot subscribe: WebSocket not connected');
+      logger.error('❌ Cannot subscribe: WebSocket not connected');
       return;
     }
 
@@ -502,9 +503,9 @@ export class TrueDataWebSocketService {
       };
 
       this.ws.send(JSON.stringify(subscriptionMessage));
-      // console.log('📡 Subscription request sent for symbols:', symbols);
+      // logger.info('📡 Subscription request sent for symbols:', symbols);
     } catch (error: any) {
-      console.error('❌ Error sending subscription:', error.message);
+      logger.error('❌ Error sending subscription:', error.message);
     }
   }
 
@@ -513,7 +514,7 @@ export class TrueDataWebSocketService {
    */
   public unsubscribeFromSymbols(symbols: string[]): void {
     if (!this.isConnected || !this.ws) {
-      console.error('❌ Cannot unsubscribe: WebSocket not connected');
+      logger.error('❌ Cannot unsubscribe: WebSocket not connected');
       return;
     }
 
@@ -524,17 +525,17 @@ export class TrueDataWebSocketService {
       };
 
       this.ws.send(JSON.stringify(unsubscriptionMessage));
-      // console.log('📡 Unsubscription request sent for symbols:', symbols);
+      // logger.info('📡 Unsubscription request sent for symbols:', symbols);
 
       // Clean up instrument ID mapping for unsubscribed symbols
       this.instrumentIdToSymbol.forEach((symbolName, instrumentId) => {
         if (symbols.includes(symbolName)) {
           this.instrumentIdToSymbol.delete(instrumentId);
-          // console.log(`🗑️ Removed mapping for ${symbolName} (${instrumentId})`);
+          // logger.info(`🗑️ Removed mapping for ${symbolName} (${instrumentId})`);
         }
       });
     } catch (error: any) {
-      console.error('❌ Error sending unsubscription:', error.message);
+      logger.error('❌ Error sending unsubscription:', error.message);
     }
   }
 
@@ -546,9 +547,9 @@ export class TrueDataWebSocketService {
       if (this.ws && this.isConnected) {
         try {
           this.ws.ping();
-          // console.log('💓 Heartbeat sent');
+          // logger.info('💓 Heartbeat sent');
         } catch (error: any) {
-          console.error('❌ Error sending heartbeat:', error.message);
+          logger.error('❌ Error sending heartbeat:', error.message);
         }
       }
     }, 30000); // Send heartbeat every 30 seconds
@@ -570,13 +571,13 @@ export class TrueDataWebSocketService {
   private handleReconnection(): void {
     // Check if within market hours before attempting reconnection
     if (!this.isWithinMarketHours()) {
-      console.log('⏰ Outside market hours. Skipping reconnection.');
+      logger.info('⏰ Outside market hours. Skipping reconnection.');
       this.stopMarketHoursMonitoring();
       return;
     }
 
     if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
-      console.error('❌ Max reconnection attempts reached. Stopping reconnection.');
+      logger.error('❌ Max reconnection attempts reached. Stopping reconnection.');
       this.sendNotificationEmail('failed', {
         errorMessage: `Max reconnection attempts (${this.config.maxReconnectAttempts}) reached`
       });
@@ -584,7 +585,7 @@ export class TrueDataWebSocketService {
     }
 
     this.reconnectAttempts++;
-    console.log(`🔄 Attempting to reconnect... (${this.reconnectAttempts}/${this.config.maxReconnectAttempts})`);
+    logger.info(`🔄 Attempting to reconnect... (${this.reconnectAttempts}/${this.config.maxReconnectAttempts})`);
 
     // Notify frontend clients about reconnection attempts
     socketIOService.broadcastConnectionStatus('reconnecting');
@@ -593,7 +594,7 @@ export class TrueDataWebSocketService {
       try {
         await this.connect();
       } catch (error: any) {
-        console.error('❌ Reconnection failed:', error.message);
+        logger.error('❌ Reconnection failed:', error.message);
         this.handleReconnection();
       }
     }, this.config.reconnectInterval);
@@ -674,9 +675,9 @@ export class TrueDataWebSocketService {
       //   htmlContent
       // );
 
-      console.log(`📧 Email notification sent: ${status}`);
+      logger.info(`📧 Email notification sent: ${status}`);
     } catch (error: any) {
-      console.error(`❌ Failed to send email notification:`, error.message);
+      logger.error(`❌ Failed to send email notification:`, error.message);
     }
   }
 
@@ -694,7 +695,7 @@ export class TrueDataWebSocketService {
    * Stop the WebSocket service
    */
   public stop(): void {
-    console.log('🛑 Stopping TrueData WebSocket service...');
+    logger.info('🛑 Stopping TrueData WebSocket service...');
 
     this.stopHeartbeat();
     this.stopMarketHoursMonitoring();
@@ -711,7 +712,7 @@ export class TrueDataWebSocketService {
     }
 
     this.isConnected = false;
-    console.log('✅ WebSocket service stopped');
+    logger.info('✅ WebSocket service stopped');
 
     if (!this.isWithinMarketHours()) {
       this.scheduleNextMarketOpen();

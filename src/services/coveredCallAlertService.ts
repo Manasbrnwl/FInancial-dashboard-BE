@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { socketIOService } from "./socketioService";
 import { loadEnv } from "../config/env";
 import { sendEmailNotification } from "../utils/sendEmail";
+import { logger } from "../utils/logger";
 
 loadEnv();
 
@@ -282,7 +283,7 @@ export async function triggerCoveredCallAlert(
 
     recentAlerts.set(alertKey, new Date());
 
-    console.log(
+    logger.info(
         `📢 Covered Call Alert: ${candidate.symbol} | OTM ${criteriaResult.otmPercent}% | Premium ${criteriaResult.premiumPercent}% | Upside ${criteriaResult.maxUpside}%`
     );
 
@@ -360,7 +361,7 @@ async function sendConsolidatedAlertEmail(alerts: AlertPayload[]): Promise<void>
     <p style="color: #666; font-size: 12px;">This is an automated alert from the Covered Call Alert System.</p>
   `;
 
-    console.log(`📧 Sending consolidated email with ${alerts.length} alerts to ${ALERT_EMAIL_RECIPIENTS.length} recipients...`);
+    logger.info(`📧 Sending consolidated email with ${alerts.length} alerts to ${ALERT_EMAIL_RECIPIENTS.length} recipients...`);
 
     try {
         await Promise.allSettled(
@@ -368,9 +369,9 @@ async function sendConsolidatedAlertEmail(alerts: AlertPayload[]): Promise<void>
                 sendEmailNotification(email, subject, text, html)
             )
         );
-        console.log(`✅ Consolidated alert email sent successfully`);
+        logger.info(`✅ Consolidated alert email sent successfully`);
     } catch (err: any) {
-        console.error("❌ Failed to send consolidated alert email:", err?.message || err);
+        logger.error("❌ Failed to send consolidated alert email:", err?.message || err);
     }
 }
 
@@ -428,13 +429,13 @@ export async function processCoveredCallData(
                     } else {
                         // Reset count if criteria not met
                         if (consecutiveMatches.has(symbolKey)) {
-                            console.log(`📉 ${candidate.symbol}: Criteria not met, resetting count`);
+                            logger.info(`📉 ${candidate.symbol}: Criteria not met, resetting count`);
                             consecutiveMatches.delete(symbolKey);
                         }
                     }
                     return null;
                 } catch (error: any) {
-                    console.error(
+                    logger.error(
                         `❌ Failed to process covered call for ${candidate.symbol}:`,
                         error.message
                     );

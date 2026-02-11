@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { logger } from "./logger";
 
 export interface BatchInsertOptions {
   chunkSize?: number;
@@ -47,7 +48,7 @@ export class BatchInserter {
     let totalErrors = 0;
 
     if (logProgress) {
-      console.log(
+      logger.info(
         `📊 Starting batch insert for ${tableName}: ${data.length} records in ${chunks.length} chunks`
       );
     }
@@ -59,13 +60,13 @@ export class BatchInserter {
         totalInserted += chunk.length;
 
         if (logProgress && (i + 1) % 10 === 0) {
-          console.log(
+          logger.info(
             `✅ Processed ${i + 1}/${chunks.length} chunks for ${tableName}`
           );
         }
       } catch (error: any) {
         totalErrors += chunk.length;
-        console.error(
+        logger.error(
           `❌ Error in chunk ${i + 1} for ${tableName}:`,
           error.message
         );
@@ -76,7 +77,7 @@ export class BatchInserter {
     }
 
     if (logProgress) {
-      console.log(
+      logger.info(
         `🎯 ${tableName} batch complete: ${totalInserted} inserted, ${totalErrors} errors`
       );
     }
@@ -92,7 +93,7 @@ export class BatchInserter {
     insertFunction: (data: T[]) => Promise<any>,
     tableName: string
   ): Promise<void> {
-    console.log(
+    logger.info(
       `🔄 Retrying ${chunk.length} records individually for ${tableName}`
     );
 
@@ -100,7 +101,7 @@ export class BatchInserter {
       try {
         await insertFunction([record]);
       } catch (error: any) {
-        console.error(
+        logger.error(
           `❌ Individual record failed for ${tableName}:`,
           error.message
         );
@@ -135,7 +136,7 @@ export class BatchInserter {
     }
 
     if (logProgress) {
-      console.log(
+      logger.info(
         `📋 Upserting ${uniqueInstruments.length} unique instruments`
       );
     }
@@ -175,7 +176,7 @@ export class BatchInserter {
         } catch (error: any) {
           errorCount++;
           if (logProgress && errorCount <= 5) {
-            console.error(
+            logger.error(
               `❌ Instrument upsert failed for ${instrument.exchange}:${instrument.instrument_type}:`,
               error.message
             );
@@ -184,16 +185,15 @@ export class BatchInserter {
       }
 
       if (logProgress && chunks.length > 10 && (i + 1) % 10 === 0) {
-        console.log(
-          `📋 Processed ${i + 1}/${
-            chunks.length
+        logger.info(
+          `📋 Processed ${i + 1}/${chunks.length
           } instrument chunks (${successCount} success, ${errorCount} errors)`
         );
       }
     }
 
     if (logProgress) {
-      console.log(
+      logger.info(
         `✅ Instruments upsert completed: ${successCount} success, ${errorCount} errors`
       );
     }
@@ -241,7 +241,7 @@ export class BatchInserter {
     );
 
     if (logProgress) {
-      console.log(
+      logger.info(
         `📋 Upserting ${uniqueSymbols.length} unique symbols into symbols_list`
       );
     }
@@ -270,7 +270,7 @@ export class BatchInserter {
 
           if (!instrument) {
             if (logProgress && errorCount < 5) {
-              console.warn(
+              logger.warn(
                 `⚠️ Instrument not found for ${symbolData.exchange}:${symbolData.instrument_type}`
               );
             }
@@ -309,7 +309,7 @@ export class BatchInserter {
         } catch (error: any) {
           errorCount++;
           if (logProgress && errorCount <= 5) {
-            console.error(
+            logger.error(
               `❌ Symbol upsert failed for ${symbolData.symbol}:`,
               error.message
             );
@@ -318,16 +318,15 @@ export class BatchInserter {
       }
 
       if (logProgress && chunks.length > 10 && (i + 1) % 10 === 0) {
-        console.log(
-          `📋 Processed ${i + 1}/${
-            chunks.length
+        logger.info(
+          `📋 Processed ${i + 1}/${chunks.length
           } symbol chunks (${successCount} success, ${errorCount} errors)`
         );
       }
     }
 
     if (logProgress) {
-      console.log(
+      logger.info(
         `✅ Symbols upsert completed: ${successCount} success, ${errorCount} errors`
       );
     }
@@ -354,7 +353,7 @@ export class BatchInserter {
     let totalErrors = 0;
 
     if (logProgress) {
-      console.log(
+      logger.info(
         `🔄 Starting transaction-based batch insert: ${chunks.length} chunks`
       );
     }
@@ -368,13 +367,13 @@ export class BatchInserter {
         totalInserted += chunk.length;
 
         if (logProgress && (i + 1) % 5 === 0) {
-          console.log(
+          logger.info(
             `⚡ Completed ${i + 1}/${chunks.length} transaction chunks`
           );
         }
       } catch (error: any) {
         totalErrors += chunk.length;
-        console.error(`❌ Transaction chunk ${i + 1} failed:`, error.message);
+        logger.error(`❌ Transaction chunk ${i + 1} failed:`, error.message);
       }
     }
 

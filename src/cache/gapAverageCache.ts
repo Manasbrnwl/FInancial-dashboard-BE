@@ -1,5 +1,6 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { loadEnv } from "../config/env";
+import { logger } from "../utils/logger";
 
 loadEnv();
 
@@ -61,7 +62,7 @@ export async function loadGapBaselines(): Promise<void> {
     });
   });
 
-  console.log(
+  logger.info(
     `?? Loaded gap baselines for ${gapBaselines.size} instruments`
   );
 }

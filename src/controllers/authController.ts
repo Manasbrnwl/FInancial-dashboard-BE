@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { logger } from "../utils/logger";
 import {
   createOtpForUser,
   issueJwtToken,
@@ -32,11 +33,11 @@ export const loginWithPassword = async (req: Request, res: Response) => {
       expiresAt: new Date(expiresAt).toISOString(),
     });
   } catch (error: any) {
-    console.error("Failed to generate OTP:", error);
+    logger.error("Failed to generate OTP:", error);
     return res.status(500).json({
       success: false,
       error: "Failed to generate OTP. Please try again.",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -66,8 +67,8 @@ export const verifyOtpAndIssueToken = async (req: Request, res: Response) => {
         otpResult.reason === "OTP_EXPIRED"
           ? 410
           : otpResult.reason === "OTP_NOT_FOUND"
-          ? 400
-          : 401;
+            ? 400
+            : 401;
 
       return res.status(status).json({
         success: false,
@@ -75,8 +76,8 @@ export const verifyOtpAndIssueToken = async (req: Request, res: Response) => {
           otpResult.reason === "OTP_EXPIRED"
             ? "OTP has expired. Please request a new one."
             : otpResult.reason === "OTP_NOT_FOUND"
-            ? "No OTP found. Please login again to receive a code."
-            : "Invalid OTP",
+              ? "No OTP found. Please login again to receive a code."
+              : "Invalid OTP",
       });
     }
 
@@ -88,11 +89,11 @@ export const verifyOtpAndIssueToken = async (req: Request, res: Response) => {
       expiresIn,
     });
   } catch (error: any) {
-    console.error("Failed to verify OTP:", error);
+    logger.error("Failed to verify OTP:", error);
     return res.status(500).json({
       success: false,
       error: "Failed to verify OTP. Please try again.",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };

@@ -1,4 +1,5 @@
 import { upstoxWebSocketService } from '../services/upstoxWebsocketService';
+import { logger } from "./logger";
 
 /**
  * WebSocket Manager - Arbitrage functionality
@@ -14,12 +15,12 @@ export class WebSocketManager {
     const status = upstoxWebSocketService.getStatus();
 
     if (!status.isConnected) {
-      console.error('❌ Cannot subscribe: Upstox WebSocket not connected');
+      logger.error('❌ Cannot subscribe: Upstox WebSocket not connected');
       return;
     }
 
     upstoxWebSocketService.subscribeToSymbols(instrumentKeys);
-    console.log('📡 Subscription request sent for instruments:', instrumentKeys);
+    logger.info('📡 Subscription request sent for instruments:', instrumentKeys);
   }
 
   /**
@@ -29,12 +30,12 @@ export class WebSocketManager {
     const status = upstoxWebSocketService.getStatus();
 
     if (!status.isConnected) {
-      console.error('❌ Cannot unsubscribe: Upstox WebSocket not connected');
+      logger.error('❌ Cannot unsubscribe: Upstox WebSocket not connected');
       return;
     }
 
     upstoxWebSocketService.unsubscribeFromSymbols(instrumentKeys);
-    console.log('📡 Unsubscription request sent for instruments:', instrumentKeys);
+    logger.info('📡 Unsubscription request sent for instruments:', instrumentKeys);
   }
 
   /**

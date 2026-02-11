@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
 
 const normalizeBigInt = (row: Record<string, any>) =>
   Object.fromEntries(
@@ -50,11 +51,11 @@ export const getNseEquityData = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error("Error fetching NSE equity data:", error);
+    logger.error("Error fetching NSE equity data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE equity data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -72,11 +73,11 @@ export const getNseEquitySymbols = async (req: Request, res: Response) => {
       data: symbols.map((s) => s.symbol),
     });
   } catch (error: any) {
-    console.error("Error fetching NSE equity symbols:", error);
+    logger.error("Error fetching NSE equity symbols:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE equity symbols",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -102,11 +103,11 @@ export const getNseEquityLatest = async (req: Request, res: Response) => {
       data: latest,
     });
   } catch (error: any) {
-    console.error("Error fetching latest NSE equity data:", error);
+    logger.error("Error fetching latest NSE equity data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch latest NSE equity data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -149,11 +150,11 @@ export const getEquityDateRangeController = async (
       hourly_max_date: hourly_row.max_date && hourly_row.max_date,
     });
   } catch (error: any) {
-    console.error("Error fetching equity date range:", error);
+    logger.error("Error fetching equity date range:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch equity date range",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };

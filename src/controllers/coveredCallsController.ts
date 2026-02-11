@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
 
 export const getCoveredCallsData = async (req: Request, res: Response) => {
   try {
@@ -170,11 +171,11 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
       limit,
     });
   } catch (error: any) {
-    console.error("Error fetching Covered Calls data:", error);
+    logger.error("Error fetching Covered Calls data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch Covered Calls data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -300,11 +301,11 @@ export const getCoveredCallsStats = async (req: Request, res: Response) => {
       }
     });
   } catch (error: any) {
-    console.error("Error fetching Covered Calls stats:", error);
+    logger.error("Error fetching Covered Calls stats:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch Covered Calls stats",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -392,11 +393,11 @@ export const getCoveredCallsByUnderlying = async (
       count: transformedData.length,
     });
   } catch (error: any) {
-    console.error("Error fetching Covered Calls data by underlying:", error);
+    logger.error("Error fetching Covered Calls data by underlying:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch Covered Calls data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -439,11 +440,11 @@ export const getCoveredCallsSymbolsExpiry = async (
       data: result,
     });
   } catch (error) {
-    console.error("Error fetching symbols and expiry dates:", error);
+    logger.error("Error fetching symbols and expiry dates:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error instanceof Error ? error.message : "Unknown error",
+      ...(process.env.NODE_ENV !== "production" && { error: error instanceof Error ? error.message : "Unknown error" }),
     });
   }
 };
@@ -617,11 +618,11 @@ export const getFilteredCoveredCallsDetails = async (
       },
     });
   } catch (error) {
-    console.error("Error fetching filtered covered calls details:", error);
+    logger.error("Error fetching filtered covered calls details:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error instanceof Error ? error.message : "Unknown error",
+      ...(process.env.NODE_ENV !== "production" && { error: error instanceof Error ? error.message : "Unknown error" }),
     });
   }
 };
@@ -699,8 +700,8 @@ export const getLatestOptionsTicksByInstrument = async (
       : result;
     return res.status(200).json({ success: true, data: safe });
   } catch (error: any) {
-    console.error("Error fetching latest options ticks:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    logger.error("Error fetching latest options ticks:", error);
+    return res.status(500).json({ success: false, message: process.env.NODE_ENV !== "production" ? error.message : "Internal server error" });
   }
 };
 
@@ -852,11 +853,11 @@ export const getCoveredCallsTrendDaily = async (
       },
     });
   } catch (error: any) {
-    console.error("Error fetching covered calls daily trend:", error);
+    logger.error("Error fetching covered calls daily trend:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -1141,11 +1142,11 @@ export const getCoveredCallsTrendHourly = async (
       },
     });
   } catch (error: any) {
-    console.error("Error fetching covered calls hourly trend:", error);
+    logger.error("Error fetching covered calls hourly trend:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };

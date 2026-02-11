@@ -2,14 +2,15 @@ import { ApiClient, MarketDataStreamerV3 } from 'upstox-js-sdk';
 import { loadEnv } from '../config/env';
 import { socketIOService } from './socketioService';
 import { upstoxAuthService } from './upstoxAuthService';
+import { logger } from "../utils/logger";
 
 loadEnv();
 
 // Helper functions for dev-only logging
 const isDev = process.env.NODE_ENV === 'development';
-const devLog = (...args: any[]) => { if (isDev) console.log(...args); };
-const devWarn = (...args: any[]) => { if (isDev) console.warn(...args); };
-const devError = (...args: any[]) => { if (isDev) console.error(...args); };
+const devLog = (...args: any[]) => { if (isDev) logger.info(...args); };
+const devWarn = (...args: any[]) => { if (isDev) logger.warn(...args); };
+const devError = (...args: any[]) => { if (isDev) logger.error(...args); };
 
 interface MarketData {
     symbol?: string;

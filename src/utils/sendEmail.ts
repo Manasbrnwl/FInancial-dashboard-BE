@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+import { logger } from "./logger";
 
 dotenv.config();
 
@@ -40,11 +41,11 @@ const sendEmailNotification = async (
 
     const info = await transporter.sendMail(mailOptions);
     if (process.env.NODE_ENV === "development") {
-      console.log(`OTP email queued: ${info.messageId}`);
+      logger.info(`OTP email queued: ${info.messageId}`);
     }
     return true;
   } catch (error: any) {
-    console.error("Failed to send OTP email:", error?.message || error);
+    logger.error("Failed to send OTP email:", error?.message || error);
     throw error;
   }
 };

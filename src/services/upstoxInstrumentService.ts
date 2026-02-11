@@ -2,6 +2,7 @@ import axios from "axios";
 import zlib from "zlib";
 import { promisify } from "util";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
 
 const gunzip = promisify(zlib.gunzip);
 
@@ -75,7 +76,7 @@ export const upstoxInstrumentService = {
 
             return instruments.filter((inst) => ['NSE_EQ', 'BSE_EQ', 'NSE_FO'].includes(inst.exchange) && [null, '', 'CE', 'PE', 'FF'].includes(inst.isin) && ['EQUITY', 'OPTSTK', 'FUTSTK'].includes(inst.instrumentType));
         } catch (error: any) {
-            console.error(`❌ Failed to load ${exchange} instruments:`, error.message);
+            logger.error(`❌ Failed to load ${exchange} instruments:`, error.message);
             return [];
         }
     },
@@ -96,9 +97,9 @@ export const upstoxInstrumentService = {
             }
             symbolKeyMap = tempMap;
 
-            console.log(`📈 Total instruments loaded: ${allInstruments.length} (NSE: ${nseInstruments.length}, BSE: ${bseInstruments.length})`);
+            logger.info(`📈 Total instruments loaded: ${allInstruments.length} (NSE: ${nseInstruments.length}, BSE: ${bseInstruments.length})`);
         } catch (error: any) {
-            console.error("❌ Failed to load Upstox instruments:", error.message);
+            logger.error("❌ Failed to load Upstox instruments:", error.message);
         }
     },
 
@@ -134,7 +135,7 @@ export const upstoxInstrumentService = {
                 errorCount++;
             }
         }
-        console.log(`✅ NSE Equity sync complete: ${successCount} success, ${errorCount} errors`);
+        logger.info(`✅ NSE Equity sync complete: ${successCount} success, ${errorCount} errors`);
     },
 
     loadNseFutInstruments: async (): Promise<void> => {
@@ -144,7 +145,7 @@ export const upstoxInstrumentService = {
             const futInstruments = nseData.filter((inst) => inst.instrumentType === "FUTSTK");
 
             if (futInstruments.length === 0) {
-                console.log("⚠️ No FUTSTK instruments found");
+                logger.info("⚠️ No FUTSTK instruments found");
                 return;
             }
 
@@ -200,14 +201,14 @@ export const upstoxInstrumentService = {
                 } catch (error: any) {
                     errorCount++;
                     if (errorCount <= 5) {
-                        console.error(`❌ Failed to upsert ${inst.tradingSymbol}:`, error.message);
+                        logger.error(`❌ Failed to upsert ${inst.tradingSymbol}:`, error.message);
                     }
                 }
             }
 
-            console.log(`✅ NSE Futures sync complete: ${successCount} success, ${errorCount} errors`);
+            logger.info(`✅ NSE Futures sync complete: ${successCount} success, ${errorCount} errors`);
         } catch (error: any) {
-            console.error("❌ Failed to load NSE Futures instruments:", error.message);
+            logger.error("❌ Failed to load NSE Futures instruments:", error.message);
         }
     },
 
@@ -270,17 +271,17 @@ export const upstoxInstrumentService = {
             } catch (error: any) {
                 errorCount++;
                 if (errorCount <= 5) {
-                    console.error(`❌ Failed to upsert ${inst.tradingSymbol}:`, error.message);
+                    logger.error(`❌ Failed to upsert ${inst.tradingSymbol}:`, error.message);
                 }
             }
         }
 
-        console.log(`✅ NSE Options sync complete: ${successCount} success, ${errorCount} errors`);
+        logger.info(`✅ NSE Options sync complete: ${successCount} success, ${errorCount} errors`);
     },
 
     // loadBseEqInstruments: async (): Promise<void> => {
     //     await upstoxInstrumentService.loadExchangeInstruments("BSE");
     //     const data = bseInstruments.filter((inst) => inst.instrumentType === "EQUITY");
-    //     console.log(bseInstruments[0])
+    //     logger.info(bseInstruments[0])
     // },
 }

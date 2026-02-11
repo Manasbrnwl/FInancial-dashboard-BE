@@ -1,6 +1,7 @@
 import axios from "axios";
 import { getAccessToken } from "../config/store";
 import { PrismaClient } from "@prisma/client";
+import { logger } from "../utils/logger";
 
 const prisma = new PrismaClient();
 
@@ -29,7 +30,7 @@ async function getNseEquityHistory(date: string) {
           segment: "fo",
         },
       });
-      console.log("Bhavcopy not found");
+      logger.info("Bhavcopy not found");
       return false;
     } else {
       // Add small delay between status check and actual data fetch
@@ -45,7 +46,7 @@ async function getNseEquityHistory(date: string) {
       return bhavcopy.data;
     }
   } catch (error) {
-    console.error("Error fetching NSE Equity history:", error);
+    logger.error("Error fetching NSE Equity history:", error);
     return false;
   }
 }

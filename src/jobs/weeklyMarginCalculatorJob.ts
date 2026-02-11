@@ -10,6 +10,7 @@ import { updateJobStatus, initializeJobStatus } from "../utils/cronMonitor";
 import { isDhanTokenReady } from "./dhanTokenInitJob";
 import { sendEmailNotification } from "../utils/sendEmail";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
 
 // Run every Sunday at 2:00 AM
 const CRON_EXPRESSION = "0 2 * * 0";
@@ -19,7 +20,7 @@ const CRON_EXPRESSION = "0 2 * * 0";
  */
 async function fetchNseEquityInstruments(): Promise<MarginCalculatorRequest[]> {
   try {
-    console.log("📊 Fetching NSE Equity instruments...");
+    logger.info("📊 Fetching NSE Equity instruments...");
 
     // Get distinct symbols with their latest data
     const instruments = await prisma.$queryRaw<
@@ -39,7 +40,7 @@ async function fetchNseEquityInstruments(): Promise<MarginCalculatorRequest[]> {
       LIMIT 500
     `;
 
-    console.log(`   ✅ Found ${instruments.length} NSE EQ instruments`);
+    logger.info(`   ✅ Found ${instruments.length} NSE EQ instruments`);
 
     return instruments.map((inst) => ({
       securityId: inst.symbol_id,
@@ -51,7 +52,7 @@ async function fetchNseEquityInstruments(): Promise<MarginCalculatorRequest[]> {
       price: inst.close || 100, // Use latest close price or default
     }));
   } catch (error: any) {
-    console.error("❌ Error fetching NSE EQ instruments:", error.message);
+    logger.error("❌ Error fetching NSE EQ instruments:", error.message);
     return [];
   }
 }
@@ -61,7 +62,7 @@ async function fetchNseEquityInstruments(): Promise<MarginCalculatorRequest[]> {
  */
 async function fetchNseFnoInstruments(): Promise<MarginCalculatorRequest[]> {
   try {
-    console.log("📊 Fetching NSE F&O instruments...");
+    logger.info("📊 Fetching NSE F&O instruments...");
 
     // Get active futures with latest data
     const futures = await prisma.$queryRaw<
@@ -84,7 +85,7 @@ async function fetchNseFnoInstruments(): Promise<MarginCalculatorRequest[]> {
       LIMIT 200
     `;
 
-    console.log(`   ✅ Found ${futures.length} NSE F&O instruments`);
+    logger.info(`   ✅ Found ${futures.length} NSE F&O instruments`);
 
     return futures.map((inst) => ({
       securityId: inst.symbol_id || inst.symbol.toString(),
@@ -96,7 +97,7 @@ async function fetchNseFnoInstruments(): Promise<MarginCalculatorRequest[]> {
       price: inst.close || 100,
     }));
   } catch (error: any) {
-    console.error("❌ Error fetching NSE F&O instruments:", error.message);
+    logger.error("❌ Error fetching NSE F&O instruments:", error.message);
     return [];
   }
 }
@@ -106,7 +107,7 @@ async function fetchNseFnoInstruments(): Promise<MarginCalculatorRequest[]> {
  */
 async function fetchBseEquityInstruments(): Promise<MarginCalculatorRequest[]> {
   try {
-    console.log("📊 Fetching BSE Equity instruments...");
+    logger.info("📊 Fetching BSE Equity instruments...");
 
     // Get distinct symbols with their latest data
     const instruments = await prisma.$queryRaw<
@@ -127,7 +128,7 @@ async function fetchBseEquityInstruments(): Promise<MarginCalculatorRequest[]> {
       LIMIT 200
     `;
 
-    console.log(`   ✅ Found ${instruments.length} BSE EQ instruments`);
+    logger.info(`   ✅ Found ${instruments.length} BSE EQ instruments`);
 
     return instruments.map((inst) => ({
       securityId: inst.symbol_id,
@@ -139,7 +140,7 @@ async function fetchBseEquityInstruments(): Promise<MarginCalculatorRequest[]> {
       price: inst.close || 100,
     }));
   } catch (error: any) {
-    console.error("❌ Error fetching BSE EQ instruments:", error.message);
+    logger.error("❌ Error fetching BSE EQ instruments:", error.message);
     return [];
   }
 }
@@ -154,17 +155,17 @@ async function calculateAllMargins() {
   let totalFailed = 0;
 
   try {
-    console.log("\n🚀 Starting weekly margin calculation job...");
+    logger.info("\n🚀 Starting weekly margin calculation job...");
     updateJobStatus("weeklyMarginCalculatorJob", "running", CRON_EXPRESSION);
 
     // Check if Dhan token is ready
     if (!isDhanTokenReady()) {
-      console.error("❌ DhanHQ token manager not initialized");
+      logger.error("❌ DhanHQ token manager not initialized");
       throw new Error("DhanHQ token manager not initialized");
     }
 
     // Step 1: Fetch all instruments
-    console.log("\n📋 Step 1: Fetching instruments from database...");
+    logger.info("\n📋 Step 1: Fetching instruments from database...");
     const [nseEqInstruments, nseFnoInstruments, bseEqInstruments] =
       await Promise.all([
         fetchNseEquityInstruments(),
@@ -179,13 +180,13 @@ async function calculateAllMargins() {
     ];
 
     totalProcessed = allInstruments.length;
-    console.log(`\n📊 Total instruments to process: ${totalProcessed}`);
-    console.log(`   - NSE Equity: ${nseEqInstruments.length}`);
-    console.log(`   - NSE F&O: ${nseFnoInstruments.length}`);
-    console.log(`   - BSE Equity: ${bseEqInstruments.length}`);
+    logger.info(`\n📊 Total instruments to process: ${totalProcessed}`);
+    logger.info(`   - NSE Equity: ${nseEqInstruments.length}`);
+    logger.info(`   - NSE F&O: ${nseFnoInstruments.length}`);
+    logger.info(`   - BSE Equity: ${bseEqInstruments.length}`);
 
     if (allInstruments.length === 0) {
-      console.log("⚠️ No instruments found to process");
+      logger.info("⚠️ No instruments found to process");
       const duration = Date.now() - startTime;
       updateJobStatus(
         "weeklyMarginCalculatorJob",
@@ -197,7 +198,7 @@ async function calculateAllMargins() {
     }
 
     // Step 2: Calculate margins in batches
-    console.log("\n💰 Step 2: Calculating margins...");
+    logger.info("\n💰 Step 2: Calculating margins...");
     const BATCH_SIZE = 50;
     const batches = [];
 
@@ -205,11 +206,11 @@ async function calculateAllMargins() {
       batches.push(allInstruments.slice(i, i + BATCH_SIZE));
     }
 
-    console.log(`   Processing ${batches.length} batches of ${BATCH_SIZE}...`);
+    logger.info(`   Processing ${batches.length} batches of ${BATCH_SIZE}...`);
 
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i];
-      console.log(
+      logger.info(
         `\n   [Batch ${i + 1}/${batches.length}] Processing ${batch.length} instruments...`
       );
 
@@ -218,7 +219,7 @@ async function calculateAllMargins() {
       totalSuccessful += result.successful;
       totalFailed += result.failed;
 
-      console.log(
+      logger.info(
         `   ✅ Batch ${i + 1} complete: ${result.successful} successful, ${result.failed} failed`
       );
 
@@ -232,13 +233,13 @@ async function calculateAllMargins() {
     const durationMinutes = Math.floor(duration / 60000);
 
     // Success summary
-    console.log("\n" + "=".repeat(60));
-    console.log("✅ Weekly margin calculation completed");
-    console.log(`📊 Total processed: ${totalProcessed}`);
-    console.log(`✅ Successful: ${totalSuccessful}`);
-    console.log(`❌ Failed: ${totalFailed}`);
-    console.log(`⏱️ Duration: ${durationMinutes} minutes`);
-    console.log("=".repeat(60));
+    logger.info("\n" + "=".repeat(60));
+    logger.info("✅ Weekly margin calculation completed");
+    logger.info(`📊 Total processed: ${totalProcessed}`);
+    logger.info(`✅ Successful: ${totalSuccessful}`);
+    logger.info(`❌ Failed: ${totalFailed}`);
+    logger.info(`⏱️ Duration: ${durationMinutes} minutes`);
+    logger.info("=".repeat(60));
 
     updateJobStatus(
       "weeklyMarginCalculatorJob",
@@ -266,7 +267,7 @@ async function calculateAllMargins() {
     );
   } catch (error: any) {
     const duration = Date.now() - startTime;
-    console.error("\n❌ Weekly margin calculation failed:", error.message);
+    logger.error("\n❌ Weekly margin calculation failed:", error.message);
 
     updateJobStatus(
       "weeklyMarginCalculatorJob",
@@ -315,7 +316,7 @@ export function initializeWeeklyMarginCalculatorJob(): void {
     timezone: "Asia/Kolkata",
   });
 
-  console.log(
+  logger.info(
     "⏰ Weekly margin calculator job scheduled to run every Sunday at 2:00 AM"
   );
 }

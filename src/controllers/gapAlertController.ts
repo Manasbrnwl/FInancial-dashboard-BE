@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
 import { loadEnv } from "../config/env";
 import { loadGapBaselines } from "../cache/gapAverageCache";
 
@@ -24,11 +25,11 @@ export const getRecentAlerts = async (req: Request, res: Response) => {
 
     return res.status(200).json({ success: true, data: alerts });
   } catch (error: any) {
-    console.error("? Failed to fetch recent gap alerts:", error?.message || error);
+    logger.error("? Failed to fetch recent gap alerts:", error?.message || error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch recent gap alerts",
-      error: error?.message || "Unknown error",
+      ...(process.env.NODE_ENV !== "production" && { error: error?.message || "Unknown error" }),
     });
   }
 };
@@ -59,11 +60,11 @@ export const getAlertHistory = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error("? Failed to fetch gap alert history:", error?.message || error);
+    logger.error("? Failed to fetch gap alert history:", error?.message || error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch alert history",
-      error: error?.message || "Unknown error",
+      ...(process.env.NODE_ENV !== "production" && { error: error?.message || "Unknown error" }),
     });
   }
 };
@@ -93,11 +94,11 @@ export const getGapHistory = async (req: Request, res: Response) => {
 
     return res.status(200).json({ success: true, data });
   } catch (error: any) {
-    console.error("? Failed to fetch gap history:", error?.message || error);
+    logger.error("? Failed to fetch gap history:", error?.message || error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch gap history",
-      error: error?.message || "Unknown error",
+      ...(process.env.NODE_ENV !== "production" && { error: error?.message || "Unknown error" }),
     });
   }
 };
@@ -110,11 +111,11 @@ export const reloadGapBaselines = async (_req: Request, res: Response) => {
       message: "Gap baselines refreshed",
     });
   } catch (error: any) {
-    console.error("? Failed to reload gap baselines:", error?.message || error);
+    logger.error("? Failed to reload gap baselines:", error?.message || error);
     return res.status(500).json({
       success: false,
       message: "Failed to reload gap baselines",
-      error: error?.message || "Unknown error",
+      ...(process.env.NODE_ENV !== "production" && { error: error?.message || "Unknown error" }),
     });
   }
 };

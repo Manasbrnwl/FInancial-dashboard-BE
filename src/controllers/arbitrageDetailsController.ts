@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
 
 /**
  * Get arbitrage details for a specific instrument and date
@@ -85,11 +86,11 @@ export const getArbitrageDetails = async (req: Request, res: Response) => {
       data: result,
     });
   } catch (error) {
-    console.error("Error fetching arbitrage details:", error);
+    logger.error("Error fetching arbitrage details:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error instanceof Error ? error.message : "Unknown error",
+      ...(process.env.NODE_ENV !== "production" && { error: error instanceof Error ? error.message : "Unknown error" }),
     });
   }
 };
@@ -156,11 +157,11 @@ export const getLiveDataForSymbols = async (req: Request, res: Response) => {
       data: result,
     });
   } catch (error) {
-    console.error("Error fetching live data:", error);
+    logger.error("Error fetching live data:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error instanceof Error ? error.message : "Unknown error",
+      ...(process.env.NODE_ENV !== "production" && { error: error instanceof Error ? error.message : "Unknown error" }),
     });
   }
 };
@@ -430,11 +431,11 @@ ranked_symbols AS (
       },
     });
   } catch (error) {
-    console.error("Error fetching filtered arbitrage data:", error);
+    logger.error("Error fetching filtered arbitrage data:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error instanceof Error ? error.message : "Unknown error",
+      ...(process.env.NODE_ENV !== "production" && { error: error instanceof Error ? error.message : "Unknown error" }),
     });
   }
 };

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { CronExpressionParser } from 'cron-parser';
+import { logger } from "./logger";
 
 const HISTORY_FILE = path.join(__dirname, '../../history.json');
 
@@ -26,7 +27,7 @@ export function loadHistory(): CronHistory {
       return JSON.parse(data);
     }
   } catch (error) {
-    console.error('Error loading cron history:', error);
+    logger.error('Error loading cron history:', error);
   }
   return {};
 }
@@ -38,7 +39,7 @@ export function saveHistory(history: CronHistory): void {
   try {
     fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
   } catch (error) {
-    console.error('Error saving cron history:', error);
+    logger.error('Error saving cron history:', error);
   }
 }
 
@@ -50,7 +51,7 @@ export function getNextCronRun(cronExpression: string): string {
     const interval = CronExpressionParser.parse(cronExpression);
     return interval.next().toDate().toISOString();
   } catch (error) {
-    console.error('Error calculating next cron run:', error);
+    logger.error('Error calculating next cron run:', error);
     return '';
   }
 }
@@ -81,7 +82,7 @@ export function updateJobStatus(
 
   saveHistory(history);
 
-  console.log(`[CronMonitor] ${jobName} - Status: ${status}${duration ? `, Duration: ${duration}ms` : ''}`);
+  logger.info(`[CronMonitor] ${jobName} - Status: ${status}${duration ? `, Duration: ${duration}ms` : ''}`);
 }
 
 /**
@@ -105,12 +106,12 @@ export function initializeJobStatus(jobName: string, cronExpression: string): vo
       lastDuration: null
     };
     saveHistory(history);
-    console.log(`[CronMonitor] Initialized ${jobName}`);
+    logger.info(`[CronMonitor] Initialized ${jobName}`);
   } else {
     // Update nextRun on restart
     history[jobName].nextRun = getNextCronRun(cronExpression);
     history[jobName].status = 'idle';
     saveHistory(history);
-    console.log(`[CronMonitor] Reinitialized ${jobName}`);
+    logger.info(`[CronMonitor] Reinitialized ${jobName}`);
   }
 }

@@ -5,6 +5,7 @@ import { upstoxAuthService } from "../services/upstoxAuthService";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { loadEnv } from "../config/env";
+import { logger } from "../utils/logger";
 
 loadEnv();
 const prisma = new PrismaClient();
@@ -46,7 +47,7 @@ async function getActiveOptions(): Promise<InstrumentMap[]> {
       upstoxName: s.upstox_symbol || "", // Handle null safety
     }));
   } catch (error: any) {
-    console.error("❌ Failed to fetch active options from DB:", error.message);
+    logger.error("❌ Failed to fetch active options from DB:", error.message);
     return [];
   }
 }
@@ -74,7 +75,7 @@ async function fetchQuotes(keys: string[], accessToken: string) {
     }
     return null;
   } catch (error: any) {
-    console.error(
+    logger.error(
       "❌ Failed to fetch quotes batch:",
       error.response?.data?.message || error.message
     );
@@ -87,14 +88,14 @@ async function fetchQuotes(keys: string[], accessToken: string) {
  */
 export async function executeFiveMinuteJob() {
   const startTime = Date.now();
-  console.log(`⏰ Starting 5-minute NSE Options Job at ${new Date().toISOString()}`);
+  logger.info(`⏰ Starting 5-minute NSE Options Job at ${new Date().toISOString()}`);
 
   try {
     // 1. Get Access Token (Must be valid)
     // 1. Get Access Token (Must be valid)
     const token = await upstoxAuthService.getAccessToken(); // Use service!
     if (!token) {
-      console.error("? No Upstox Access Token available. Skipping job.");
+      logger.error("? No Upstox Access Token available. Skipping job.");
       // Optional: Trigger re-login or alert
       return;
     }
@@ -103,11 +104,11 @@ export async function executeFiveMinuteJob() {
     // 2. Get Active Instruments
     const instruments = await getActiveOptions();
     if (instruments.length === 0) {
-      console.log("⚠️ No active options with Upstox IDs found.");
+      logger.info("⚠️ No active options with Upstox IDs found.");
       return;
     }
 
-    console.log(`✅ Found ${instruments.length} active options. Processing batches...`);
+    logger.info(`✅ Found ${instruments.length} active options. Processing batches...`);
 
     // 3. Batch Process
     let totalInserted = 0;
@@ -168,10 +169,10 @@ export async function executeFiveMinuteJob() {
     }
 
     const duration = (Date.now() - startTime) / 1000;
-    console.log(`✅ Job Completed. Inserted ${totalInserted} records in ${duration.toFixed(2)}s.`);
+    logger.info(`✅ Job Completed. Inserted ${totalInserted} records in ${duration.toFixed(2)}s.`);
 
   } catch (error: any) {
-    console.error("❌ Critical Error in 5-minute Options Job:", error.message);
+    logger.error("❌ Critical Error in 5-minute Options Job:", error.message);
     // await sendEmailNotification(...) // Optional failure alert
   }
 }
@@ -191,7 +192,7 @@ export function initializeHourlyTicksNseOptJob(): void {
     timezone: "Asia/Kolkata",
   });
 
-  console.log(`? 5-Minute Options Job Scheduled (${schedule})`);
+  logger.info(`? 5-Minute Options Job Scheduled (${schedule})`);
 
   // Optional: Run once on start for DEV verification
   if (process.env.NODE_ENV === "development") {

@@ -1,5 +1,6 @@
 import axios from "axios";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
+import { logger } from "../utils/logger";
 
 // OHLC data structure from Upstox V3 API
 export interface OhlcCandle {
@@ -63,10 +64,10 @@ export const upstoxOhlcService = {
                 return response.data.data;
             }
 
-            console.error("❌ Upstox OHLC V3 API returned non-success status:", response.data.status);
+            logger.error("❌ Upstox OHLC V3 API returned non-success status:", response.data.status);
             return null;
         } catch (error: any) {
-            console.error(
+            logger.error(
                 "❌ Failed to fetch OHLC data:",
                 error.response?.data?.errors || error.message
             );

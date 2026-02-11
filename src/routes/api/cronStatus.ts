@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getAllJobStatuses } from '../../utils/cronMonitor';
+import { logger } from "../../utils/logger";
 
 const router = Router();
 
@@ -17,7 +18,7 @@ router.get('/', (req: Request, res: Response) => {
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {
-    console.error('Error fetching cron status:', error);
+    logger.error('Error fetching cron status:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch cron status',

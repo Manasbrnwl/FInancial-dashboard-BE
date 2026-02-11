@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
 
 /**
  * Get aggregated arbitrage history for a specific instrument
@@ -95,11 +96,11 @@ export const getSymbolArbitrageHistory = async (req: Request, res: Response) => 
             data: mergedData,
         });
     } catch (error) {
-        console.error("Error fetching arbitrage history:", error);
+        logger.error("Error fetching arbitrage history:", error);
         return res.status(500).json({
             success: false,
             message: "Internal server error",
-            error: error instanceof Error ? error.message : "Unknown error",
+            ...(process.env.NODE_ENV !== "production" && { error: error instanceof Error ? error.message : "Unknown error" }),
         });
     }
 };

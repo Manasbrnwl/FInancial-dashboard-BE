@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
 
 // OHLC Data NSE
 export const getOhlcDataNSE = async (req: Request, res: Response) => {
@@ -44,11 +45,11 @@ export const getOhlcDataNSE = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error("Error fetching OHLC NSE data:", error);
+    logger.error("Error fetching OHLC NSE data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch OHLC NSE data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -96,11 +97,11 @@ export const getTicksDataNSEEQ = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error("Error fetching Ticks NSE EQ data:", error);
+    logger.error("Error fetching Ticks NSE EQ data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch Ticks NSE EQ data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -148,11 +149,11 @@ export const getTicksDataNSEFUT = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error("Error fetching Ticks NSE FUT data:", error);
+    logger.error("Error fetching Ticks NSE FUT data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch Ticks NSE FUT data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -200,11 +201,11 @@ export const getTicksDataNSEOPT = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error("Error fetching Ticks NSE OPT data:", error);
+    logger.error("Error fetching Ticks NSE OPT data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch Ticks NSE OPT data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -259,11 +260,11 @@ export const getOhlcDataBSE = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error("Error fetching OHLC BSE data:", error);
+    logger.error("Error fetching OHLC BSE data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch OHLC BSE data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };

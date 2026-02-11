@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
+import { logger } from "../utils/logger";
 
 const prisma = new PrismaClient();
 
@@ -30,11 +31,11 @@ export const getRecentCoveredCallAlerts = async (
             count: safeAlerts.length,
         });
     } catch (error: any) {
-        console.error("❌ Failed to fetch recent covered call alerts:", error?.message || error);
+        logger.error("❌ Failed to fetch recent covered call alerts:", error?.message || error);
         res.status(500).json({
             success: false,
             message: "Failed to fetch recent covered call alerts",
-            error: error?.message,
+            ...(process.env.NODE_ENV !== "production" && { error: error?.message }),
         });
     }
 };
@@ -102,11 +103,11 @@ export const getCoveredCallAlertHistory = async (
             },
         });
     } catch (error: any) {
-        console.error("❌ Failed to fetch covered call alert history:", error?.message || error);
+        logger.error("❌ Failed to fetch covered call alert history:", error?.message || error);
         res.status(500).json({
             success: false,
             message: "Failed to fetch covered call alert history",
-            error: error?.message,
+            ...(process.env.NODE_ENV !== "production" && { error: error?.message }),
         });
     }
 };
@@ -150,11 +151,11 @@ export const getCoveredCallAlertConfig = async (
             data: config,
         });
     } catch (error: any) {
-        console.error("❌ Failed to fetch covered call alert config:", error?.message || error);
+        logger.error("❌ Failed to fetch covered call alert config:", error?.message || error);
         res.status(500).json({
             success: false,
             message: "Failed to fetch covered call alert config",
-            error: error?.message,
+            ...(process.env.NODE_ENV !== "production" && { error: error?.message }),
         });
     }
 };
@@ -203,11 +204,11 @@ export const updateCoveredCallAlertConfig = async (
             data: config,
         });
     } catch (error: any) {
-        console.error("❌ Failed to update covered call alert config:", error?.message || error);
+        logger.error("❌ Failed to update covered call alert config:", error?.message || error);
         res.status(500).json({
             success: false,
             message: "Failed to update covered call alert config",
-            error: error?.message,
+            ...(process.env.NODE_ENV !== "production" && { error: error?.message }),
         });
     }
 };

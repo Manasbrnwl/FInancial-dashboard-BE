@@ -1,5 +1,6 @@
 import { dhanTokenManager } from "../services/dhanTokenManager";
 import { loadEnv } from "../config/env";
+import { logger } from "../utils/logger";
 
 loadEnv();
 
@@ -13,7 +14,7 @@ export async function initializeDhanToken(): Promise<void> {
     const initialToken = process.env.DHAN_ACCESS_TOKEN;
 
     if (!initialToken) {
-      console.error(
+      logger.error(
         "❌ DHAN_ACCESS_TOKEN not found in environment variables"
       );
       throw new Error(
@@ -22,7 +23,7 @@ export async function initializeDhanToken(): Promise<void> {
     }
 
     if (!process.env.DHAN_CLIENT_ID) {
-      console.error(
+      logger.error(
         "❌ DHAN_CLIENT_ID not found in environment variables"
       );
       throw new Error(
@@ -34,10 +35,10 @@ export async function initializeDhanToken(): Promise<void> {
     await dhanTokenManager.initialize(initialToken);
 
     if (process.env.NODE_ENV === "development") {
-      console.log("✅ DhanHQ token manager initialized successfully");
+      logger.info("✅ DhanHQ token manager initialized successfully");
     }
   } catch (error: any) {
-    console.error(
+    logger.error(
       "❌ Failed to initialize DhanHQ token manager:",
       error.message
     );

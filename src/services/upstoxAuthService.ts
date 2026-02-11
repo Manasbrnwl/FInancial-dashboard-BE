@@ -1,6 +1,7 @@
 import axios from "axios";
 import { PrismaClient } from "@prisma/client";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
+import { logger } from "../utils/logger";
 
 let cachedAccessToken: string | null = null;
 let tokenExpiry: number | null = null;
@@ -55,10 +56,10 @@ export const upstoxAuthService = {
             await prisma.$disconnect();
 
             cachedAccessToken = access_token;
-            console.log("? Upstox Access Token generated and saved to DB");
+            logger.info("? Upstox Access Token generated and saved to DB");
             return access_token;
         } catch (error: any) {
-            console.error("? Failed to generate Upstox access token:", error.response?.data || error.message);
+            logger.error("? Failed to generate Upstox access token:", error.response?.data || error.message);
             throw error;
         }
     },
@@ -84,7 +85,7 @@ export const upstoxAuthService = {
             }
             return null;
         } catch (error: any) {
-            console.error("? Failed to fetch token from DB:", error.message);
+            logger.error("? Failed to fetch token from DB:", error.message);
             return null;
         }
     },

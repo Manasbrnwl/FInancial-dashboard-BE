@@ -54,7 +54,7 @@ function parseContract(text:string) {
   
 //   Example usage
 //   const input = "DRREDDY25SEPFUT";
-//   console.log(parseContract(input)); // [ 'DRREDDY25SEPFUT', 'DRREDDY', '2025-SEPT-29', 'FUT' ]
+//   logger.info(parseContract(input)); // [ 'DRREDDY25SEPFUT', 'DRREDDY', '2025-SEPT-29', 'FUT' ]
 
 export {parseContract};
   

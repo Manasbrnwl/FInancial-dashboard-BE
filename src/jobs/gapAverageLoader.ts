@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { loadGapBaselines } from "../cache/gapAverageCache";
 import { loadEnv } from "../config/env";
+import { logger } from "../utils/logger";
 
 loadEnv();
 
@@ -9,7 +10,7 @@ const CRON_EXPRESSION = process.env.GAP_BASELINE_LOAD_CRON || "0 9 * * 1-5"; // 
 export function initializeGapAverageLoader(): void {
   // Prime cache on startup
   loadGapBaselines().catch((error: any) => {
-    console.error("? Failed to load gap baselines on startup:", error?.message || error);
+    logger.error("? Failed to load gap baselines on startup:", error?.message || error);
   });
 
   cron.schedule(
@@ -18,14 +19,14 @@ export function initializeGapAverageLoader(): void {
       try {
         await loadGapBaselines();
       } catch (error: any) {
-        console.error("? Failed to refresh gap baselines:", error?.message || error);
+        logger.error("? Failed to refresh gap baselines:", error?.message || error);
       }
     },
     { timezone: "Asia/Kolkata" }
   );
 
   if (process.env.NODE_ENV === "development") {
-    console.log(
+    logger.info(
       `?? Gap baseline loader scheduled with cron "${CRON_EXPRESSION}" (IST timezone)`
     );
   }

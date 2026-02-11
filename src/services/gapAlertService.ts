@@ -4,6 +4,7 @@ import { getGapBaseline } from "../cache/gapAverageCache";
 import { loadEnv } from "../config/env";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { sendSmsNotification } from "../utils/sendSms";
+import { logger } from "../utils/logger";
 
 loadEnv();
 
@@ -207,7 +208,7 @@ export async function triggerAlert({
 
   const trend = direction === "positive" ? "Uptrend" : "Downtrend";
 
-  console.log(
+  logger.info(
     `?? Gap alert: ${instrumentName} ${alertType} deviation ${payload.deviationPercent}% (slot ${timeSlot}) | Trend: ${trend}`
   );
 
@@ -299,7 +300,7 @@ export async function triggerAlert({
         sendEmailNotification(email, subject, text, html)
       )
     ).catch((err) =>
-      console.error("? Failed to send gap alert emails:", err?.message || err)
+      logger.error("? Failed to send gap alert emails:", err?.message || err)
     );
   }
 
@@ -311,7 +312,7 @@ export async function triggerAlert({
         sendSmsNotification(phone, smsMessage)
       )
     ).catch((err) =>
-      console.error("? Failed to send gap alert SMS:", err?.message || err)
+      logger.error("? Failed to send gap alert SMS:", err?.message || err)
     );
   }
 }
@@ -464,7 +465,7 @@ export async function processGapData(
         });
       }
     } catch (error: any) {
-      console.error(
+      logger.error(
         `? Failed to process gap data for ${gap.instrumentName}:`,
         error.message
       );

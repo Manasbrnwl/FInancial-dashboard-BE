@@ -4,6 +4,7 @@ import { sendEmailNotification } from "../utils/sendEmail";
 import { parseContract } from "./helper";
 import { getNseFuturesHistory } from "./nseFuturesHistory";
 import { createBatchInserter } from "../utils/batchInsert";
+import { logger } from "../utils/logger";
 
 const prisma = new PrismaClient();
 
@@ -27,7 +28,7 @@ async function insertFutIntoDataBase(date: any) {
       const date = dates[index];
       const response = await getNseFuturesHistory(date);
       if (response == false) {
-        console.log("skipped ", date);
+        logger.info("skipped ", date);
       } else {
         // Collect all instruments, symbols, and futures data
         const instrumentsToUpsert: Array<{ exchange: string; instrument_type: string }> = [];
@@ -127,15 +128,15 @@ async function insertFutIntoDataBase(date: any) {
             }
           );
 
-          console.log(
+          logger.info(
             `📈 Futures for ${date}: ${result.inserted} processed, ${result.errors} errors`
           );
         }
       }
     }
-    console.log("✅ Completed all FUT data upload");
+    logger.info("✅ Completed all FUT data upload");
   } catch (error: any) {
-    console.log("Future :", error);
+    logger.info("Future :", error);
     // await sendEmailNotification(
     //   process.env.RECEIVER_EMAIL || "tech@anfy.in",
     //   "Finance Dashboard History Cron",

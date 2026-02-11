@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
 
 interface EquityRow {
   id: number;
@@ -46,11 +47,11 @@ export const getEquitiesWithDerivatives = async (
       })),
     });
   } catch (error: any) {
-    console.error("Error fetching equities with derivatives:", error);
+    logger.error("Error fetching equities with derivatives:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch equities",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -89,11 +90,11 @@ export const getSymbolsForEquity = async (req: Request, res: Response) => {
       })),
     });
   } catch (error: any) {
-    console.error("Error fetching symbols for equity:", error);
+    logger.error("Error fetching symbols for equity:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch symbols for equity",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };

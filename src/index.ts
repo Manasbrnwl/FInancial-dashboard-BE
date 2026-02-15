@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import { createServer } from "http";
 import morgan from "morgan";
 import cron from "node-cron";
-import { devLog, devError } from "./utils/errorLogger";
+import { devLog, devError, prodError } from "./utils/errorLogger";
 import { globalErrorHandler } from "./middleware/errorHandler";
 // import healthRouter from "./routes/health";
 import websocketRouter from "./routes/websocket";
@@ -88,6 +88,7 @@ async function syncUpstoxInstruments() {
     // devLog("✅ Weekly Upstox instrument sync completed");
   } catch (error: any) {
     devError("❌ Failed to sync Upstox instruments:", error.message);
+    prodError("Failed to sync Upstox instruments");
   }
 }
 
@@ -123,6 +124,7 @@ async function initializeWebSocketService() {
     await upstoxWebSocketService.start();
   } catch (error: any) {
     devError("❌ Failed to initialize Upstox WebSocket service:", error.message);
+    prodError("Failed to initialize Upstox WebSocket service");
   }
 }
 

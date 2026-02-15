@@ -1,5 +1,5 @@
 import { upstoxWebSocketService } from '../services/upstoxWebsocketService';
-import { devLog, devError } from './errorLogger';
+import { devLog, devError, prodError } from './errorLogger';
 
 /**
  * WebSocket Manager - Arbitrage functionality
@@ -16,6 +16,7 @@ export class WebSocketManager {
 
     if (!status.isConnected) {
       devError('❌ Cannot subscribe: Upstox WebSocket not connected');
+      prodError('WebSocket subscribe failed: not connected');
       return;
     }
 
@@ -31,6 +32,7 @@ export class WebSocketManager {
 
     if (!status.isConnected) {
       devError('❌ Cannot unsubscribe: Upstox WebSocket not connected');
+      prodError('WebSocket unsubscribe failed: not connected');
       return;
     }
 

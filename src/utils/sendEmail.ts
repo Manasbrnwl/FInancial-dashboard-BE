@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import { logger } from "./logger";
-import { devError, devLog } from "./errorLogger";
+import { devError, devLog, prodError } from "./errorLogger";
 
 dotenv.config();
 
@@ -47,6 +47,7 @@ const sendEmailNotification = async (
     return true;
   } catch (error: any) {
     devError("Failed to send OTP email:", error?.message || error);
+    prodError("Failed to send email");
     throw error;
   }
 };

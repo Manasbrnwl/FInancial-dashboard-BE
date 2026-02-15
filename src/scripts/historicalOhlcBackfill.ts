@@ -4,7 +4,7 @@ import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { loadEnv } from "../config/env";
 import { logger } from "../utils/logger";
-import { devError, devLog } from "../utils/errorLogger";
+import { devError, devLog, prodError } from "../utils/errorLogger";
 
 loadEnv();
 const prisma = new PrismaClient();
@@ -89,6 +89,7 @@ async function fetchHistoricalCandles(
                 `❌ Failed to fetch historical data for ${instrumentKey}:`,
                 error.response?.data?.errors || error.message
             );
+            prodError("Failed to fetch historical data");
         }
         return [];
     }
@@ -380,6 +381,7 @@ export async function backfillHistoricalOhlc(
         const token = await upstoxAuthService.getAccessToken();
         if (!token) {
             devError("❌ No Upstox Access Token available. Aborting backfill.");
+            prodError("No Upstox Access Token available for backfill");
             return;
         }
 
@@ -418,6 +420,7 @@ export async function backfillHistoricalOhlc(
 
     } catch (error: any) {
         devError("❌ Critical Error in Historical OHLC Backfill:", error.message);
+        prodError("Critical error in historical OHLC backfill");
     }
 }
 
@@ -437,6 +440,7 @@ if (require.main === module) {
         })
         .catch((err) => {
             devError("Backfill script failed:", err);
+            prodError("Backfill script failed");
             process.exit(1);
         });
 }

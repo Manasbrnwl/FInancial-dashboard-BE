@@ -10,7 +10,7 @@ import { updateJobStatus, initializeJobStatus } from "../utils/cronMonitor";
 import { isDhanTokenReady } from "./dhanTokenInitJob";
 import { sendEmailNotification } from "../utils/sendEmail";
 import prisma from "../config/prisma";
-import { devLog, devError } from "../utils/errorLogger";
+import { devLog, devError, prodError } from "../utils/errorLogger";
 
 // Run every Sunday at 2:00 AM
 const CRON_EXPRESSION = "0 2 * * 0";
@@ -53,6 +53,7 @@ async function fetchNseEquityInstruments(): Promise<MarginCalculatorRequest[]> {
     }));
   } catch (error: any) {
     devError("❌ Error fetching NSE EQ instruments:", error.message);
+    prodError("Error fetching NSE EQ instruments");
     return [];
   }
 }
@@ -98,6 +99,7 @@ async function fetchNseFnoInstruments(): Promise<MarginCalculatorRequest[]> {
     }));
   } catch (error: any) {
     devError("❌ Error fetching NSE F&O instruments:", error.message);
+    prodError("Error fetching NSE F&O instruments");
     return [];
   }
 }
@@ -141,6 +143,7 @@ async function fetchBseEquityInstruments(): Promise<MarginCalculatorRequest[]> {
     }));
   } catch (error: any) {
     devError("❌ Error fetching BSE EQ instruments:", error.message);
+    prodError("Error fetching BSE EQ instruments");
     return [];
   }
 }
@@ -161,6 +164,7 @@ async function calculateAllMargins() {
     // Check if Dhan token is ready
     if (!isDhanTokenReady()) {
       devError("❌ DhanHQ token manager not initialized");
+      prodError("DhanHQ token manager not initialized");
       throw new Error("DhanHQ token manager not initialized");
     }
 
@@ -268,6 +272,7 @@ async function calculateAllMargins() {
   } catch (error: any) {
     const duration = Date.now() - startTime;
     devError("\n❌ Weekly margin calculation failed:", error.message);
+    prodError("Weekly margin calculation failed");
 
     updateJobStatus(
       "weeklyMarginCalculatorJob",

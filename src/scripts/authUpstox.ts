@@ -2,7 +2,7 @@ import express from "express";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { loadEnv } from "../config/env";
 import { logger } from "../utils/logger";
-import { devError, devLog } from "../utils/errorLogger";
+import { devError, devLog, prodError } from "../utils/errorLogger";
 
 loadEnv();
 
@@ -47,6 +47,7 @@ async function startAuth() {
 
             } catch (error: any) {
                 devError("? Failed to generate token:", error.message);
+                prodError("Failed to generate Upstox token");
             } finally {
                 server.close();
                 process.exit(0);
@@ -54,6 +55,7 @@ async function startAuth() {
         } else {
             res.status(400).send("No code returned.");
             devError("No code returned in callback.");
+            prodError("No authorization code returned in callback");
             server.close();
             process.exit(1);
         }

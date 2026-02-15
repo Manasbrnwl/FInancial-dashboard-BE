@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { CronExpressionParser } from 'cron-parser';
-import { devLog, devError } from "./errorLogger";
+import { devLog, devError, prodError } from "./errorLogger";
 
 const HISTORY_FILE = path.join(__dirname, '../../history.json');
 
@@ -28,6 +28,7 @@ export function loadHistory(): CronHistory {
     }
   } catch (error) {
     devError('Error loading cron history:', error);
+    prodError('Failed to load cron history');
   }
   return {};
 }
@@ -40,6 +41,7 @@ export function saveHistory(history: CronHistory): void {
     fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
   } catch (error) {
     devError('Error saving cron history:', error);
+    prodError('Failed to save cron history');
   }
 }
 
@@ -52,6 +54,7 @@ export function getNextCronRun(cronExpression: string): string {
     return interval.next().toDate().toISOString();
   } catch (error) {
     devError('Error calculating next cron run:', error);
+    prodError('Failed to calculate next cron run');
     return '';
   }
 }

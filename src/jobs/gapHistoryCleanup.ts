@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { PrismaClient } from "@prisma/client";
 import { loadEnv } from "../config/env";
-import { devLog, devError } from "../utils/errorLogger";
+import { devLog, devError, prodError } from "../utils/errorLogger";
 
 loadEnv();
 
@@ -26,6 +26,7 @@ export function initializeGapHistoryCleanupJob(): void {
         devLog(`?? Cleaned gap_time_series older than ${retentionDays} days`);
       } catch (error: any) {
         devError("? Failed to cleanup gap_time_series:", error?.message || error);
+        prodError("Failed to cleanup gap_time_series");
       }
     },
     { timezone: "Asia/Kolkata" }

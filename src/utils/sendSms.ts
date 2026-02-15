@@ -1,6 +1,6 @@
 import axios from "axios";
 import { loadEnv } from "../config/env";
-import { devError, devWarn } from "./errorLogger";
+import { devError, devWarn, prodError } from "./errorLogger";
 
 loadEnv();
 
@@ -40,6 +40,7 @@ export async function sendSmsNotification(
     return true;
   } catch (error: any) {
     devError("? Failed to send SMS:", error?.message || error);
+    prodError("Failed to send SMS");
     return false;
   }
 }

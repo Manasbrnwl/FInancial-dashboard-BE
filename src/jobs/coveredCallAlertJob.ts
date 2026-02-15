@@ -5,7 +5,7 @@ import { processCoveredCallData } from "../services/coveredCallAlertService";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { loadEnv } from "../config/env";
-import { devLog, devError } from "../utils/errorLogger";
+import { devLog, devError, prodError } from "../utils/errorLogger";
 
 loadEnv();
 const prisma = new PrismaClient();
@@ -89,6 +89,7 @@ async function getActiveOptions(): Promise<OptionInstrument[]> {
         }));
     } catch (error: any) {
         devError("❌ Failed to fetch active options from DB:", error.message);
+        prodError("Failed to fetch active options from DB");
         return [];
     }
 }
@@ -115,6 +116,7 @@ async function fetchQuotes(keys: string[], accessToken: string): Promise<Record<
             "❌ Failed to fetch quotes batch:",
             error.response?.data?.errors || error.message
         );
+        prodError("Failed to fetch quotes batch");
         return null;
     }
 }
@@ -226,6 +228,7 @@ async function getCoveredCallCandidates(accessToken: string): Promise<CoveredCal
         return candidates;
     } catch (error: any) {
         devError("❌ Failed to fetch covered call candidates:", error.message);
+        prodError("Failed to fetch covered call candidates");
         return [];
     }
 }
@@ -242,6 +245,7 @@ export async function executeCoveredCallAlertJob() {
         const token = await upstoxAuthService.getAccessToken();
         if (!token) {
             devError("❌ No Upstox Access Token available. Skipping job.");
+            prodError("No Upstox Access Token available for covered call job");
             return;
         }
 
@@ -274,6 +278,7 @@ export async function executeCoveredCallAlertJob() {
         devLog(`✅ Covered Call Alert Job Completed in ${duration.toFixed(2)}s.`);
     } catch (error: any) {
         devError("❌ Critical Error in Covered Call Alert Job:", error.message);
+        prodError("Critical error in covered call alert job");
     }
 }
 

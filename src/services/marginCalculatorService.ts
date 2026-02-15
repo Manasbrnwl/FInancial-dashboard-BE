@@ -2,7 +2,7 @@ import axios from "axios";
 import { config } from "dotenv";
 import { getDhanAccessToken } from "../config/store";
 import prisma from "../config/prisma";
-import { devLog, devWarn, devError } from "../utils/errorLogger";
+import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
 
 config();
 
@@ -126,6 +126,7 @@ class MarginCalculatorService {
       return response.data;
     } catch (error: any) {
       devError("❌ Error calculating margin:", error.message);
+      prodError("Error calculating margin");
       if (error.response) {
         devError(
           `API Error (${error.response.status}):`,
@@ -208,6 +209,7 @@ class MarginCalculatorService {
         }:`,
         error.message
       );
+      prodError("Failed to calculate and store margin");
       throw error;
     }
   }

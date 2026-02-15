@@ -1,4 +1,4 @@
-import { devError } from "../utils/errorLogger";
+import { devError, prodError } from "../utils/errorLogger";
 import { logger } from "../utils/logger";
 function parseContract(symbol: string) {
     // Array of regex patterns to try in order
@@ -39,6 +39,7 @@ function parseContract(symbol: string) {
     // Validate the date
     if (isNaN(date.getTime())) {
         devError(`Invalid date: ${year}-${month}-${day}`);
+        prodError("Invalid date in contract parsing");
         return null;
     }
 

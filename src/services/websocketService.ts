@@ -2,7 +2,7 @@ import WebSocket from 'ws';
 import { loadEnv } from '../config/env';
 import { sendEmailNotification } from '../utils/sendEmail';
 import { socketIOService } from './socketioService';
-import { devLog, devWarn, devError } from "../utils/errorLogger";
+import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
 
 loadEnv();
 
@@ -154,6 +154,7 @@ export class TrueDataWebSocketService {
       await this.sendNotificationEmail('started', {});
     } catch (error: any) {
       devError('❌ Failed to start WebSocket service:', error.message);
+      prodError('Failed to start WebSocket service');
       await this.sendNotificationEmail('failed', { errorMessage: error.message });
     }
   }
@@ -199,6 +200,7 @@ export class TrueDataWebSocketService {
 
         this.ws.on('error', (error: Error) => {
           devError('❌ WebSocket error:', error.message);
+          prodError('WebSocket connection error');
           this.isConnected = false;
           this.stopHeartbeat();
           reject(error);
@@ -275,6 +277,7 @@ export class TrueDataWebSocketService {
 
     } catch (error: any) {
       devError('❌ Error handling WebSocket message:', error.message);
+      prodError('Error handling WebSocket message');
     }
   }
 
@@ -294,6 +297,7 @@ export class TrueDataWebSocketService {
       });
     } catch (error: any) {
       devError('❌ Error handling subscription response:', error.message);
+      prodError('Error handling subscription response');
     }
   }
 
@@ -364,6 +368,7 @@ export class TrueDataWebSocketService {
 
     } catch (error: any) {
       devError('❌ Error handling trade update:', error.message);
+      prodError('Error handling trade update');
     }
   }
 
@@ -414,6 +419,7 @@ export class TrueDataWebSocketService {
 
     } catch (error: any) {
       devError('❌ Error handling bid-ask update:', error.message);
+      prodError('Error handling bid-ask update');
     }
   }
 
@@ -458,6 +464,7 @@ export class TrueDataWebSocketService {
 
     } catch (error: any) {
       devError('❌ Error handling tick update:', error.message);
+      prodError('Error handling tick update');
     }
   }
 
@@ -484,6 +491,7 @@ export class TrueDataWebSocketService {
 
     } catch (error: any) {
       devError('❌ Error processing market data:', error.message);
+      prodError('Error processing market data');
     }
   }
 
@@ -493,6 +501,7 @@ export class TrueDataWebSocketService {
   public subscribeToSymbols(symbols: string[]): void {
     if (!this.isConnected || !this.ws) {
       devError('❌ Cannot subscribe: WebSocket not connected');
+      prodError('WebSocket subscribe failed: not connected');
       return;
     }
 
@@ -506,6 +515,7 @@ export class TrueDataWebSocketService {
       // devLog('📡 Subscription request sent for symbols:', symbols);
     } catch (error: any) {
       devError('❌ Error sending subscription:', error.message);
+      prodError('Error sending WebSocket subscription');
     }
   }
 
@@ -515,6 +525,7 @@ export class TrueDataWebSocketService {
   public unsubscribeFromSymbols(symbols: string[]): void {
     if (!this.isConnected || !this.ws) {
       devError('❌ Cannot unsubscribe: WebSocket not connected');
+      prodError('WebSocket unsubscribe failed: not connected');
       return;
     }
 
@@ -536,6 +547,7 @@ export class TrueDataWebSocketService {
       });
     } catch (error: any) {
       devError('❌ Error sending unsubscription:', error.message);
+      prodError('Error sending WebSocket unsubscription');
     }
   }
 
@@ -550,6 +562,7 @@ export class TrueDataWebSocketService {
           // devLog('💓 Heartbeat sent');
         } catch (error: any) {
           devError('❌ Error sending heartbeat:', error.message);
+          prodError('Error sending heartbeat');
         }
       }
     }, 30000); // Send heartbeat every 30 seconds
@@ -578,6 +591,7 @@ export class TrueDataWebSocketService {
 
     if (this.reconnectAttempts >= this.config.maxReconnectAttempts) {
       devError('❌ Max reconnection attempts reached. Stopping reconnection.');
+      prodError('Max WebSocket reconnection attempts reached');
       this.sendNotificationEmail('failed', {
         errorMessage: `Max reconnection attempts (${this.config.maxReconnectAttempts}) reached`
       });
@@ -595,6 +609,7 @@ export class TrueDataWebSocketService {
         await this.connect();
       } catch (error: any) {
         devError('❌ Reconnection failed:', error.message);
+        prodError('WebSocket reconnection failed');
         this.handleReconnection();
       }
     }, this.config.reconnectInterval);
@@ -678,6 +693,7 @@ export class TrueDataWebSocketService {
       devLog(`📧 Email notification sent: ${status}`);
     } catch (error: any) {
       devError(`❌ Failed to send email notification:`, error.message);
+      prodError('Failed to send WebSocket notification email');
     }
   }
 

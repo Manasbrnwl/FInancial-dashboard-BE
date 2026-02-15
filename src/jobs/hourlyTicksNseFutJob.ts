@@ -8,7 +8,7 @@ import { sendEmailNotification } from "../utils/sendEmail";
 import { rateLimiter } from "../utils/rateLimiter";
 import { updateJobStatus, initializeJobStatus } from "../utils/cronMonitor";
 import { processGapData } from "../services/gapAlertService";
-import { devLog, devWarn, devError } from "../utils/errorLogger";
+import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
 
 loadEnv();
 
@@ -68,6 +68,7 @@ async function fetchAccessToken(): Promise<boolean> {
       return true;
     } else {
       devError("? No access token received from API");
+      prodError("No access token received from API for futures job");
       return fetchAccessToken();
     }
   } catch (error: any) {
@@ -75,6 +76,7 @@ async function fetchAccessToken(): Promise<boolean> {
       "? Failed to fetch access token for hourly job:",
       error.message
     );
+    prodError("Failed to fetch access token for hourly futures job");
     return fetchAccessToken();
   }
 }
@@ -159,6 +161,7 @@ async function getNseInstruments(): Promise<SymbolInstruments[]> {
     return symbolInstruments;
   } catch (error: any) {
     devError("? Failed to fetch NSE Futures instruments:", error.message);
+    prodError("Failed to fetch NSE Futures instruments");
     return [];
   }
 }
@@ -203,6 +206,7 @@ async function bulkInsertTicksData(records: any[]): Promise<number> {
     return result.count;
   } catch (error: any) {
     devError(`? Failed to bulk insert ticks data:`, error.message);
+    prodError("Failed to bulk insert futures ticks data");
     return 0;
   }
 }
@@ -220,6 +224,7 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
 
   if (!accessToken) {
     devError("? No access token available for historical data fetch");
+    prodError("No access token available for futures historical data");
     return {
       processedSymbols: 0,
       successfulLegRequests: 0,
@@ -311,6 +316,7 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
           `? Failed to fetch data for ${leg.instrumentType}:`,
           error.message
         );
+        prodError("Failed to fetch futures data for instrument");
       }
     }
 
@@ -412,6 +418,7 @@ async function fetchHistoricalData(symbols: SymbolInstruments[]): Promise<{
     } catch (error: any) {
       if (process.env.NODE_ENV === "development") {
         devError("? Failed to process gap data:", error.message);
+        prodError("Failed to process gap data");
       }
     }
   }
@@ -515,6 +522,7 @@ async function sendHourlyJobEmail(
     }
   } catch (error: any) {
     devError(`? Failed to send email notification:`, error.message);
+    prodError("Failed to send email notification");
   }
 }
 
@@ -583,6 +591,7 @@ async function executeHourlyJob(): Promise<void> {
       }
     } else {
       devError("? Skipping instrument query due to login failure");
+      prodError("Skipping futures job due to login failure");
 
       await sendHourlyJobEmail("failed", {
         errorMessage: "Failed to fetch access token",
@@ -605,6 +614,7 @@ async function executeHourlyJob(): Promise<void> {
     }
   } catch (error: any) {
     devError("? Error in hourly NSE Futures job:", error.message);
+    prodError("Error in hourly NSE Futures job");
 
     await sendHourlyJobEmail("failed", {
       errorMessage: error.message,

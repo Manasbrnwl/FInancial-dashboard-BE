@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { sendEmailNotification } from "../utils/sendEmail";
-import { devLog, devError } from "../utils/errorLogger";
+import { devLog, devError, prodError } from "../utils/errorLogger";
 
 const TARGET_EMAIL = process.env.GAP_ALERT_EMAILS;
 
@@ -30,10 +30,12 @@ async function sendLoginReminder() {
             devLog(`? Login reminder email sent to ${TARGET_EMAIL}`);
         } else {
             devError("? No email recipient configured for login reminder.");
+            prodError("No email recipient configured for login reminder");
         }
 
     } catch (error: any) {
         devError("? Failed to send login reminder:", error.message);
+        prodError("Failed to send login reminder");
     }
 }
 

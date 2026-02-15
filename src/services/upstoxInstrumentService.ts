@@ -2,7 +2,7 @@ import axios from "axios";
 import zlib from "zlib";
 import { promisify } from "util";
 import prisma from "../config/prisma";
-import { devLog, devWarn, devError } from "../utils/errorLogger";
+import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
 
 const gunzip = promisify(zlib.gunzip);
 
@@ -77,6 +77,7 @@ export const upstoxInstrumentService = {
             return instruments.filter((inst) => ['NSE_EQ', 'BSE_EQ', 'NSE_FO'].includes(inst.exchange) && [null, '', 'CE', 'PE', 'FF'].includes(inst.isin) && ['EQUITY', 'OPTSTK', 'FUTSTK'].includes(inst.instrumentType));
         } catch (error: any) {
             devError(`❌ Failed to load ${exchange} instruments:`, error.message);
+            prodError(`Failed to load ${exchange} instruments`);
             return [];
         }
     },
@@ -100,6 +101,7 @@ export const upstoxInstrumentService = {
             devLog(`📈 Total instruments loaded: ${allInstruments.length} (NSE: ${nseInstruments.length}, BSE: ${bseInstruments.length})`);
         } catch (error: any) {
             devError("❌ Failed to load Upstox instruments:", error.message);
+            prodError("Failed to load Upstox instruments");
         }
     },
 
@@ -202,6 +204,7 @@ export const upstoxInstrumentService = {
                     errorCount++;
                     if (errorCount <= 5) {
                         devError(`❌ Failed to upsert ${inst.tradingSymbol}:`, error.message);
+                        prodError("Failed to upsert futures instrument");
                     }
                 }
             }
@@ -209,6 +212,7 @@ export const upstoxInstrumentService = {
             devLog(`✅ NSE Futures sync complete: ${successCount} success, ${errorCount} errors`);
         } catch (error: any) {
             devError("❌ Failed to load NSE Futures instruments:", error.message);
+            prodError("Failed to load NSE Futures instruments");
         }
     },
 
@@ -272,6 +276,7 @@ export const upstoxInstrumentService = {
                 errorCount++;
                 if (errorCount <= 5) {
                     devError(`❌ Failed to upsert ${inst.tradingSymbol}:`, error.message);
+                    prodError("Failed to upsert options instrument");
                 }
             }
         }

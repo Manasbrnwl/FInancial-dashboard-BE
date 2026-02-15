@@ -6,7 +6,7 @@ import {
   isValidUser,
   verifyOtpCode,
 } from "../services/authService";
-import { devError } from "../utils/errorLogger";
+import { devError, prodError } from "../utils/errorLogger";
 
 export const loginWithPassword = async (req: Request, res: Response) => {
   const { username } = req.body;
@@ -35,6 +35,7 @@ export const loginWithPassword = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Failed to generate OTP:", error);
+    prodError("Failed to generate OTP");
     return res.status(500).json({
       success: false,
       error: "Failed to generate OTP. Please try again.",
@@ -91,6 +92,7 @@ export const verifyOtpAndIssueToken = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Failed to verify OTP:", error);
+    prodError("Failed to verify OTP");
     return res.status(500).json({
       success: false,
       error: "Failed to verify OTP. Please try again.",

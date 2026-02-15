@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
-import { devError } from "../utils/errorLogger";
+import { devError, prodError } from "../utils/errorLogger";
 
 export const getArbitrageData = async (req: Request, res: Response) => {
   try {
@@ -89,6 +89,7 @@ export const getArbitrageData = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching Arbitrage data:", error);
+    prodError("Error fetching Arbitrage data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch Arbitrage data",
@@ -154,6 +155,7 @@ export const getNSEOptionsData = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching NSE Options data:", error);
+    prodError("Error fetching NSE Options data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE Options data",
@@ -217,6 +219,7 @@ export const getNSEFuturesData = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching NSE Futures data:", error);
+    prodError("Error fetching NSE Futures data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE Futures data",
@@ -283,6 +286,7 @@ export const getNSEFuturesTicksData = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching NSE Futures Ticks data:", error);
+    prodError("Error fetching NSE Futures Ticks data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE Futures Ticks data",
@@ -349,6 +353,7 @@ export const getNSEOptionsTicksData = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching NSE Options Ticks data:", error);
+    prodError("Error fetching NSE Options Ticks data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE Options Ticks data",

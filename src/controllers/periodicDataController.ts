@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
-import { devError } from "../utils/errorLogger";
+import { devError, prodError } from "../utils/errorLogger";
 
 // OHLC Data NSE
 export const getOhlcDataNSE = async (req: Request, res: Response) => {
@@ -47,6 +47,7 @@ export const getOhlcDataNSE = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching OHLC NSE data:", error);
+    prodError("Error fetching OHLC NSE data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch OHLC NSE data",
@@ -99,6 +100,7 @@ export const getTicksDataNSEEQ = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching Ticks NSE EQ data:", error);
+    prodError("Error fetching Ticks NSE EQ data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch Ticks NSE EQ data",
@@ -151,6 +153,7 @@ export const getTicksDataNSEFUT = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching Ticks NSE FUT data:", error);
+    prodError("Error fetching Ticks NSE FUT data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch Ticks NSE FUT data",
@@ -203,6 +206,7 @@ export const getTicksDataNSEOPT = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching Ticks NSE OPT data:", error);
+    prodError("Error fetching Ticks NSE OPT data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch Ticks NSE OPT data",
@@ -262,6 +266,7 @@ export const getOhlcDataBSE = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching OHLC BSE data:", error);
+    prodError("Error fetching OHLC BSE data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch OHLC BSE data",

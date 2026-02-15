@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { devLog, devWarn, devError } from "./errorLogger";
+import { devLog, devWarn, devError, prodError } from "./errorLogger";
 
 export interface BatchInsertOptions {
   chunkSize?: number;
@@ -70,6 +70,7 @@ export class BatchInserter {
           `❌ Error in chunk ${i + 1} for ${tableName}:`,
           error.message
         );
+        prodError(`Batch insert chunk failed for ${tableName}`);
 
         // Try individual inserts for failed chunk to identify problematic records
         await this.retryChunkIndividually(chunk, insertFunction, tableName);
@@ -105,6 +106,7 @@ export class BatchInserter {
           `❌ Individual record failed for ${tableName}:`,
           error.message
         );
+        prodError(`Individual record insert failed for ${tableName}`);
       }
     }
   }
@@ -180,6 +182,7 @@ export class BatchInserter {
               `❌ Instrument upsert failed for ${instrument.exchange}:${instrument.instrument_type}:`,
               error.message
             );
+            prodError("Instrument upsert failed");
           }
         }
       }
@@ -313,6 +316,7 @@ export class BatchInserter {
               `❌ Symbol upsert failed for ${symbolData.symbol}:`,
               error.message
             );
+            prodError("Symbol upsert failed");
           }
         }
       }
@@ -374,6 +378,7 @@ export class BatchInserter {
       } catch (error: any) {
         totalErrors += chunk.length;
         devError(`❌ Transaction chunk ${i + 1} failed:`, error.message);
+        prodError("Transaction chunk failed");
       }
     }
 

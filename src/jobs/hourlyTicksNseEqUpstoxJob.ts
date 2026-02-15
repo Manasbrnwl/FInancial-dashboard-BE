@@ -5,7 +5,7 @@ import { upstoxAuthService } from "../services/upstoxAuthService";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { loadEnv } from "../config/env";
-import { devLog, devError } from "../utils/errorLogger";
+import { devLog, devError, prodError } from "../utils/errorLogger";
 
 loadEnv();
 const prisma = new PrismaClient();
@@ -47,6 +47,7 @@ async function getActiveEquityInstruments(): Promise<InstrumentMap[]> {
         }));
     } catch (error: any) {
         devError("❌ Failed to fetch active equity instruments from DB:", error.message);
+        prodError("Failed to fetch active equity instruments from DB");
         return [];
     }
 }
@@ -73,6 +74,7 @@ async function fetchQuotes(keys: string[], accessToken: string) {
             "❌ Failed to fetch quotes batch:",
             error.response?.data?.errors || error.message
         );
+        prodError("Failed to fetch quotes batch");
         return null;
     }
 }
@@ -158,6 +160,7 @@ async function sendHourlyJobEmail(
         }
     } catch (error: any) {
         devError(`❌ Failed to send email notification:`, error.message);
+        prodError("Failed to send email notification");
     }
 }
 
@@ -176,6 +179,7 @@ export async function executeHourlyJob() {
         const token = await upstoxAuthService.getAccessToken();
         if (!token) {
             devError("? No Upstox Access Token available. Skipping job.");
+            prodError("No Upstox Access Token for equity job");
             await sendHourlyJobEmail("failed", { errorMessage: "No Upstox Access Token available" });
             return;
         }
@@ -271,6 +275,7 @@ export async function executeHourlyJob() {
 
     } catch (error: any) {
         devError("❌ Critical Error in 5-minute Equity Job:", error.message);
+        prodError("Critical error in 5-minute equity job");
         await sendHourlyJobEmail("failed", { errorMessage: error.message });
     }
 }

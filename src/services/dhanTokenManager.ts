@@ -4,7 +4,7 @@ import { config } from "dotenv";
 import cron from "node-cron";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { setDhanAccessToken } from "../config/store";
-import { devLog, devWarn, devError } from "../utils/errorLogger";
+import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
 
 config();
 
@@ -109,6 +109,7 @@ class DhanTokenManager {
       }
     } catch (error: any) {
       devError("❌ Failed to initialize DhanHQ token manager:", error.message);
+      prodError("Failed to initialize DhanHQ token manager");
       throw error;
     }
   }
@@ -131,6 +132,7 @@ class DhanTokenManager {
       return response.status === 200;
     } catch (error: any) {
       devError("❌ Token verification failed:", error.message);
+      prodError("DhanHQ token verification failed");
       return false;
     }
   }
@@ -191,6 +193,7 @@ class DhanTokenManager {
       }
     } catch (error: any) {
       devError("❌ Failed to renew DhanHQ token:", error.message);
+      prodError("Failed to renew DhanHQ token");
 
       // Send failure notification
       await this.sendNotification(
@@ -223,6 +226,7 @@ class DhanTokenManager {
         await this.renewToken();
       } catch (error: any) {
         devError("❌ Scheduled token renewal failed:", error.message);
+        prodError("Scheduled token renewal failed");
       }
     }, {
       timezone: "Asia/Kolkata",
@@ -294,6 +298,7 @@ class DhanTokenManager {
       );
     } catch (error: any) {
       devError("❌ Failed to send notification email:", error.message);
+      prodError("Failed to send notification email");
     }
   }
 

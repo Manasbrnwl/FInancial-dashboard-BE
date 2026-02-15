@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
 
-import { devError } from "../utils/errorLogger";
+import { devError, prodError } from "../utils/errorLogger";
 
 const normalizeBigInt = (row: Record<string, any>) =>
   Object.fromEntries(
@@ -128,6 +128,7 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching NSE futures data:", error);
+    prodError("Error fetching NSE futures data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE futures data",
@@ -150,6 +151,7 @@ export const getNseFuturesUnderlyings = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching NSE futures underlyings:", error);
+    prodError("Error fetching NSE futures underlyings");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE futures underlyings",
@@ -180,6 +182,7 @@ export const getNseFuturesExpiries = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching NSE futures expiries:", error);
+    prodError("Error fetching NSE futures expiries");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE futures expiries",
@@ -236,6 +239,7 @@ export const getFuturesDateRangeController = async (
     });
   } catch (error: any) {
     devError("Error fetching futures date range:", error);
+    prodError("Error fetching futures date range");
     res.status(500).json({
       success: false,
       error: "Failed to fetch futures date range",

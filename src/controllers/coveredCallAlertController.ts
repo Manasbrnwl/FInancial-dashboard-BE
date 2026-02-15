@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 
-import { devError } from "../utils/errorLogger";
+import { devError, prodError } from "../utils/errorLogger";
 
 const prisma = new PrismaClient();
 
@@ -33,6 +33,7 @@ export const getRecentCoveredCallAlerts = async (
         });
     } catch (error: any) {
         devError("❌ Failed to fetch recent covered call alerts:", error?.message || error);
+        prodError("Failed to fetch recent covered call alerts");
         res.status(500).json({
             success: false,
             message: "Failed to fetch recent covered call alerts",
@@ -105,6 +106,7 @@ export const getCoveredCallAlertHistory = async (
         });
     } catch (error: any) {
         devError("❌ Failed to fetch covered call alert history:", error?.message || error);
+        prodError("Failed to fetch covered call alert history");
         res.status(500).json({
             success: false,
             message: "Failed to fetch covered call alert history",
@@ -153,6 +155,7 @@ export const getCoveredCallAlertConfig = async (
         });
     } catch (error: any) {
         devError("❌ Failed to fetch covered call alert config:", error?.message || error);
+        prodError("Failed to fetch covered call alert config");
         res.status(500).json({
             success: false,
             message: "Failed to fetch covered call alert config",
@@ -206,6 +209,7 @@ export const updateCoveredCallAlertConfig = async (
         });
     } catch (error: any) {
         devError("❌ Failed to update covered call alert config:", error?.message || error);
+        prodError("Failed to update covered call alert config");
         res.status(500).json({
             success: false,
             message: "Failed to update covered call alert config",

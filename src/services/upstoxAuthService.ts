@@ -1,7 +1,7 @@
 import axios from "axios";
 import { PrismaClient } from "@prisma/client";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
-import { devLog, devWarn, devError } from "../utils/errorLogger";
+import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
 
 let cachedAccessToken: string | null = null;
 let tokenExpiry: number | null = null;
@@ -60,6 +60,7 @@ export const upstoxAuthService = {
             return access_token;
         } catch (error: any) {
             devError("? Failed to generate Upstox access token:", error.response?.data || error.message);
+            prodError("Failed to generate Upstox access token");
             throw error;
         }
     },
@@ -86,6 +87,7 @@ export const upstoxAuthService = {
             return null;
         } catch (error: any) {
             devError("? Failed to fetch token from DB:", error.message);
+            prodError("Failed to fetch Upstox token from DB");
             return null;
         }
     },

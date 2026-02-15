@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { logger } from "../utils/logger";
-import { devError } from "../utils/errorLogger";
+import { devError, prodError } from "../utils/errorLogger";
 
 const prisma = new PrismaClient();
 
@@ -75,6 +75,7 @@ async function insertBSEEqtIntoDataBase(
       `Error Uploading BSE Equity`,
       `<h1>Finance Dashboard History</h1><p>Cron encountered error: <strong>${error.message}</strong></p><p>On uploading BSE Equity Data for ${data.SYMBOL_NAME}.</p>`
     );
+    prodError("Error inserting BSE data for " + data.SYMBOL_NAME);
     throw error;
   }
 }

@@ -1,7 +1,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { upstoxWebSocketService } from './upstoxWebsocketService';
-import { devLog, devWarn, devError } from "../utils/errorLogger";
+import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
 
 interface MarketData {
   symbol?: string;
@@ -49,6 +49,7 @@ export class SocketIOService {
       devError(`❌ Socket.io handshake failed (${error?.code}): ${error?.message}`, {
         origin: error?.req?.headers?.origin
       });
+      prodError('Socket.io handshake failed');
     });
 
     this.setupEventHandlers();
@@ -135,6 +136,7 @@ export class SocketIOService {
       socket.on('error', (error) => {
         if (process.env.NODE_ENV === "development") {
           devError(`❌ Socket error for client ${socket.id}:`, error);
+          prodError('Socket error occurred');
         }
       });
     });

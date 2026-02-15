@@ -5,7 +5,7 @@ import { upstoxAuthService } from "../services/upstoxAuthService";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { loadEnv } from "../config/env";
-import { devLog, devError } from "../utils/errorLogger";
+import { devLog, devError, prodError } from "../utils/errorLogger";
 
 loadEnv();
 const prisma = new PrismaClient();
@@ -48,6 +48,7 @@ async function getActiveOptions(): Promise<InstrumentMap[]> {
     }));
   } catch (error: any) {
     devError("❌ Failed to fetch active options from DB:", error.message);
+    prodError("Failed to fetch active options from DB");
     return [];
   }
 }
@@ -79,6 +80,7 @@ async function fetchQuotes(keys: string[], accessToken: string) {
       "❌ Failed to fetch quotes batch:",
       error.response?.data?.message || error.message
     );
+    prodError("Failed to fetch quotes batch");
     return null;
   }
 }
@@ -96,6 +98,7 @@ export async function executeFiveMinuteJob() {
     const token = await upstoxAuthService.getAccessToken(); // Use service!
     if (!token) {
       devError("? No Upstox Access Token available. Skipping job.");
+      prodError("No Upstox Access Token for options job");
       // Optional: Trigger re-login or alert
       return;
     }
@@ -173,6 +176,7 @@ export async function executeFiveMinuteJob() {
 
   } catch (error: any) {
     devError("❌ Critical Error in 5-minute Options Job:", error.message);
+    prodError("Critical error in 5-minute options job");
     // await sendEmailNotification(...) // Optional failure alert
   }
 }

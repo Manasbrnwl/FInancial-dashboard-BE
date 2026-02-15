@@ -4,7 +4,7 @@ import { loadEnv } from "../config/env";
 import { PrismaClient } from "@prisma/client";
 import { rateLimiter } from "../utils/rateLimiter";
 import { processGapData } from "./gapAlertService";
-import { devLog, devWarn, devError } from "../utils/errorLogger";
+import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
 
 loadEnv();
 
@@ -83,6 +83,7 @@ async function getNseInstruments(): Promise<SymbolInstruments[]> {
         return symbolInstruments;
     } catch (error: any) {
         devError("? Failed to fetch NSE Futures instruments:", error.message);
+        prodError("Failed to fetch NSE Futures instruments");
         return [];
     }
 }
@@ -115,6 +116,7 @@ async function bulkInsertTicksData(records: any[]): Promise<number> {
         return result.count;
     } catch (error: any) {
         devError(`? Failed to bulk insert ticks data:`, error.message);
+        prodError("Failed to bulk insert ticks data");
         return 0;
     }
 }
@@ -131,6 +133,7 @@ export async function backfillGapsForDate(dateInput: string | Date): Promise<voi
     const accessToken = getAccessToken();
     if (!accessToken) {
         devError("? No access token available for backfill");
+        prodError("No access token available for backfill");
         return;
     }
 
@@ -161,10 +164,12 @@ export async function backfillGapsForDate(dateInput: string | Date): Promise<voi
                     }
                 } catch (err: any) {
                     devError(`Error fetching ${leg.instrumentType}: ${err.message}`);
+                    prodError("Failed to fetch instrument data");
                 }
 
             } catch (error: any) {
                 devError(`? Failed to fetch data for ${leg.instrumentType}:`, error.message);
+                prodError("Failed to fetch instrument data");
             }
         }
 

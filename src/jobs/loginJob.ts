@@ -9,7 +9,7 @@ import { insertEqIntoDataBase } from "../nseEquity/insertEqtIntoDatabase";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { getBseEquityHistory } from "../bseEquity/bseEquityHistory";
 import { updateJobStatus, initializeJobStatus } from "../utils/cronMonitor";
-import { devLog, devError } from "../utils/errorLogger";
+import { devLog, devError, prodError } from "../utils/errorLogger";
 loadEnv();
 
 const CRON_EXPRESSION = "0 20 * * 1-5"; // 8 PM, Monday-Friday
@@ -74,12 +74,14 @@ export async function fetchAccessToken(): Promise<void> {
       updateJobStatus('loginJob', 'success', CRON_EXPRESSION, duration);
     } else {
       devError("❌ No access token received from API");
+      prodError("No access token received from API");
       const duration = Date.now() - startTime;
       updateJobStatus('loginJob', 'failed', CRON_EXPRESSION, duration, 'No access token received from API');
       fetchAccessToken();
     }
   } catch (error: any) {
     devError("❌ Failed to fetch access token:", error.message);
+    prodError("Failed to fetch access token");
     const duration = Date.now() - startTime;
     updateJobStatus('loginJob', 'failed', CRON_EXPRESSION, duration, error.message);
     fetchAccessToken();

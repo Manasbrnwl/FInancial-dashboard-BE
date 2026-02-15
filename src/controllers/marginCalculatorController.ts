@@ -7,7 +7,7 @@ import {
   TransactionType,
   ProductType,
 } from "../services/marginCalculatorService";
-import { devError } from "../utils/errorLogger";
+import { devError, prodError } from "../utils/errorLogger";
 
 /**
  * Calculate margin for a single order
@@ -74,6 +74,7 @@ export const calculateMargin = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error calculating margin:", error);
+    prodError("Error calculating margin");
     res.status(500).json({
       success: false,
       error: "Failed to calculate margin",
@@ -123,6 +124,7 @@ export const calculateMarginOnly = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error calculating margin:", error);
+    prodError("Error calculating margin");
     res.status(500).json({
       success: false,
       error: "Failed to calculate margin",
@@ -165,6 +167,7 @@ export const calculateBulkMargins = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error calculating bulk margins:", error);
+    prodError("Error calculating bulk margins");
     res.status(500).json({
       success: false,
       error: "Failed to calculate bulk margins",
@@ -195,6 +198,7 @@ export const getStoredMargins = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching stored margins:", error);
+    prodError("Error fetching stored margins");
     res.status(500).json({
       success: false,
       error: "Failed to fetch stored margins",
@@ -235,6 +239,7 @@ export const getLatestMargin = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error fetching latest margin:", error);
+    prodError("Error fetching latest margin");
     res.status(500).json({
       success: false,
       error: "Failed to fetch latest margin",
@@ -260,6 +265,7 @@ export const cleanupOldMargins = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     devError("Error cleaning up margins:", error);
+    prodError("Error cleaning up margins");
     res.status(500).json({
       success: false,
       error: "Failed to cleanup margins",

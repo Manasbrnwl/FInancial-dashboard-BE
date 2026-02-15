@@ -2,7 +2,7 @@ import axios from "axios";
 import { getAccessToken } from "../config/store";
 import { PrismaClient } from "@prisma/client";
 import { logger } from "../utils/logger";
-import { devError, devLog } from "../utils/errorLogger";
+import { devError, devLog, prodError } from "../utils/errorLogger";
 
 const prisma = new PrismaClient();
 
@@ -48,6 +48,7 @@ async function getNseFuturesHistory(date: string) {
     }
   } catch (error) {
     devError("Error fetching NSE Futures history:", error);
+    prodError("Error fetching NSE Futures history");
     return false;
   }
 }

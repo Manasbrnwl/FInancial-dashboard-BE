@@ -6,7 +6,7 @@ import { loadEnv } from "../config/env";
 import { PrismaClient } from "@prisma/client";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { rateLimiter } from "../utils/rateLimiter";
-import { devLog, devError } from "../utils/errorLogger";
+import { devLog, devError, prodError } from "../utils/errorLogger";
 
 loadEnv();
 
@@ -51,6 +51,7 @@ async function fetchAccessToken(): Promise<boolean> {
       return true;
     } else {
       devError("❌ No access token received from API");
+      prodError("No access token received from API for equity job");
       return fetchAccessToken();
     }
   } catch (error: any) {
@@ -58,6 +59,7 @@ async function fetchAccessToken(): Promise<boolean> {
       "❌ Failed to fetch access token for hourly job:",
       error.message
     );
+    prodError("Failed to fetch access token for hourly equity job");
     return fetchAccessToken();
   }
 }
@@ -94,6 +96,7 @@ async function getNseInstruments(): Promise<Map<string, number>> {
     return instrumentMap;
   } catch (error: any) {
     devError("❌ Failed to fetch NSE Equity instruments:", error.message);
+    prodError("Failed to fetch NSE Equity instruments");
     return new Map();
   }
 }
@@ -145,6 +148,7 @@ async function bulkInsertTicksData(records: any[]): Promise<number> {
     return result.count;
   } catch (error: any) {
     devError(`❌ Failed to bulk insert ticks data:`, error.message);
+    prodError("Failed to bulk insert equity ticks data");
     return 0;
   }
 }
@@ -162,6 +166,7 @@ async function fetchHistoricalData(
 
   if (!accessToken) {
     devError("❌ No access token available for historical data fetch");
+    prodError("No access token available for equity historical data");
     return { successfulInstrumentsCount: 0, totalRecordsInserted: 0 };
   }
 
@@ -254,6 +259,7 @@ async function fetchHistoricalData(
       }
     } catch (error: any) {
       devError(`❌ Failed to fetch data for ${type}:`, error.message);
+      prodError("Failed to fetch equity data for instrument");
     }
   }
 
@@ -354,6 +360,7 @@ async function sendHourlyJobEmail(
     }
   } catch (error: any) {
     devError(`❌ Failed to send email notification:`, error.message);
+    prodError("Failed to send email notification");
   }
 }
 
@@ -406,6 +413,7 @@ async function executeHourlyJob(): Promise<void> {
       }
     } else {
       devError("❌ Skipping instrument query due to login failure");
+      prodError("Skipping equity job due to login failure");
 
       // Send failure notification
       await sendHourlyJobEmail("failed", {
@@ -420,6 +428,7 @@ async function executeHourlyJob(): Promise<void> {
     }
   } catch (error: any) {
     devError("❌ Error in hourly NSE Equity job:", error.message);
+    prodError("Error in hourly NSE Equity job");
 
     // Send failure notification
     await sendHourlyJobEmail("failed", {

@@ -1,3 +1,4 @@
+import { devError } from "../utils/errorLogger";
 import { logger } from "../utils/logger";
 function parseContract(symbol: string) {
     // Array of regex patterns to try in order
@@ -37,7 +38,7 @@ function parseContract(symbol: string) {
 
     // Validate the date
     if (isNaN(date.getTime())) {
-        logger.error(`Invalid date: ${year}-${month}-${day}`);
+        devError(`Invalid date: ${year}-${month}-${day}`);
         return null;
     }
 
@@ -57,6 +58,6 @@ function parseContract(symbol: string) {
 
 // Example usage
 //   const input = "NIFTY22063014500PE"; // ABB2209293350CE   M&MFIN220929257.5CE   MRF220929100000CE
-//   logger.info(parseContract(input)); // [ 'NIFTY22063014500PE', 'NIFTY', '2022-06-30', 'PE' ]
+//   devLog(parseContract(input)); // [ 'NIFTY22063014500PE', 'NIFTY', '2022-06-30', 'PE' ]
 export { parseContract };
 

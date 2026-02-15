@@ -5,7 +5,7 @@ import qs from "qs";
 import { loadEnv } from "../config/env";
 import { PrismaClient } from "@prisma/client";
 import { sendEmailNotification } from "../utils/sendEmail";
-import { logger } from "../utils/logger";
+import { devLog, devWarn, devError } from "../utils/errorLogger";
 
 loadEnv();
 
@@ -27,7 +27,7 @@ async function fetchAccessToken(): Promise<boolean> {
     };
 
     if (process.env.NODE_ENV === "development") {
-      logger.info("🔑 Fetching access token for daily NSE job...");
+      devLog("🔑 Fetching access token for daily NSE job...");
     }
 
     const response = await axios.post(
@@ -45,15 +45,15 @@ async function fetchAccessToken(): Promise<boolean> {
     if (accessToken) {
       setAccessToken(accessToken);
       if (process.env.NODE_ENV === "development") {
-        logger.info("✅ Access token updated successfully for daily job");
+        devLog("✅ Access token updated successfully for daily job");
       }
       return true;
     } else {
-      logger.error("❌ No access token received from API");
+      devError("❌ No access token received from API");
       return fetchAccessToken();
     }
   } catch (error: any) {
-    logger.error(
+    devError(
       "❌ Failed to fetch access token for daily job:",
       error.message
     );
@@ -67,7 +67,7 @@ async function fetchAccessToken(): Promise<boolean> {
 async function getNseInstrumentTypes(): Promise<string[]> {
   try {
     if (process.env.NODE_ENV === "development") {
-      logger.info("🔍 Fetching NSE instrument types from database...");
+      devLog("🔍 Fetching NSE instrument types from database...");
     }
 
     const nseInstruments = await prisma.instrument_lists.findMany({
@@ -78,14 +78,14 @@ async function getNseInstrumentTypes(): Promise<string[]> {
     });
 
     if (process.env.NODE_ENV === "development") {
-      logger.info(
+      devLog(
         `✅ Found ${nseInstruments.length} NSE instrument types:`
       );
     }
 
     const instrumentTypes: string[] = [];
     nseInstruments.forEach((instrument, index) => {
-      // logger.info(`${index + 1}. ID: ${instrument.id}, Type: ${instrument.instrument_type}, Exchange: ${instrument.exchange}`);
+      // devLog(`${index + 1}. ID: ${instrument.id}, Type: ${instrument.instrument_type}, Exchange: ${instrument.exchange}`);
       if (instrument.instrument_type) {
         instrumentTypes.push(instrument.instrument_type);
       }
@@ -93,7 +93,7 @@ async function getNseInstrumentTypes(): Promise<string[]> {
 
     return instrumentTypes;
   } catch (error: any) {
-    logger.error(
+    devError(
       "❌ Failed to fetch NSE instrument types:",
       error.message
     );
@@ -118,7 +118,7 @@ async function getInstrumentId(instrumentType: string): Promise<number | null> {
 
     return instrument?.id || null;
   } catch (error: any) {
-    logger.error(
+    devError(
       `❌ Failed to get instrument ID for ${instrumentType}:`,
       error.message
     );
@@ -156,13 +156,13 @@ async function bulkInsertOHLCData(records: any[]): Promise<number> {
     });
 
     if (process.env.NODE_ENV === "development") {
-      logger.info(
+      devLog(
         `✅ Successfully inserted ${result.count} records into ohlcDataNSE`
       );
     }
     return result.count;
   } catch (error: any) {
-    logger.error(`❌ Failed to bulk insert OHLC data:`, error.message);
+    devError(`❌ Failed to bulk insert OHLC data:`, error.message);
     return 0;
   }
 }
@@ -174,7 +174,7 @@ async function fetchHistoricalData(instrumentTypes: string[]): Promise<{ success
   const accessToken = getAccessToken();
 
   if (!accessToken) {
-    logger.error("❌ No access token available for historical data fetch");
+    devError("❌ No access token available for historical data fetch");
     return { successfulInstrumentsCount: 0, totalRecordsInserted: 0 };
   }
 
@@ -202,7 +202,7 @@ async function fetchHistoricalData(instrumentTypes: string[]): Promise<{ success
   //   const fromDate = "250926T09:00:00";
   //   const toDate = "250926T14:00:00";
   if (process.env.NODE_ENV === "development") {
-    logger.info(`📊 Fetching historical data from ${fromDate} to ${toDate}`);
+    devLog(`📊 Fetching historical data from ${fromDate} to ${toDate}`);
   }
 
   let successfulInstrumentsCount = 0;
@@ -211,7 +211,7 @@ async function fetchHistoricalData(instrumentTypes: string[]): Promise<{ success
   for (const type of instrumentTypes) {
     try {
       if (process.env.NODE_ENV === "development") {
-        logger.info(`🔄 Fetching data for instrument type: ${type}`);
+        devLog(`🔄 Fetching data for instrument type: ${type}`);
       }
 
       const response = await axios.get(
@@ -229,10 +229,10 @@ async function fetchHistoricalData(instrumentTypes: string[]): Promise<{ success
           ? response.data.Records.length
           : 0;
         if (process.env.NODE_ENV === "development") {
-          logger.info(
+          devLog(
             `✅ Successfully fetched data for ${type} (Status: ${response.data.status})`
           );
-          logger.info(`📊 Data records: ${recordsCount}`);
+          devLog(`📊 Data records: ${recordsCount}`);
         }
 
         // Get instrument ID and insert data into database
@@ -247,13 +247,13 @@ async function fetchHistoricalData(instrumentTypes: string[]): Promise<{ success
             const insertedCount = await bulkInsertOHLCData(transformedRecords);
             totalRecordsInserted += insertedCount;
             if (process.env.NODE_ENV === "development") {
-              logger.info(
+              devLog(
                 `💾 Inserted ${insertedCount} records for ${type} (instrumentId: ${instrumentId})`
               );
             }
           } else {
             if (process.env.NODE_ENV === "development") {
-              logger.info(
+              devLog(
                 `⚠️ Could not find instrument ID for ${type}, skipping database insert`
               );
             }
@@ -261,22 +261,22 @@ async function fetchHistoricalData(instrumentTypes: string[]): Promise<{ success
         }
       } else {
         if (process.env.NODE_ENV === "development") {
-          logger.info(
+          devLog(
             `⚠️ Data fetch for ${type} returned status: ${response.data?.status || "unknown"
             }`
           );
         }
       }
     } catch (error: any) {
-      logger.error(`❌ Failed to fetch data for ${type}:`, error.message);
+      devError(`❌ Failed to fetch data for ${type}:`, error.message);
     }
   }
 
   if (process.env.NODE_ENV === "development") {
-    logger.info(
+    devLog(
       `📈 Summary: ${successfulInstrumentsCount} out of ${instrumentTypes.length} instruments returned successful data`
     );
-    logger.info(`💾 Total records inserted: ${totalRecordsInserted}`);
+    devLog(`💾 Total records inserted: ${totalRecordsInserted}`);
   }
 
   return { successfulInstrumentsCount, totalRecordsInserted };
@@ -361,10 +361,10 @@ async function sendDailyJobEmail(
     );
 
     if (process.env.NODE_ENV === "development") {
-      logger.info(`📧 Email notification sent: ${status}`);
+      devLog(`📧 Email notification sent: ${status}`);
     }
   } catch (error: any) {
-    logger.error(`❌ Failed to send email notification:`, error.message);
+    devError(`❌ Failed to send email notification:`, error.message);
   }
 }
 
@@ -375,11 +375,11 @@ async function executeDailyJob(): Promise<void> {
   try {
     const date = new Date();
     if (process.env.NODE_ENV === "development") {
-      logger.info(`🕐 Starting daily NSE job at ${date.toISOString()}`);
+      devLog(`🕐 Starting daily NSE job at ${date.toISOString()}`);
     }
 
     // Send start notification
-    await sendDailyJobEmail("started", {});
+    // await sendDailyJobEmail("started", {});
 
     // First login and get access token
     const loginSuccess = await fetchAccessToken();
@@ -392,7 +392,7 @@ async function executeDailyJob(): Promise<void> {
       if (instrumentTypes.length > 0) {
         const result = await fetchHistoricalData(instrumentTypes);
         if (process.env.NODE_ENV === "development") {
-          logger.info(
+          devLog(
             `🎯 Final Result: ${result.successfulInstrumentsCount} instruments returned successful responses with status="success"`
           );
         }
@@ -405,7 +405,7 @@ async function executeDailyJob(): Promise<void> {
         });
       } else {
         if (process.env.NODE_ENV === "development") {
-          logger.info(
+          devLog(
             "⚠️ No instrument types found, skipping historical data fetch"
           );
         }
@@ -418,7 +418,7 @@ async function executeDailyJob(): Promise<void> {
         });
       }
     } else {
-      logger.error("❌ Skipping instrument query due to login failure");
+      devError("❌ Skipping instrument query due to login failure");
 
       // Send failure notification
       await sendDailyJobEmail("failed", {
@@ -427,12 +427,12 @@ async function executeDailyJob(): Promise<void> {
     }
 
     if (process.env.NODE_ENV === "development") {
-      logger.info(
+      devLog(
         `✅ daily NSE job completed at ${new Date().toISOString()}`
       );
     }
   } catch (error: any) {
-    logger.error("❌ Error in daily NSE job:", error.message);
+    devError("❌ Error in daily NSE job:", error.message);
 
     // Send failure notification
     await sendDailyJobEmail("failed", {
@@ -457,7 +457,7 @@ export function initializeDailyNseJob(): void {
     timezone: "Asia/Kolkata", // Indian timezone
   });
 
-  logger.info(
+  devLog(
     "⏰ daily NSE job scheduled to run every day 7 PM, Monday to Friday (IST)"
   );
 }

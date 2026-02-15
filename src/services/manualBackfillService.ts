@@ -4,7 +4,7 @@ import { loadEnv } from "../config/env";
 import { PrismaClient } from "@prisma/client";
 import { rateLimiter } from "../utils/rateLimiter";
 import { processGapData } from "./gapAlertService";
-import { logger } from "../utils/logger";
+import { devLog, devWarn, devError } from "../utils/errorLogger";
 
 loadEnv();
 
@@ -82,7 +82,7 @@ async function getNseInstruments(): Promise<SymbolInstruments[]> {
 
         return symbolInstruments;
     } catch (error: any) {
-        logger.error("? Failed to fetch NSE Futures instruments:", error.message);
+        devError("? Failed to fetch NSE Futures instruments:", error.message);
         return [];
     }
 }
@@ -114,7 +114,7 @@ async function bulkInsertTicksData(records: any[]): Promise<number> {
         });
         return result.count;
     } catch (error: any) {
-        logger.error(`? Failed to bulk insert ticks data:`, error.message);
+        devError(`? Failed to bulk insert ticks data:`, error.message);
         return 0;
     }
 }
@@ -130,11 +130,11 @@ export async function backfillGapsForDate(dateInput: string | Date): Promise<voi
 
     const accessToken = getAccessToken();
     if (!accessToken) {
-        logger.error("? No access token available for backfill");
+        devError("? No access token available for backfill");
         return;
     }
 
-    logger.info(`?? Starting backfill for date: ${dateInput} (Format: ${dateStr})`);
+    devLog(`?? Starting backfill for date: ${dateInput} (Format: ${dateStr})`);
 
     const symbols = await getNseInstruments();
     const MIN_VOLUME_THRESHOLD = Number(process.env.MIN_VOLUME_THRESHOLD) || 10;
@@ -157,14 +157,14 @@ export async function backfillGapsForDate(dateInput: string | Date): Promise<voi
                     if (response.data && response.data.status === "Success" && response.data.Records) {
                         legData[leg.leg] = response.data.Records;
                     } else {
-                        // logger.warn(`No data for ${leg.instrumentType}`);
+                        // devWarn(`No data for ${leg.instrumentType}`);
                     }
                 } catch (err: any) {
-                    logger.error(`Error fetching ${leg.instrumentType}: ${err.message}`);
+                    devError(`Error fetching ${leg.instrumentType}: ${err.message}`);
                 }
 
             } catch (error: any) {
-                logger.error(`? Failed to fetch data for ${leg.instrumentType}:`, error.message);
+                devError(`? Failed to fetch data for ${leg.instrumentType}:`, error.message);
             }
         }
 
@@ -270,7 +270,7 @@ export async function backfillGapsForDate(dateInput: string | Date): Promise<voi
             samples.push(...alignedPoints.slice(0, 30));
         }
 
-        logger.info(`? ${symbol.instruments[0]?.name || symbol.symbolId}: Found ${alignedPoints.length} aligned points. Selected ${samples.length}.`);
+        devLog(`? ${symbol.instruments[0]?.name || symbol.symbolId}: Found ${alignedPoints.length} aligned points. Selected ${samples.length}.`);
 
         if (samples.length === 0) continue;
 
@@ -329,5 +329,5 @@ export async function backfillGapsForDate(dateInput: string | Date): Promise<voi
         }
     }
 
-    logger.info("?? Backfill completed.");
+    devLog("?? Backfill completed.");
 }

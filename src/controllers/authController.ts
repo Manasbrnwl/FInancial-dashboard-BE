@@ -6,6 +6,7 @@ import {
   isValidUser,
   verifyOtpCode,
 } from "../services/authService";
+import { devError } from "../utils/errorLogger";
 
 export const loginWithPassword = async (req: Request, res: Response) => {
   const { username } = req.body;
@@ -33,7 +34,7 @@ export const loginWithPassword = async (req: Request, res: Response) => {
       expiresAt: new Date(expiresAt).toISOString(),
     });
   } catch (error: any) {
-    logger.error("Failed to generate OTP:", error);
+    devError("Failed to generate OTP:", error);
     return res.status(500).json({
       success: false,
       error: "Failed to generate OTP. Please try again.",
@@ -89,7 +90,7 @@ export const verifyOtpAndIssueToken = async (req: Request, res: Response) => {
       expiresIn,
     });
   } catch (error: any) {
-    logger.error("Failed to verify OTP:", error);
+    devError("Failed to verify OTP:", error);
     return res.status(500).json({
       success: false,
       error: "Failed to verify OTP. Please try again.",

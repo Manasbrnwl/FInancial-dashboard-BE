@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
+import { devError } from "../utils/errorLogger";
 
 const normalizeBigInt = (row: Record<string, any>) =>
   Object.fromEntries(
@@ -173,7 +174,7 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    logger.error("Error fetching NSE options data:", error);
+    devError("Error fetching NSE options data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE options data",
@@ -195,7 +196,7 @@ export const getNseOptionsUnderlyings = async (req: Request, res: Response) => {
       data: underlyings.map((u) => u.underlying),
     });
   } catch (error: any) {
-    logger.error("Error fetching NSE options underlyings:", error);
+    devError("Error fetching NSE options underlyings:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE options underlyings",
@@ -228,7 +229,7 @@ export const getNseOptionsStrikes = async (req: Request, res: Response) => {
       data: strikes.map((s) => s.strike),
     });
   } catch (error: any) {
-    logger.error("Error fetching NSE options strikes:", error);
+    devError("Error fetching NSE options strikes:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE options strikes",
@@ -258,7 +259,7 @@ export const getNseOptionsExpiries = async (req: Request, res: Response) => {
       data: expiries.map((e) => e.expiry_date),
     });
   } catch (error: any) {
-    logger.error("Error fetching NSE options expiries:", error);
+    devError("Error fetching NSE options expiries:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE options expiries",

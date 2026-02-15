@@ -3,6 +3,7 @@ import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
 import { loadEnv } from "../config/env";
 import { loadGapBaselines } from "../cache/gapAverageCache";
+import { devError } from "../utils/errorLogger";
 
 loadEnv();
 
@@ -25,7 +26,7 @@ export const getRecentAlerts = async (req: Request, res: Response) => {
 
     return res.status(200).json({ success: true, data: alerts });
   } catch (error: any) {
-    logger.error("? Failed to fetch recent gap alerts:", error?.message || error);
+    devError("? Failed to fetch recent gap alerts:", error?.message || error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch recent gap alerts",
@@ -60,7 +61,7 @@ export const getAlertHistory = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    logger.error("? Failed to fetch gap alert history:", error?.message || error);
+    devError("? Failed to fetch gap alert history:", error?.message || error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch alert history",
@@ -94,7 +95,7 @@ export const getGapHistory = async (req: Request, res: Response) => {
 
     return res.status(200).json({ success: true, data });
   } catch (error: any) {
-    logger.error("? Failed to fetch gap history:", error?.message || error);
+    devError("? Failed to fetch gap history:", error?.message || error);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch gap history",
@@ -111,7 +112,7 @@ export const reloadGapBaselines = async (_req: Request, res: Response) => {
       message: "Gap baselines refreshed",
     });
   } catch (error: any) {
-    logger.error("? Failed to reload gap baselines:", error?.message || error);
+    devError("? Failed to reload gap baselines:", error?.message || error);
     return res.status(500).json({
       success: false,
       message: "Failed to reload gap baselines",

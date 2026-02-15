@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { CronExpressionParser } from 'cron-parser';
-import { logger } from "./logger";
+import { devLog, devError } from "./errorLogger";
 
 const HISTORY_FILE = path.join(__dirname, '../../history.json');
 
@@ -27,7 +27,7 @@ export function loadHistory(): CronHistory {
       return JSON.parse(data);
     }
   } catch (error) {
-    logger.error('Error loading cron history:', error);
+    devError('Error loading cron history:', error);
   }
   return {};
 }
@@ -39,7 +39,7 @@ export function saveHistory(history: CronHistory): void {
   try {
     fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
   } catch (error) {
-    logger.error('Error saving cron history:', error);
+    devError('Error saving cron history:', error);
   }
 }
 
@@ -51,7 +51,7 @@ export function getNextCronRun(cronExpression: string): string {
     const interval = CronExpressionParser.parse(cronExpression);
     return interval.next().toDate().toISOString();
   } catch (error) {
-    logger.error('Error calculating next cron run:', error);
+    devError('Error calculating next cron run:', error);
     return '';
   }
 }
@@ -82,7 +82,7 @@ export function updateJobStatus(
 
   saveHistory(history);
 
-  logger.info(`[CronMonitor] ${jobName} - Status: ${status}${duration ? `, Duration: ${duration}ms` : ''}`);
+  devLog(`[CronMonitor] ${jobName} - Status: ${status}${duration ? `, Duration: ${duration}ms` : ''}`);
 }
 
 /**
@@ -106,12 +106,12 @@ export function initializeJobStatus(jobName: string, cronExpression: string): vo
       lastDuration: null
     };
     saveHistory(history);
-    logger.info(`[CronMonitor] Initialized ${jobName}`);
+    devLog(`[CronMonitor] Initalized ${jobName}`);
   } else {
     // Update nextRun on restart
     history[jobName].nextRun = getNextCronRun(cronExpression);
     history[jobName].status = 'idle';
     saveHistory(history);
-    logger.info(`[CronMonitor] Reinitialized ${jobName}`);
+    devLog(`[CronMonitor] Reinitialized ${jobName}`);
   }
 }

@@ -5,7 +5,7 @@ import { upstoxAuthService } from "../services/upstoxAuthService";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { loadEnv } from "../config/env";
-import { logger } from "../utils/logger";
+import { devLog, devError } from "../utils/errorLogger";
 
 loadEnv();
 const prisma = new PrismaClient();
@@ -46,7 +46,7 @@ async function getActiveEquityInstruments(): Promise<InstrumentMap[]> {
             upstoxName: s.upstox_symbol!,
         }));
     } catch (error: any) {
-        logger.error("❌ Failed to fetch active equity instruments from DB:", error.message);
+        devError("❌ Failed to fetch active equity instruments from DB:", error.message);
         return [];
     }
 }
@@ -69,7 +69,7 @@ async function fetchQuotes(keys: string[], accessToken: string) {
         }
         return null;
     } catch (error: any) {
-        logger.error(
+        devError(
             "❌ Failed to fetch quotes batch:",
             error.response?.data?.errors || error.message
         );
@@ -154,10 +154,10 @@ async function sendHourlyJobEmail(
         );
 
         if (process.env.NODE_ENV === "development") {
-            logger.info(`📧 Email notification sent: ${status}`);
+            devLog(`📧 Email notification sent: ${status}`);
         }
     } catch (error: any) {
-        logger.error(`❌ Failed to send email notification:`, error.message);
+        devError(`❌ Failed to send email notification:`, error.message);
     }
 }
 
@@ -166,16 +166,16 @@ async function sendHourlyJobEmail(
  */
 export async function executeHourlyJob() {
     const startTime = Date.now();
-    logger.info(`⏰ Starting 5-minute NSE Equity Job at ${new Date().toISOString()}`);
+    devLog(`⏰ Starting 5-minute NSE Equity Job at ${new Date().toISOString()}`);
 
     try {
         // Send start notification
-        await sendHourlyJobEmail("started", {});
+        // await sendHourlyJobEmail("started", {});
 
         // 1. Get Access Token
         const token = await upstoxAuthService.getAccessToken();
         if (!token) {
-            logger.error("? No Upstox Access Token available. Skipping job.");
+            devError("? No Upstox Access Token available. Skipping job.");
             await sendHourlyJobEmail("failed", { errorMessage: "No Upstox Access Token available" });
             return;
         }
@@ -183,7 +183,7 @@ export async function executeHourlyJob() {
         // 2. Get Active Instruments
         const instruments = await getActiveEquityInstruments();
         if (instruments.length === 0) {
-            logger.info("⚠️ No active equity instruments with Upstox IDs found.");
+            devLog("⚠️ No active equity instruments with Upstox IDs found.");
             await sendHourlyJobEmail("completed", {
                 instrumentsCount: 0,
                 totalRecordsInserted: 0,
@@ -191,7 +191,7 @@ export async function executeHourlyJob() {
             return;
         }
 
-        logger.info(`✅ Found ${instruments.length} active equity instruments. Processing batches...`);
+        devLog(`✅ Found ${instruments.length} active equity instruments. Processing batches...`);
 
         // 3. Batch Process
         let totalInserted = 0;
@@ -221,7 +221,7 @@ export async function executeHourlyJob() {
                     const bestAsk = quote.depth?.sell?.[0]?.price || 0;
                     const bestAskQty = quote.depth?.sell?.[0]?.quantity || 0;
 
-                    if(bestBid === 0 && bestAsk === 0 && bestBidQty === 0 && bestAskQty === 0){
+                    if (bestBid === 0 && bestAsk === 0 && bestBidQty === 0 && bestAskQty === 0) {
                         continue;
                     }
 
@@ -261,7 +261,7 @@ export async function executeHourlyJob() {
         }
 
         const duration = (Date.now() - startTime) / 1000;
-        logger.info(`✅ Job Completed. Inserted ${totalInserted} records in ${duration.toFixed(2)}s.`);
+        devLog(`✅ Job Completed. Inserted ${totalInserted} records in ${duration.toFixed(2)}s.`);
 
         // Send completion notification
         await sendHourlyJobEmail("completed", {
@@ -270,7 +270,7 @@ export async function executeHourlyJob() {
         });
 
     } catch (error: any) {
-        logger.error("❌ Critical Error in 5-minute Equity Job:", error.message);
+        devError("❌ Critical Error in 5-minute Equity Job:", error.message);
         await sendHourlyJobEmail("failed", { errorMessage: error.message });
     }
 }
@@ -287,7 +287,7 @@ export function initializeHourlyTicksNseEqUpstoxJob(): void {
         timezone: "Asia/Kolkata",
     });
 
-    logger.info(`? 5-Minute NSE Equity Upstox Job Scheduled (${schedule})`);
+    devLog(`? 5-Minute NSE Equity Upstox Job Scheduled (${schedule})`);
 
     if (process.env.NODE_ENV === "development") {
         executeHourlyJob();

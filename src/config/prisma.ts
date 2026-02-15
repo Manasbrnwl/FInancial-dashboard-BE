@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { logger } from "../utils/logger";
+import { devWarn } from "../utils/errorLogger";
 
 const globalForPrisma = global as unknown as {
   prisma?: PrismaClient;
@@ -22,7 +23,7 @@ if (logQueries && Number.isFinite(slowThreshold) && slowThreshold > 0 && "$use" 
     const result = await next(params);
     const duration = Date.now() - start;
     if (duration >= slowThreshold) {
-      logger.warn(
+      devWarn(
         `[prisma:slow ${duration}ms] ${params.model || "raw"}.${params.action}`
       );
     }

@@ -6,7 +6,7 @@ import { loadEnv } from "../config/env";
 import { PrismaClient } from "@prisma/client";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { rateLimiter } from "../utils/rateLimiter";
-import { logger } from "../utils/logger";
+import { devLog, devError } from "../utils/errorLogger";
 
 loadEnv();
 
@@ -28,7 +28,7 @@ async function fetchAccessToken(): Promise<boolean> {
     };
 
     if (process.env.NODE_ENV === "development") {
-      logger.info("🔑 Fetching access token for hourly NSE Equity job...");
+      devLog("🔑 Fetching access token for hourly NSE Equity job...");
     }
 
     const response = await axios.post(
@@ -46,15 +46,15 @@ async function fetchAccessToken(): Promise<boolean> {
     if (accessToken) {
       setAccessToken(accessToken);
       if (process.env.NODE_ENV === "development") {
-        logger.info("✅ Access token updated successfully for hourly job");
+        devLog("✅ Access token updated successfully for hourly job");
       }
       return true;
     } else {
-      logger.error("❌ No access token received from API");
+      devError("❌ No access token received from API");
       return fetchAccessToken();
     }
   } catch (error: any) {
-    logger.error(
+    devError(
       "❌ Failed to fetch access token for hourly job:",
       error.message
     );
@@ -69,7 +69,7 @@ async function fetchAccessToken(): Promise<boolean> {
 async function getNseInstruments(): Promise<Map<string, number>> {
   try {
     if (process.env.NODE_ENV === "development") {
-      logger.info("🔍 Fetching NSE Equity instruments from database...");
+      devLog("🔍 Fetching NSE Equity instruments from database...");
     }
 
     const instruments = await prisma.$queryRaw<
@@ -82,7 +82,7 @@ async function getNseInstruments(): Promise<Map<string, number>> {
     `;
 
     if (process.env.NODE_ENV === "development") {
-      logger.info(`✅ Found ${instruments.length} NSE Equity instruments`);
+      devLog(`✅ Found ${instruments.length} NSE Equity instruments`);
     }
 
     // Create a Map of instrument_type -> instrumentId (id)
@@ -93,7 +93,7 @@ async function getNseInstruments(): Promise<Map<string, number>> {
 
     return instrumentMap;
   } catch (error: any) {
-    logger.error("❌ Failed to fetch NSE Equity instruments:", error.message);
+    devError("❌ Failed to fetch NSE Equity instruments:", error.message);
     return new Map();
   }
 }
@@ -138,13 +138,13 @@ async function bulkInsertTicksData(records: any[]): Promise<number> {
     });
 
     if (process.env.NODE_ENV === "development") {
-      logger.info(
+      devLog(
         `✅ Successfully inserted ${result.count} records into ticksDataNSEEQ`
       );
     }
     return result.count;
   } catch (error: any) {
-    logger.error(`❌ Failed to bulk insert ticks data:`, error.message);
+    devError(`❌ Failed to bulk insert ticks data:`, error.message);
     return 0;
   }
 }
@@ -161,7 +161,7 @@ async function fetchHistoricalData(
   const accessToken = getAccessToken();
 
   if (!accessToken) {
-    logger.error("❌ No access token available for historical data fetch");
+    devError("❌ No access token available for historical data fetch");
     return { successfulInstrumentsCount: 0, totalRecordsInserted: 0 };
   }
 
@@ -184,7 +184,7 @@ async function fetchHistoricalData(
   // const fromDate = "251006T09:00:00";
   // const toDate = "251006T15:00:00";
   if (process.env.NODE_ENV === "development") {
-    logger.info(`📊 Fetching historical data for ${date}`);
+    devLog(`📊 Fetching historical data for ${date}`);
   }
 
   let successfulInstrumentsCount = 0;
@@ -193,7 +193,7 @@ async function fetchHistoricalData(
   for (const [type, instrumentId] of instrumentsMap) {
     try {
       if (process.env.NODE_ENV === "development") {
-        logger.info(`🔄 Fetching data for instrument type: ${type}`);
+        devLog(`🔄 Fetching data for instrument type: ${type}`);
       }
 
       // Wait for rate limiter before making request
@@ -201,7 +201,7 @@ async function fetchHistoricalData(
 
       const stats = rateLimiter.getStats();
       if (process.env.NODE_ENV === "development") {
-        logger.info(
+        devLog(
           `📊 Rate limit stats - Second: ${stats.perSecond}/5, Minute: ${stats.perMinute}/300, Hour: ${stats.perHour}/18000`
         );
       }
@@ -221,10 +221,10 @@ async function fetchHistoricalData(
           ? response.data.Records.length
           : 0;
         if (process.env.NODE_ENV === "development") {
-          logger.info(
+          devLog(
             `✅ Successfully fetched data for ${type} (Status: ${response.data.status})`
           );
-          logger.info(`📊 Data records: ${recordsCount}`);
+          devLog(`📊 Data records: ${recordsCount}`);
         }
         // Get instrument ID and insert data into database
         if (recordsCount > 0) {
@@ -239,29 +239,29 @@ async function fetchHistoricalData(
           const insertedCount = await bulkInsertTicksData(transformedRecords);
           totalRecordsInserted += insertedCount;
           if (process.env.NODE_ENV === "development") {
-            logger.info(
+            devLog(
               `💾 Inserted ${insertedCount} records for ${type} (instrumentId: ${instrumentId})`
             );
           }
         }
       } else {
         if (process.env.NODE_ENV === "development") {
-          logger.info(
+          devLog(
             `⚠️ Data fetch for ${type} returned status: ${response.data?.status || "unknown"
             }`
           );
         }
       }
     } catch (error: any) {
-      logger.error(`❌ Failed to fetch data for ${type}:`, error.message);
+      devError(`❌ Failed to fetch data for ${type}:`, error.message);
     }
   }
 
   if (process.env.NODE_ENV === "development") {
-    logger.info(
+    devLog(
       `📈 Summary: ${successfulInstrumentsCount} out of ${instrumentsMap.size} instruments returned successful data`
     );
-    logger.info(`💾 Total records inserted: ${totalRecordsInserted}`);
+    devLog(`💾 Total records inserted: ${totalRecordsInserted}`);
   }
 
   return { successfulInstrumentsCount, totalRecordsInserted };
@@ -350,10 +350,10 @@ async function sendHourlyJobEmail(
     );
 
     if (process.env.NODE_ENV === "development") {
-      logger.info(`📧 Email notification sent: ${status}`);
+      devLog(`📧 Email notification sent: ${status}`);
     }
   } catch (error: any) {
-    logger.error(`❌ Failed to send email notification:`, error.message);
+    devError(`❌ Failed to send email notification:`, error.message);
   }
 }
 
@@ -364,7 +364,7 @@ async function executeHourlyJob(): Promise<void> {
   try {
     const date = new Date();
     if (process.env.NODE_ENV === "development") {
-      logger.info(`🕐 Starting hourly NSE Equity job at ${date.toISOString()}`);
+      devLog(`🕐 Starting hourly NSE Equity job at ${date.toISOString()}`);
     }
 
     // Send start notification
@@ -381,7 +381,7 @@ async function executeHourlyJob(): Promise<void> {
       if (instrumentsMap.size > 0) {
         const result = await fetchHistoricalData(instrumentsMap);
         if (process.env.NODE_ENV === "development") {
-          logger.info(
+          devLog(
             `🎯 Final Result: ${result.successfulInstrumentsCount} instruments returned successful responses with status="success"`
           );
         }
@@ -394,7 +394,7 @@ async function executeHourlyJob(): Promise<void> {
         });
       } else {
         if (process.env.NODE_ENV === "development") {
-          logger.info("⚠️ No instruments found, skipping historical data fetch");
+          devLog("⚠️ No instruments found, skipping historical data fetch");
         }
 
         // Send completion notification with zero results
@@ -405,7 +405,7 @@ async function executeHourlyJob(): Promise<void> {
         });
       }
     } else {
-      logger.error("❌ Skipping instrument query due to login failure");
+      devError("❌ Skipping instrument query due to login failure");
 
       // Send failure notification
       await sendHourlyJobEmail("failed", {
@@ -414,12 +414,12 @@ async function executeHourlyJob(): Promise<void> {
     }
 
     if (process.env.NODE_ENV === "development") {
-      logger.info(
+      devLog(
         `✅ Hourly NSE Equity job completed at ${new Date().toISOString()}`
       );
     }
   } catch (error: any) {
-    logger.error("❌ Error in hourly NSE Equity job:", error.message);
+    devError("❌ Error in hourly NSE Equity job:", error.message);
 
     // Send failure notification
     await sendHourlyJobEmail("failed", {
@@ -444,7 +444,7 @@ export function initializeHourlyTicksNseEqJob(): void {
     timezone: "Asia/Kolkata", // Indian timezone
   });
 
-  logger.info(
+  devLog(
     "⏰ Hourly NSE Equity job scheduled to run every hour from 9 AM to 6 PM, Monday to Friday (IST)"
   );
 }

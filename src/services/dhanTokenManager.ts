@@ -4,7 +4,7 @@ import { config } from "dotenv";
 import cron from "node-cron";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { setDhanAccessToken } from "../config/store";
-import { logger } from "../utils/logger";
+import { devLog, devWarn, devError } from "../utils/errorLogger";
 
 config();
 
@@ -46,14 +46,14 @@ class DhanTokenManager {
         const config = await prisma.app_config.findUnique({ where: { key: 'DHAN_ACCESS_TOKEN' } });
         if (config?.value) {
           token = config.value;
-          if (process.env.NODE_ENV === "development") logger.info("🔑 Loaded Dhan token from Database");
+          if (process.env.NODE_ENV === "development") devLog("🔑 Loaded Dhan token from Database");
         }
       }
 
       // 2. Fallback to Environment (Bootstrapping)
       if (!token) {
         token = process.env.DHAN_ACCESS_TOKEN;
-        if (token && process.env.NODE_ENV === "development") logger.info("⚠️ Loaded Dhan token from Environment (Fallback)");
+        if (token && process.env.NODE_ENV === "development") devLog("⚠️ Loaded Dhan token from Environment (Fallback)");
       }
 
       if (!token) {
@@ -78,7 +78,7 @@ class DhanTokenManager {
       }
 
       if (process.env.NODE_ENV === "development") {
-        logger.info("🔑 Initializing DhanHQ token manager...");
+        devLog("🔑 Initializing DhanHQ token manager...");
       }
 
       // Set initial token
@@ -91,7 +91,7 @@ class DhanTokenManager {
       const isValid = await this.verifyToken();
 
       if (!isValid) {
-        logger.warn(
+        devWarn(
           "⚠️ Initial token may be invalid or expired. Attempting renewal..."
         );
         await this.renewToken();
@@ -103,12 +103,12 @@ class DhanTokenManager {
       this.scheduleAutomaticRenewal();
 
       if (process.env.NODE_ENV === "development") {
-        logger.info(
+        devLog(
           "✅ DhanHQ token manager initialized successfully"
         );
       }
     } catch (error: any) {
-      logger.error("❌ Failed to initialize DhanHQ token manager:", error.message);
+      devError("❌ Failed to initialize DhanHQ token manager:", error.message);
       throw error;
     }
   }
@@ -126,11 +126,11 @@ class DhanTokenManager {
       });
 
       if (process.env.NODE_ENV === "development") {
-        logger.info("✅ DhanHQ token verified successfully");
+        devLog("✅ DhanHQ token verified successfully");
       }
       return response.status === 200;
     } catch (error: any) {
-      logger.error("❌ Token verification failed:", error.message);
+      devError("❌ Token verification failed:", error.message);
       return false;
     }
   }
@@ -141,7 +141,7 @@ class DhanTokenManager {
   async renewToken(): Promise<void> {
     try {
       if (process.env.NODE_ENV === "development") {
-        logger.info("🔄 Renewing DhanHQ access token...");
+        devLog("🔄 Renewing DhanHQ access token...");
       }
 
       const response = await axios.get(
@@ -171,8 +171,8 @@ class DhanTokenManager {
         this.expiryTime = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
         if (process.env.NODE_ENV === "development") {
-          logger.info("✅ DhanHQ token renewed successfully");
-          logger.info(`🕐 Token valid until: ${this.expiryTime.toISOString()}`);
+          devLog("✅ DhanHQ token renewed successfully");
+          devLog(`🕐 Token valid until: ${this.expiryTime.toISOString()}`);
         }
 
         // Verify renewed token
@@ -190,7 +190,7 @@ class DhanTokenManager {
         throw new Error("Invalid response from RenewToken API");
       }
     } catch (error: any) {
-      logger.error("❌ Failed to renew DhanHQ token:", error.message);
+      devError("❌ Failed to renew DhanHQ token:", error.message);
 
       // Send failure notification
       await this.sendNotification(
@@ -209,7 +209,7 @@ class DhanTokenManager {
   private scheduleAutomaticRenewal(): void {
     if (this.renewalScheduled) {
       if (process.env.NODE_ENV === "development") {
-        logger.info("⏰ Token renewal already scheduled");
+        devLog("⏰ Token renewal already scheduled");
       }
       return;
     }
@@ -217,12 +217,12 @@ class DhanTokenManager {
     // Run every day at 3:00 AM to renew token (20 hours after typical 6 AM start)
     cron.schedule("0 3 * * *", async () => {
       if (process.env.NODE_ENV === "development") {
-        logger.info("⏰ Scheduled token renewal triggered");
+        devLog("⏰ Scheduled token renewal triggered");
       }
       try {
         await this.renewToken();
       } catch (error: any) {
-        logger.error("❌ Scheduled token renewal failed:", error.message);
+        devError("❌ Scheduled token renewal failed:", error.message);
       }
     }, {
       timezone: "Asia/Kolkata",
@@ -230,7 +230,7 @@ class DhanTokenManager {
 
     this.renewalScheduled = true;
     if (process.env.NODE_ENV === "development") {
-      logger.info("⏰ Automatic token renewal scheduled for 3:00 AM daily");
+      devLog("⏰ Automatic token renewal scheduled for 3:00 AM daily");
     }
   }
 
@@ -250,7 +250,7 @@ class DhanTokenManager {
 
     // Check if token is expired or about to expire (within 1 hour)
     if (this.expiryTime && Date.now() > this.expiryTime.getTime() - 60 * 60 * 1000) {
-      logger.warn("⚠️ Token expiring soon, renewal recommended");
+      devWarn("⚠️ Token expiring soon, renewal recommended");
     }
 
     return this.accessToken;
@@ -293,7 +293,7 @@ class DhanTokenManager {
         emailBody
       );
     } catch (error: any) {
-      logger.error("❌ Failed to send notification email:", error.message);
+      devError("❌ Failed to send notification email:", error.message);
     }
   }
 
@@ -302,7 +302,7 @@ class DhanTokenManager {
    */
   async forceRenewal(): Promise<void> {
     if (process.env.NODE_ENV === "development") {
-      logger.info("🔧 Manual token renewal triggered");
+      devLog("🔧 Manual token renewal triggered");
     }
     await this.renewToken();
   }

@@ -2,7 +2,7 @@ import axios from "axios";
 import { config } from "dotenv";
 import { getDhanAccessToken } from "../config/store";
 import prisma from "../config/prisma";
-import { logger } from "../utils/logger";
+import { devLog, devWarn, devError } from "../utils/errorLogger";
 
 config();
 
@@ -96,12 +96,12 @@ class MarginCalculatorService {
       }
 
       if (process.env.NODE_ENV === "development") {
-        logger.info(
+        devLog(
           `📊 Calculating margin for ${request.symbol || request.securityId} (${request.exchangeSegment
           })`
         );
       }
-logger.info(request)
+      devLog(request)
       const response = await axios.post(
         this.API_URL,
         {
@@ -125,9 +125,9 @@ logger.info(request)
 
       return response.data;
     } catch (error: any) {
-      logger.error("❌ Error calculating margin:", error.message);
+      devError("❌ Error calculating margin:", error.message);
       if (error.response) {
-        logger.error(
+        devError(
           `API Error (${error.response.status}):`,
           error.response.data
         );
@@ -193,17 +193,17 @@ logger.info(request)
       });
 
       if (process.env.NODE_ENV === "development") {
-        logger.info(
+        devLog(
           `✅ Margin calculated and stored for ${request.symbol || request.securityId
           }`
         );
-        logger.info(`   Total Margin: ₹${marginData.totalMargin.toFixed(2)}`);
-        logger.info(`   Leverage: ${marginData.leverage}x`);
+        devLog(`   Total Margin: ₹${marginData.totalMargin.toFixed(2)}`);
+        devLog(`   Leverage: ${marginData.leverage}x`);
       }
 
       return marginData;
     } catch (error: any) {
-      logger.error(
+      devError(
         `❌ Failed to calculate and store margin for ${request.symbol || request.securityId
         }:`,
         error.message
@@ -226,7 +226,7 @@ logger.info(request)
     }>;
   }> {
     if (process.env.NODE_ENV === "development") {
-      logger.info(`📊 Calculating margins for ${requests.length} orders...`);
+      devLog(`📊 Calculating margins for ${requests.length} orders...`);
     }
 
     let successful = 0;
@@ -257,7 +257,7 @@ logger.info(request)
     }
 
     if (process.env.NODE_ENV === "development") {
-      logger.info(
+      devLog(
         `✅ Bulk margin calculation completed: ${successful} successful, ${failed} failed`
       );
     }
@@ -321,7 +321,7 @@ logger.info(request)
     });
 
     if (process.env.NODE_ENV === "development") {
-      logger.info(
+      devLog(
         `🗑️ Cleaned up ${deleted.count} old margin calculations (older than ${daysToKeep} days)`
       );
     }

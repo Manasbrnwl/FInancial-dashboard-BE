@@ -1,6 +1,10 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
+import { devError } from "../utils/errorLogger";
+
+
+const ENV = process.env.NODE_ENV;
 
 /**
  * Get arbitrage details for a specific instrument and date
@@ -86,7 +90,7 @@ export const getArbitrageDetails = async (req: Request, res: Response) => {
       data: result,
     });
   } catch (error) {
-    logger.error("Error fetching arbitrage details:", error);
+    devError("Error fetching arbitrage details:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -157,7 +161,7 @@ export const getLiveDataForSymbols = async (req: Request, res: Response) => {
       data: result,
     });
   } catch (error) {
-    logger.error("Error fetching live data:", error);
+    devError("Error fetching live data:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -431,7 +435,7 @@ ranked_symbols AS (
       },
     });
   } catch (error) {
-    logger.error("Error fetching filtered arbitrage data:", error);
+    devError("Error fetching filtered arbitrage data:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",

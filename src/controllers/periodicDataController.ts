@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
+import { devError } from "../utils/errorLogger";
 
 // OHLC Data NSE
 export const getOhlcDataNSE = async (req: Request, res: Response) => {
@@ -45,7 +46,7 @@ export const getOhlcDataNSE = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    logger.error("Error fetching OHLC NSE data:", error);
+    devError("Error fetching OHLC NSE data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch OHLC NSE data",
@@ -97,7 +98,7 @@ export const getTicksDataNSEEQ = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    logger.error("Error fetching Ticks NSE EQ data:", error);
+    devError("Error fetching Ticks NSE EQ data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch Ticks NSE EQ data",
@@ -149,7 +150,7 @@ export const getTicksDataNSEFUT = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    logger.error("Error fetching Ticks NSE FUT data:", error);
+    devError("Error fetching Ticks NSE FUT data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch Ticks NSE FUT data",
@@ -201,7 +202,7 @@ export const getTicksDataNSEOPT = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    logger.error("Error fetching Ticks NSE OPT data:", error);
+    devError("Error fetching Ticks NSE OPT data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch Ticks NSE OPT data",
@@ -260,7 +261,7 @@ export const getOhlcDataBSE = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    logger.error("Error fetching OHLC BSE data:", error);
+    devError("Error fetching OHLC BSE data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch OHLC BSE data",

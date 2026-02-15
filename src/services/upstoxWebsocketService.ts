@@ -3,14 +3,9 @@ import { loadEnv } from '../config/env';
 import { socketIOService } from './socketioService';
 import { upstoxAuthService } from './upstoxAuthService';
 import { logger } from "../utils/logger";
+import { devError, devLog, devWarn } from '../utils/errorLogger';
 
 loadEnv();
-
-// Helper functions for dev-only logging
-const isDev = process.env.NODE_ENV === 'development';
-const devLog = (...args: any[]) => { if (isDev) logger.info(...args); };
-const devWarn = (...args: any[]) => { if (isDev) logger.warn(...args); };
-const devError = (...args: any[]) => { if (isDev) logger.error(...args); };
 
 interface MarketData {
     symbol?: string;
@@ -50,40 +45,54 @@ export class UpstoxWebSocketService {
      * Check if current time is within market hours (9:00 AM - 3:30 PM IST)
      */
     private isWithinMarketHours(): boolean {
-        const istTime = this.getISTNow();
-        const hours = istTime.getHours();
-        const minutes = istTime.getMinutes();
-        const currentTimeInMinutes = hours * 60 + minutes;
+        try {
+            const istTime = this.getISTNow();
+            const hours = istTime.getHours();
+            const minutes = istTime.getMinutes();
+            const currentTimeInMinutes = hours * 60 + minutes;
 
-        // Market hours: 9:00 AM (540 minutes) to 3:30 PM (930 minutes)
-        const marketOpenMinutes = 9 * 60; // 9:00 AM = 540 minutes
-        const marketCloseMinutes = 15 * 60 + 30; // 3:30 PM = 930 minutes
-        const isWithinHours = currentTimeInMinutes >= marketOpenMinutes && currentTimeInMinutes <= marketCloseMinutes;
+            // Market hours: 9:00 AM (540 minutes) to 3:30 PM (930 minutes)
+            const marketOpenMinutes = 9 * 60; // 9:00 AM = 540 minutes
+            const marketCloseMinutes = 15 * 60 + 30; // 3:30 PM = 930 minutes
+            const isWithinHours = currentTimeInMinutes >= marketOpenMinutes && currentTimeInMinutes <= marketCloseMinutes;
 
-        // Check if it's a weekday (Monday = 1, Friday = 5)
-        const dayOfWeek = istTime.getDay();
-        const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
+            // Check if it's a weekday (Monday = 1, Friday = 5)
+            const dayOfWeek = istTime.getDay();
+            const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
 
-        // For development/testing, you might want to bypass this check
-        // return true; 
-        return isWithinHours && isWeekday;
+            // For development/testing, you might want to bypass this check
+            // return true; 
+            return isWithinHours && isWeekday;
+        } catch (error: any) {
+            devError('❌ Error in isWithinMarketHours:', error.message);
+            return false;
+        }
     }
 
     /**
      * Get the current time in IST
      */
     private getISTNow(): Date {
-        const now = new Date();
-        return new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+        try {
+            const now = new Date();
+            return new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+        } catch (error: any) {
+            devError('❌ Error in getISTNow:', error.message);
+            return new Date();
+        }
     }
 
     /**
      * Clear scheduled market open timer
      */
     private clearMarketOpenTimer(): void {
-        if (this.marketOpenTimer) {
-            clearTimeout(this.marketOpenTimer);
-            this.marketOpenTimer = null;
+        try {
+            if (this.marketOpenTimer) {
+                clearTimeout(this.marketOpenTimer);
+                this.marketOpenTimer = null;
+            }
+        } catch (error: any) {
+            devError('❌ Error in clearMarketOpenTimer:', error.message);
         }
     }
 
@@ -91,49 +100,61 @@ export class UpstoxWebSocketService {
      * Schedule the next attempt to start the WebSocket service at market open
      */
     private scheduleNextMarketOpen(): void {
-        const istNow = this.getISTNow();
-        const nextOpen = new Date(istNow);
-        nextOpen.setHours(9, 0, 0, 0);
-
-        // If we're past today's open time or it's a weekend, move to the next weekday
-        while (nextOpen <= istNow || nextOpen.getDay() === 0 || nextOpen.getDay() === 6) {
-            nextOpen.setDate(nextOpen.getDate() + 1);
+        try {
+            const istNow = this.getISTNow();
+            const nextOpen = new Date(istNow);
             nextOpen.setHours(9, 0, 0, 0);
+
+            // If we're past today's open time or it's a weekend, move to the next weekday
+            while (nextOpen <= istNow || nextOpen.getDay() === 0 || nextOpen.getDay() === 6) {
+                nextOpen.setDate(nextOpen.getDate() + 1);
+                nextOpen.setHours(9, 0, 0, 0);
+            }
+
+            const delay = nextOpen.getTime() - istNow.getTime();
+            this.clearMarketOpenTimer();
+
+            this.marketOpenTimer = setTimeout(() => {
+                devLog(`Starting Upstox WebSocket service at scheduled market open: ${nextOpen.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}`);
+                this.start();
+            }, delay);
+
+            devLog(`Next WebSocket start scheduled for ${nextOpen.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}`);
+        } catch (error: any) {
+            devError('❌ Error in scheduleNextMarketOpen:', error.message);
         }
-
-        const delay = nextOpen.getTime() - istNow.getTime();
-        this.clearMarketOpenTimer();
-
-        this.marketOpenTimer = setTimeout(() => {
-            devLog(`Starting Upstox WebSocket service at scheduled market open: ${nextOpen.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}`);
-            this.start();
-        }, delay);
-
-        devLog(`Next WebSocket start scheduled for ${nextOpen.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })}`);
     }
 
     /**
      * Start monitoring market hours
      */
     private startMarketHoursMonitoring(): void {
-        if (this.marketHoursCheckTimer) clearInterval(this.marketHoursCheckTimer);
+        try {
+            if (this.marketHoursCheckTimer) clearInterval(this.marketHoursCheckTimer);
 
-        // Check every minute if we should disconnect due to market hours
-        this.marketHoursCheckTimer = setInterval(() => {
-            if (this.isConnected && !this.isWithinMarketHours()) {
-                devLog('🕐 Market hours ended. Disconnecting Upstox WebSocket...');
-                this.stop();
-            }
-        }, 60000); // Check every minute
+            // Check every minute if we should disconnect due to market hours
+            this.marketHoursCheckTimer = setInterval(() => {
+                if (this.isConnected && !this.isWithinMarketHours()) {
+                    devLog('🕐 Market hours ended. Disconnecting Upstox WebSocket...');
+                    this.stop();
+                }
+            }, 60000); // Check every minute
+        } catch (error: any) {
+            devError('❌ Error in startMarketHoursMonitoring:', error.message);
+        }
     }
 
     /**
      * Stop market hours monitoring
      */
     private stopMarketHoursMonitoring(): void {
-        if (this.marketHoursCheckTimer) {
-            clearInterval(this.marketHoursCheckTimer);
-            this.marketHoursCheckTimer = null;
+        try {
+            if (this.marketHoursCheckTimer) {
+                clearInterval(this.marketHoursCheckTimer);
+                this.marketHoursCheckTimer = null;
+            }
+        } catch (error: any) {
+            devError('❌ Error in stopMarketHoursMonitoring:', error.message);
         }
     }
 
@@ -368,9 +389,14 @@ export class UpstoxWebSocketService {
     }
 
     private extractSymbolFromKey(instrumentKey: string): string {
-        if (!instrumentKey) return '';
-        const parts = instrumentKey.split('|');
-        return parts.length > 1 ? parts[1] : instrumentKey;
+        try {
+            if (!instrumentKey) return '';
+            const parts = instrumentKey.split('|');
+            return parts.length > 1 ? parts[1] : instrumentKey;
+        } catch (error: any) {
+            devError('❌ Error in extractSymbolFromKey:', error.message);
+            return instrumentKey || '';
+        }
     }
 
     private processMarketData(data: MarketData): void {
@@ -403,15 +429,19 @@ export class UpstoxWebSocketService {
      * Subscribe to symbols
      */
     public subscribeToSymbols(instrumentKeys: string[]): void {
-        devLog(`🔔 subscribeToSymbols called with: ${instrumentKeys.join(', ')}`);
+        try {
+            devLog(`🔔 subscribeToSymbols called with: ${instrumentKeys.join(', ')}`);
 
-        // Update local set
-        instrumentKeys.forEach(k => this.subscribedInstruments.add(k));
+            // Update local set
+            instrumentKeys.forEach(k => this.subscribedInstruments.add(k));
 
-        if (this.streamer && this.isConnected) {
-            this.streamer.subscribe(instrumentKeys, "full");
-        } else {
-            devLog(`⏳ Upstox WebSocket not connected. Queued ${instrumentKeys.length} instruments.`);
+            if (this.streamer && this.isConnected) {
+                this.streamer.subscribe(instrumentKeys, "full");
+            } else {
+                devLog(`⏳ Upstox WebSocket not connected. Queued ${instrumentKeys.length} instruments.`);
+            }
+        } catch (error: any) {
+            devError('❌ Error in subscribeToSymbols:', error.message);
         }
     }
 
@@ -419,12 +449,16 @@ export class UpstoxWebSocketService {
      * Unsubscribe from symbols
      */
     public unsubscribeFromSymbols(instrumentKeys: string[]): void {
-        devLog(`📡 Unsubscribe called for: ${instrumentKeys.join(', ')}`);
+        try {
+            devLog(`📡 Unsubscribe called for: ${instrumentKeys.join(', ')}`);
 
-        instrumentKeys.forEach(k => this.subscribedInstruments.delete(k));
+            instrumentKeys.forEach(k => this.subscribedInstruments.delete(k));
 
-        if (this.streamer && this.isConnected) {
-            this.streamer.unsubscribe(instrumentKeys);
+            if (this.streamer && this.isConnected) {
+                this.streamer.unsubscribe(instrumentKeys);
+            }
+        } catch (error: any) {
+            devError('❌ Error in unsubscribeFromSymbols:', error.message);
         }
     }
 
@@ -432,35 +466,48 @@ export class UpstoxWebSocketService {
      * Get connection status
      */
     public getStatus(): { isConnected: boolean; subscribedCount: number; reconnectAttempts: number } {
-        return {
-            isConnected: this.isConnected,
-            subscribedCount: this.subscribedInstruments.size,
-            reconnectAttempts: this.reconnectAttempts
-        };
+        try {
+            return {
+                isConnected: this.isConnected,
+                subscribedCount: this.subscribedInstruments.size,
+                reconnectAttempts: this.reconnectAttempts
+            };
+        } catch (error: any) {
+            devError('❌ Error in getStatus:', error.message);
+            return {
+                isConnected: false,
+                subscribedCount: 0,
+                reconnectAttempts: 0
+            };
+        }
     }
 
     /**
      * Stop the WebSocket service
      */
     public stop(): void {
-        devLog('🛑 Stopping Upstox WebSocket service...');
+        try {
+            devLog('🛑 Stopping Upstox WebSocket service...');
 
-        this.stopMarketHoursMonitoring();
-        this.clearMarketOpenTimer();
+            this.stopMarketHoursMonitoring();
+            this.clearMarketOpenTimer();
 
-        if (this.streamer) {
-            try {
-                this.streamer.disconnect();
-            } catch (error: any) {
-                devWarn('⚠️ Error during streamer disconnect:', error.message);
+            if (this.streamer) {
+                try {
+                    this.streamer.disconnect();
+                } catch (error: any) {
+                    devWarn('⚠️ Error during streamer disconnect:', error.message);
+                }
+                this.streamer = null;
             }
-            this.streamer = null;
-        }
 
-        this.isConnected = false;
+            this.isConnected = false;
 
-        if (!this.isWithinMarketHours()) {
-            this.scheduleNextMarketOpen();
+            if (!this.isWithinMarketHours()) {
+                this.scheduleNextMarketOpen();
+            }
+        } catch (error: any) {
+            devError('❌ Error in stop:', error.message);
         }
     }
 }

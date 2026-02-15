@@ -4,7 +4,7 @@ import { getGapBaseline } from "../cache/gapAverageCache";
 import { loadEnv } from "../config/env";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { sendSmsNotification } from "../utils/sendSms";
-import { logger } from "../utils/logger";
+import { devLog, devWarn, devError } from "../utils/errorLogger";
 
 loadEnv();
 
@@ -208,7 +208,7 @@ export async function triggerAlert({
 
   const trend = direction === "positive" ? "Uptrend" : "Downtrend";
 
-  logger.info(
+  devLog(
     `?? Gap alert: ${instrumentName} ${alertType} deviation ${payload.deviationPercent}% (slot ${timeSlot}) | Trend: ${trend}`
   );
 
@@ -225,7 +225,7 @@ export async function triggerAlert({
 
   // Fetch latest 10 alerts globally (within today)
   const last10Alerts = await prisma.gap_alerts.findMany({
-    where: { 
+    where: {
       triggered_at: {
         gte: todayIST
       }
@@ -300,7 +300,7 @@ export async function triggerAlert({
         sendEmailNotification(email, subject, text, html)
       )
     ).catch((err) =>
-      logger.error("? Failed to send gap alert emails:", err?.message || err)
+      devError("? Failed to send gap alert emails:", err?.message || err)
     );
   }
 
@@ -312,7 +312,7 @@ export async function triggerAlert({
         sendSmsNotification(phone, smsMessage)
       )
     ).catch((err) =>
-      logger.error("? Failed to send gap alert SMS:", err?.message || err)
+      devError("? Failed to send gap alert SMS:", err?.message || err)
     );
   }
 }
@@ -465,7 +465,7 @@ export async function processGapData(
         });
       }
     } catch (error: any) {
-      logger.error(
+      devError(
         `? Failed to process gap data for ${gap.instrumentName}:`,
         error.message
       );

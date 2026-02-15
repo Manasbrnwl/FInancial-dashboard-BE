@@ -5,6 +5,7 @@ import { parseContract } from "./helper";
 import { getNseOptionsHistory } from "./nseOptionsHistory";
 import { createBatchInserter } from "../utils/batchInsert";
 import { logger } from "../utils/logger";
+import { devLog } from "../utils/errorLogger";
 
 const prisma = new PrismaClient();
 
@@ -18,10 +19,10 @@ async function insertOptIntoDataBase(date: any) {
 
     for (let index = 0; index < dates.length; index++) {
       const date = dates[index];
-      logger.info("OPT api called ", date);
+      devLog("OPT api called ", date);
       const response = await getNseOptionsHistory(date);
       if (response == false) {
-        logger.info("skipped ", date);
+        devLog("skipped ", date);
       } else {
         // Collect all instruments, symbols, and options data
         const instrumentsToUpsert: Array<{ exchange: string; instrument_type: string }> = [];
@@ -128,15 +129,15 @@ async function insertOptIntoDataBase(date: any) {
             }
           );
 
-          logger.info(
+          devLog(
             `📊 Options for ${date}: ${result.inserted} processed, ${result.errors} errors`
           );
         }
       }
     }
-    logger.info("✅ Completed all OPT data upload");
+    devLog("✅ Completed all OPT data upload");
   } catch (error) {
-    logger.info("Options : ", error);
+    devLog("Options : ", error);
     // await sendEmailNotification(
     //   process.env.RECEIVER_EMAIL || "tech@anfy.in",
     //   "Finance Dashboard History Cron",

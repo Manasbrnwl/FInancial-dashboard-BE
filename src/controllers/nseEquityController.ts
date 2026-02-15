@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
+import { devError } from "../utils/errorLogger";
 
 const normalizeBigInt = (row: Record<string, any>) =>
   Object.fromEntries(
@@ -51,7 +52,7 @@ export const getNseEquityData = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    logger.error("Error fetching NSE equity data:", error);
+    devError("Error fetching NSE equity data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE equity data",
@@ -73,7 +74,7 @@ export const getNseEquitySymbols = async (req: Request, res: Response) => {
       data: symbols.map((s) => s.symbol),
     });
   } catch (error: any) {
-    logger.error("Error fetching NSE equity symbols:", error);
+    devError("Error fetching NSE equity symbols:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE equity symbols",
@@ -103,7 +104,7 @@ export const getNseEquityLatest = async (req: Request, res: Response) => {
       data: latest,
     });
   } catch (error: any) {
-    logger.error("Error fetching latest NSE equity data:", error);
+    devError("Error fetching latest NSE equity data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch latest NSE equity data",
@@ -150,7 +151,7 @@ export const getEquityDateRangeController = async (
       hourly_max_date: hourly_row.max_date && hourly_row.max_date,
     });
   } catch (error: any) {
-    logger.error("Error fetching equity date range:", error);
+    devError("Error fetching equity date range:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch equity date range",

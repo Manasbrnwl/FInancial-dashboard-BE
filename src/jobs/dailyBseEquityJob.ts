@@ -2,7 +2,7 @@ import cron from "node-cron";
 import { getBseEquityHistory } from "../bseEquity/bseEquityHistory";
 import { updateJobStatus, initializeJobStatus } from "../utils/cronMonitor";
 import { isDhanTokenReady } from "./dhanTokenInitJob";
-import { logger } from "../utils/logger";
+import { devLog, devError } from "../utils/errorLogger";
 
 // Run daily at 10:00 PM, Monday-Friday (after NSE jobs complete)
 const CRON_EXPRESSION = "0 22 * * 1-5";
@@ -14,13 +14,11 @@ async function executeBseEquityJob(): Promise<void> {
   const startTime = Date.now();
 
   try {
-    if (process.env.NODE_ENV === "development") {
-      logger.info("⏰ Starting BSE Equity job");
-    }
+    devLog("⏰ Starting BSE Equity job");
 
     // Check if Dhan token is initialized
     if (!isDhanTokenReady()) {
-      logger.error("❌ DhanHQ token manager not initialized. Skipping BSE Equity job.");
+      devError("❌ DhanHQ token manager not initialized. Skipping BSE Equity job.");
       updateJobStatus(
         "bseEquityJob",
         "failed",
@@ -37,12 +35,10 @@ async function executeBseEquityJob(): Promise<void> {
 
     const duration = Date.now() - startTime;
     updateJobStatus("bseEquityJob", "success", CRON_EXPRESSION, duration);
-    if (process.env.NODE_ENV === "development") {
-      logger.info(`✅ BSE Equity job completed in ${Math.floor(duration / 60000)} minutes`);
-    }
+    devLog(`✅ BSE Equity job completed in ${Math.floor(duration / 60000)} minutes`);
   } catch (error: any) {
     const duration = Date.now() - startTime;
-    logger.error("❌ BSE Equity job failed:", error.message);
+    devError("❌ BSE Equity job failed:", error.message);
     updateJobStatus(
       "bseEquityJob",
       "failed",
@@ -72,5 +68,5 @@ export function initializeBseEquityJob(): void {
     timezone: "Asia/Kolkata",
   });
 
-  logger.info("⏰ BSE Equity job scheduled to run daily at 10:00 PM (Mon-Fri)");
+  devLog("⏰ BSE Equity job scheduled to run daily at 10:00 PM (Mon-Fri)");
 }

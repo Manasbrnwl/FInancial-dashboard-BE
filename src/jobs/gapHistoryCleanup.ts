@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { PrismaClient } from "@prisma/client";
 import { loadEnv } from "../config/env";
-import { logger } from "../utils/logger";
+import { devLog, devError } from "../utils/errorLogger";
 
 loadEnv();
 
@@ -23,19 +23,15 @@ export function initializeGapHistoryCleanupJob(): void {
           DELETE FROM market_data.gap_time_series
           WHERE date < CURRENT_DATE - (${retentionDays} * INTERVAL '1 day')
         `;
-        if (process.env.NODE_ENV === "development") {
-          logger.info(`?? Cleaned gap_time_series older than ${retentionDays} days`);
-        }
+        devLog(`?? Cleaned gap_time_series older than ${retentionDays} days`);
       } catch (error: any) {
-        logger.error("? Failed to cleanup gap_time_series:", error?.message || error);
+        devError("? Failed to cleanup gap_time_series:", error?.message || error);
       }
     },
     { timezone: "Asia/Kolkata" }
   );
 
-  if (process.env.NODE_ENV === "development") {
-    logger.info(
-      `?? Gap history cleanup scheduled with cron "${CRON_EXPRESSION}" (IST timezone)`
-    );
-  }
+  devLog(
+    `?? Gap history cleanup scheduled with cron "${CRON_EXPRESSION}" (IST timezone)`
+  );
 }

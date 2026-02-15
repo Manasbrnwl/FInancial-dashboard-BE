@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { logger } from "../utils/logger";
+import { devError } from "../utils/errorLogger";
 
 const prisma = new PrismaClient();
 
@@ -67,7 +68,7 @@ async function insertBSEEqtIntoDataBase(
       total: 0,
     };
   } catch (error: any) {
-    logger.error(`❌ Error inserting BSE data for ${data.SYMBOL_NAME}:`, error.message);
+    devError(`❌ Error inserting BSE data for ${data.SYMBOL_NAME}:`, error.message);
     await sendEmailNotification(
       process.env.RECEIVER_EMAIL || "tech@anfy.in",
       "Finance Dashboard History Cron",

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
+import { devError } from "../utils/errorLogger";
 
 export const getArbitrageData = async (req: Request, res: Response) => {
   try {
@@ -87,7 +88,7 @@ export const getArbitrageData = async (req: Request, res: Response) => {
       data: transformedData,
     });
   } catch (error: any) {
-    logger.error("Error fetching Arbitrage data:", error);
+    devError("Error fetching Arbitrage data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch Arbitrage data",
@@ -152,7 +153,7 @@ export const getNSEOptionsData = async (req: Request, res: Response) => {
       count: optionsData.length,
     });
   } catch (error: any) {
-    logger.error("Error fetching NSE Options data:", error);
+    devError("Error fetching NSE Options data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE Options data",
@@ -215,7 +216,7 @@ export const getNSEFuturesData = async (req: Request, res: Response) => {
       count: futuresData.length,
     });
   } catch (error: any) {
-    logger.error("Error fetching NSE Futures data:", error);
+    devError("Error fetching NSE Futures data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE Futures data",
@@ -281,7 +282,7 @@ export const getNSEFuturesTicksData = async (req: Request, res: Response) => {
       count: futuresTicksData.length,
     });
   } catch (error: any) {
-    logger.error("Error fetching NSE Futures Ticks data:", error);
+    devError("Error fetching NSE Futures Ticks data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE Futures Ticks data",
@@ -347,7 +348,7 @@ export const getNSEOptionsTicksData = async (req: Request, res: Response) => {
       count: optionsTicksData.length,
     });
   } catch (error: any) {
-    logger.error("Error fetching NSE Options Ticks data:", error);
+    devError("Error fetching NSE Options Ticks data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE Options Ticks data",

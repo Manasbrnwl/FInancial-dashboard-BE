@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import { createServer } from "http";
 import morgan from "morgan";
 import cron from "node-cron";
-import { logger } from "./utils/logger";
+import { devLog, devError } from "./utils/errorLogger";
 import { globalErrorHandler } from "./middleware/errorHandler";
 // import healthRouter from "./routes/health";
 import websocketRouter from "./routes/websocket";
@@ -62,12 +62,13 @@ app.use("/api", apiRouter);
 // Temporary Upstox Callback Route
 import { upstoxAuthService } from "./services/upstoxAuthService";
 
+
 app.get("/callback", async (req, res) => {
   const code = req.query.code as string;
   if (code) {
     try {
       const token = await upstoxAuthService.generateAccessToken(code);
-      logger.info("? Upstox Token Generated:", token.substring(0, 10) + "...");
+      devLog("? Upstox Token Generated:", token.substring(0, 10) + "...");
       res.send(`<h1>Login Successful</h1><p>Token generated. check console.</p>`);
     } catch (err: any) {
       res.status(500).send("Error: " + err.message);
@@ -79,14 +80,14 @@ app.get("/callback", async (req, res) => {
 
 // Weekly Upstox Instrument Sync - Runs every Tuesday at 6 AM IST
 async function syncUpstoxInstruments() {
-  logger.info("📊 Starting weekly Upstox instrument sync...");
+  // devLog("📊 Starting weekly Upstox instrument sync...");
   try {
     await upstoxInstrumentService.loadNseEqInstruments();
     await upstoxInstrumentService.loadNseFutInstruments();
     await upstoxInstrumentService.loadNseOptInstruments();
-    logger.info("✅ Weekly Upstox instrument sync completed");
+    // devLog("✅ Weekly Upstox instrument sync completed");
   } catch (error: any) {
-    logger.error("❌ Failed to sync Upstox instruments:", error.message);
+    devError("❌ Failed to sync Upstox instruments:", error.message);
   }
 }
 
@@ -94,7 +95,7 @@ async function syncUpstoxInstruments() {
 cron.schedule("0 6 * * 2", syncUpstoxInstruments, {
   timezone: "Asia/Kolkata",
 });
-logger.info("📅 Weekly Upstox Instrument Sync scheduled (Every Tuesday 6 AM IST)");
+devLog("📅 Weekly Upstox Instrument Sync scheduled (Every Tuesday 6 AM IST)");
 
 // Run immediately on startup in development mode
 if (process.env.NODE_ENV === "development") {
@@ -121,7 +122,7 @@ async function initializeWebSocketService() {
   try {
     await upstoxWebSocketService.start();
   } catch (error: any) {
-    logger.error("❌ Failed to initialize Upstox WebSocket service:", error.message);
+    devError("❌ Failed to initialize Upstox WebSocket service:", error.message);
   }
 }
 
@@ -143,5 +144,5 @@ process.on("SIGINT", () => {
 app.use(globalErrorHandler);
 
 httpServer.listen(PORT, () => {
-  logger.info(`🚀 Server running on http://localhost:${PORT}`);
+  devLog(`🚀 Server running on http://localhost:${PORT}`);
 });

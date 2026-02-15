@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
-import { logger } from "../utils/logger";
+
+import { devError } from "../utils/errorLogger";
 
 const prisma = new PrismaClient();
 
@@ -31,7 +32,7 @@ export const getRecentCoveredCallAlerts = async (
             count: safeAlerts.length,
         });
     } catch (error: any) {
-        logger.error("❌ Failed to fetch recent covered call alerts:", error?.message || error);
+        devError("❌ Failed to fetch recent covered call alerts:", error?.message || error);
         res.status(500).json({
             success: false,
             message: "Failed to fetch recent covered call alerts",
@@ -103,7 +104,7 @@ export const getCoveredCallAlertHistory = async (
             },
         });
     } catch (error: any) {
-        logger.error("❌ Failed to fetch covered call alert history:", error?.message || error);
+        devError("❌ Failed to fetch covered call alert history:", error?.message || error);
         res.status(500).json({
             success: false,
             message: "Failed to fetch covered call alert history",
@@ -151,7 +152,7 @@ export const getCoveredCallAlertConfig = async (
             data: config,
         });
     } catch (error: any) {
-        logger.error("❌ Failed to fetch covered call alert config:", error?.message || error);
+        devError("❌ Failed to fetch covered call alert config:", error?.message || error);
         res.status(500).json({
             success: false,
             message: "Failed to fetch covered call alert config",
@@ -204,7 +205,7 @@ export const updateCoveredCallAlertConfig = async (
             data: config,
         });
     } catch (error: any) {
-        logger.error("❌ Failed to update covered call alert config:", error?.message || error);
+        devError("❌ Failed to update covered call alert config:", error?.message || error);
         res.status(500).json({
             success: false,
             message: "Failed to update covered call alert config",

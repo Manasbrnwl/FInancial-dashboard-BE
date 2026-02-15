@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
+import { devError } from "../utils/errorLogger";
 
 export const getCoveredCallsData = async (req: Request, res: Response) => {
   try {
@@ -171,7 +172,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
       limit,
     });
   } catch (error: any) {
-    logger.error("Error fetching Covered Calls data:", error);
+    devError("Error fetching Covered Calls data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch Covered Calls data",
@@ -301,7 +302,7 @@ export const getCoveredCallsStats = async (req: Request, res: Response) => {
       }
     });
   } catch (error: any) {
-    logger.error("Error fetching Covered Calls stats:", error);
+    devError("Error fetching Covered Calls stats:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch Covered Calls stats",
@@ -393,7 +394,7 @@ export const getCoveredCallsByUnderlying = async (
       count: transformedData.length,
     });
   } catch (error: any) {
-    logger.error("Error fetching Covered Calls data by underlying:", error);
+    devError("Error fetching Covered Calls data by underlying:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch Covered Calls data",
@@ -440,7 +441,7 @@ export const getCoveredCallsSymbolsExpiry = async (
       data: result,
     });
   } catch (error) {
-    logger.error("Error fetching symbols and expiry dates:", error);
+    devError("Error fetching symbols and expiry dates:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -618,7 +619,7 @@ export const getFilteredCoveredCallsDetails = async (
       },
     });
   } catch (error) {
-    logger.error("Error fetching filtered covered calls details:", error);
+    devError("Error fetching filtered covered calls details:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -700,7 +701,7 @@ export const getLatestOptionsTicksByInstrument = async (
       : result;
     return res.status(200).json({ success: true, data: safe });
   } catch (error: any) {
-    logger.error("Error fetching latest options ticks:", error);
+    devError("Error fetching latest options ticks:", error);
     return res.status(500).json({ success: false, message: process.env.NODE_ENV !== "production" ? error.message : "Internal server error" });
   }
 };
@@ -853,7 +854,7 @@ export const getCoveredCallsTrendDaily = async (
       },
     });
   } catch (error: any) {
-    logger.error("Error fetching covered calls daily trend:", error);
+    devError("Error fetching covered calls daily trend:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -1142,7 +1143,7 @@ export const getCoveredCallsTrendHourly = async (
       },
     });
   } catch (error: any) {
-    logger.error("Error fetching covered calls hourly trend:", error);
+    devError("Error fetching covered calls hourly trend:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",

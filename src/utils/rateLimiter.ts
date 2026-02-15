@@ -1,4 +1,4 @@
-import { logger } from "./logger";
+import { devLog } from "./errorLogger";
 /**
  * Rate Limiter Utility
  *
@@ -93,7 +93,7 @@ class RateLimiter {
       const waitTime = this.getWaitTime();
       if (waitTime > 0) {
         if (process.env.NODE_ENV === "development") {
-          logger.info(`⏳ Rate limit reached. Waiting ${waitTime}ms...`);
+          devLog(`⏳ Rate limit reached. Waiting ${waitTime}ms...`);
         }
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       }

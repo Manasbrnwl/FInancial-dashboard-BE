@@ -4,7 +4,7 @@ import { upstoxAuthService } from "../services/upstoxAuthService";
 import { upstoxOhlcService, OhlcQuote } from "../services/upstoxOhlcService";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { loadEnv } from "../config/env";
-import { logger } from "../utils/logger";
+import { devLog, devError } from "../utils/errorLogger";
 
 loadEnv();
 const prisma = new PrismaClient();
@@ -56,7 +56,7 @@ async function getActiveEquityInstruments(): Promise<InstrumentData[]> {
             upstox_id: s.upstox_id!,
         }));
     } catch (error: any) {
-        logger.error("❌ Failed to fetch active equity instruments from DB:", error.message);
+        devError("❌ Failed to fetch active equity instruments from DB:", error.message);
         return [];
     }
 }
@@ -101,7 +101,7 @@ async function getActiveFuturesSymbols(): Promise<SymbolData[]> {
             expiry_month: s.expiry_month,
         }));
     } catch (error: any) {
-        logger.error("❌ Failed to fetch active futures symbols from DB:", error.message);
+        devError("❌ Failed to fetch active futures symbols from DB:", error.message);
         return [];
     }
 }
@@ -146,7 +146,7 @@ async function getActiveOptionsSymbols(): Promise<SymbolData[]> {
             expiry_month: s.expiry_month,
         }));
     } catch (error: any) {
-        logger.error("❌ Failed to fetch active options symbols from DB:", error.message);
+        devError("❌ Failed to fetch active options symbols from DB:", error.message);
         return [];
     }
 }
@@ -233,10 +233,10 @@ async function sendDailyJobEmail(
         );
 
         if (process.env.NODE_ENV === "development") {
-            logger.info(`📧 Email notification sent: ${status}`);
+            devLog(`📧 Email notification sent: ${status}`);
         }
     } catch (error: any) {
-        logger.error(`❌ Failed to send email notification:`, error.message);
+        devError(`❌ Failed to send email notification:`, error.message);
     }
 }
 
@@ -253,7 +253,7 @@ async function processEquityOhlc(
     let totalInserted = 0;
     const upstoxKeys = instruments.map(inst => inst.upstox_id);
 
-    logger.info(`📊 Processing ${instruments.length} NSE Equity instruments...`);
+    devLog(`📊 Processing ${instruments.length} NSE Equity instruments...`);
 
     const ohlcData = await upstoxOhlcService.fetchOhlcBatched(
         upstoxKeys,
@@ -261,7 +261,7 @@ async function processEquityOhlc(
         "1d",
         (batchIndex, totalBatches) => {
             if (process.env.NODE_ENV === "development") {
-                logger.info(`✅ Equity OHLC batch ${batchIndex}/${totalBatches} completed`);
+                devLog(`✅ Equity OHLC batch ${batchIndex}/${totalBatches} completed`);
             }
         }
     );
@@ -303,7 +303,7 @@ async function processEquityOhlc(
         totalInserted = result.count;
     }
 
-    logger.info(`✅ NSE Equity: ${totalInserted} records inserted`);
+    devLog(`✅ NSE Equity: ${totalInserted} records inserted`);
     return totalInserted;
 }
 
@@ -320,7 +320,7 @@ async function processFuturesOhlc(
     let totalInserted = 0;
     const upstoxKeys = symbols.map(sym => sym.upstox_id);
 
-    logger.info(`📊 Processing ${symbols.length} NSE Futures symbols...`);
+    devLog(`📊 Processing ${symbols.length} NSE Futures symbols...`);
 
     const ohlcData = await upstoxOhlcService.fetchOhlcBatched(
         upstoxKeys,
@@ -328,7 +328,7 @@ async function processFuturesOhlc(
         "1d",
         (batchIndex, totalBatches) => {
             if (process.env.NODE_ENV === "development") {
-                logger.info(`✅ Futures OHLC batch ${batchIndex}/${totalBatches} completed`);
+                devLog(`✅ Futures OHLC batch ${batchIndex}/${totalBatches} completed`);
             }
         }
     );
@@ -370,7 +370,7 @@ async function processFuturesOhlc(
         totalInserted = result.count;
     }
 
-    logger.info(`✅ NSE Futures: ${totalInserted} records inserted`);
+    devLog(`✅ NSE Futures: ${totalInserted} records inserted`);
     return totalInserted;
 }
 
@@ -387,7 +387,7 @@ async function processOptionsOhlc(
     let totalInserted = 0;
     const upstoxKeys = symbols.map(sym => sym.upstox_id);
 
-    logger.info(`📊 Processing ${symbols.length} NSE Options symbols...`);
+    devLog(`📊 Processing ${symbols.length} NSE Options symbols...`);
 
     const ohlcData = await upstoxOhlcService.fetchOhlcBatched(
         upstoxKeys,
@@ -395,7 +395,7 @@ async function processOptionsOhlc(
         "1d",
         (batchIndex, totalBatches) => {
             if (process.env.NODE_ENV === "development") {
-                logger.info(`✅ Options OHLC batch ${batchIndex}/${totalBatches} completed`);
+                devLog(`✅ Options OHLC batch ${batchIndex}/${totalBatches} completed`);
             }
         }
     );
@@ -440,7 +440,7 @@ async function processOptionsOhlc(
         totalInserted = result.count;
     }
 
-    logger.info(`✅ NSE Options: ${totalInserted} records inserted`);
+    devLog(`✅ NSE Options: ${totalInserted} records inserted`);
     return totalInserted;
 }
 
@@ -449,16 +449,16 @@ async function processOptionsOhlc(
  */
 export async function executeDailyOhlcUpstoxJob(): Promise<void> {
     const startTime = Date.now();
-    logger.info(`🕐 Starting Daily NSE OHLC Upstox Job at ${new Date().toISOString()}`);
+    devLog(`🕐 Starting Daily NSE OHLC Upstox Job at ${new Date().toISOString()}`);
 
     try {
         // Send start notification
-        await sendDailyJobEmail("started", {});
+        // await sendDailyJobEmail("started", {});
 
         // 1. Get Access Token
         const token = await upstoxAuthService.getAccessToken();
         if (!token) {
-            logger.error("❌ No Upstox Access Token available. Skipping job.");
+            devError("❌ No Upstox Access Token available. Skipping job.");
             await sendDailyJobEmail("failed", { errorMessage: "No Upstox Access Token available" });
             return;
         }
@@ -473,7 +473,7 @@ export async function executeDailyOhlcUpstoxJob(): Promise<void> {
             getActiveOptionsSymbols(),
         ]);
 
-        logger.info(`📊 Found: ${equityInstruments.length} equity, ${futuresSymbols.length} futures, ${optionsSymbols.length} options`);
+        devLog(`📊 Found: ${equityInstruments.length} equity, ${futuresSymbols.length} futures, ${optionsSymbols.length} options`);
 
         // 3. Process each segment
         const equityCount = await processEquityOhlc(equityInstruments, token, today);
@@ -483,7 +483,7 @@ export async function executeDailyOhlcUpstoxJob(): Promise<void> {
         const totalInserted = equityCount + futuresCount + optionsCount;
         const duration = (Date.now() - startTime) / 1000;
 
-        logger.info(`✅ Daily OHLC Job Completed. Total: ${totalInserted} records in ${duration.toFixed(2)}s`);
+        devLog(`✅ Daily OHLC Job Completed. Total: ${totalInserted} records in ${duration.toFixed(2)}s`);
 
         // Send completion notification
         await sendDailyJobEmail("completed", {
@@ -494,7 +494,7 @@ export async function executeDailyOhlcUpstoxJob(): Promise<void> {
         });
 
     } catch (error: any) {
-        logger.error("❌ Critical Error in Daily OHLC Job:", error.message);
+        devError("❌ Critical Error in Daily OHLC Job:", error.message);
         await sendDailyJobEmail("failed", { errorMessage: error.message });
     }
 }
@@ -515,5 +515,5 @@ export function initializeDailyOhlcUpstoxJob(): void {
         timezone: "Asia/Kolkata",
     });
 
-    logger.info("⏰ Daily OHLC Upstox Job scheduled to run every day 7 PM, Monday to Friday (IST)");
+    devLog("⏰ Daily OHLC Upstox Job scheduled to run every day 7 PM, Monday to Friday (IST)");
 }

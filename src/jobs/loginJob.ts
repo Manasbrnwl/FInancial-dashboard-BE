@@ -9,7 +9,7 @@ import { insertEqIntoDataBase } from "../nseEquity/insertEqtIntoDatabase";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { getBseEquityHistory } from "../bseEquity/bseEquityHistory";
 import { updateJobStatus, initializeJobStatus } from "../utils/cronMonitor";
-import { logger } from "../utils/logger";
+import { devLog, devError } from "../utils/errorLogger";
 loadEnv();
 
 const CRON_EXPRESSION = "0 20 * * 1-5"; // 8 PM, Monday-Friday
@@ -34,7 +34,7 @@ export async function fetchAccessToken(): Promise<void> {
       grant_type: "password",
     };
 
-    // logger.info('🔑 Fetching access token...');
+    // devLog('🔑 Fetching access token...');
 
     const response = await axios.post(
       LOGIN_API_URL,
@@ -45,7 +45,7 @@ export async function fetchAccessToken(): Promise<void> {
         },
       }
     );
-    // logger.info('✅ Login response:', response.data);
+    // devLog('✅ Login response:', response.data);
 
     // Assuming the API returns the token in the response data
     const accessToken = response.data.access_token;
@@ -68,18 +68,18 @@ export async function fetchAccessToken(): Promise<void> {
       // insertOptIntoDataBase("2025-12-08");
       insertEqIntoDataBase(date.toISOString().split("T")[0]);
       // insertEqIntoDataBase("2025-12-08");
-      // logger.info('✅ Access token updated successfully');
+      // devLog('✅ Access token updated successfully');
 
       const duration = Date.now() - startTime;
       updateJobStatus('loginJob', 'success', CRON_EXPRESSION, duration);
     } else {
-      logger.error("❌ No access token received from API");
+      devError("❌ No access token received from API");
       const duration = Date.now() - startTime;
       updateJobStatus('loginJob', 'failed', CRON_EXPRESSION, duration, 'No access token received from API');
       fetchAccessToken();
     }
   } catch (error: any) {
-    logger.error("❌ Failed to fetch access token:", error.message);
+    devError("❌ Failed to fetch access token:", error.message);
     const duration = Date.now() - startTime;
     updateJobStatus('loginJob', 'failed', CRON_EXPRESSION, duration, error.message);
     fetchAccessToken();
@@ -105,5 +105,5 @@ export function initializeLoginJob(): void {
     timezone: "Asia/Kolkata", // Indian timezone
   });
 
-  logger.info('⏰ Login job scheduled to run every day at 8:00 PM (Mon-Fri)');
+  devLog('⏰ Login job scheduled to run every day at 8:00 PM (Mon-Fri)');
 }

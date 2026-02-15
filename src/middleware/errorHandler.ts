@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { logger } from "../utils/logger";
+import { devError } from "../utils/errorLogger";
 
 /**
  * Global Express error-handling middleware.
@@ -17,7 +18,7 @@ export const globalErrorHandler = (
     const isProduction = process.env.NODE_ENV === "production";
 
     // Always log full error details server-side
-    logger.error("Unhandled error:", err);
+    devError("Unhandled error:", err);
 
     res.status(statusCode).json({
         success: false,

@@ -5,7 +5,7 @@ import { processCoveredCallData } from "../services/coveredCallAlertService";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { loadEnv } from "../config/env";
-import { logger } from "../utils/logger";
+import { devLog, devError } from "../utils/errorLogger";
 
 loadEnv();
 const prisma = new PrismaClient();
@@ -88,7 +88,7 @@ async function getActiveOptions(): Promise<OptionInstrument[]> {
             underlyingUpstoxId: o.underlying_upstox_id,
         }));
     } catch (error: any) {
-        logger.error("❌ Failed to fetch active options from DB:", error.message);
+        devError("❌ Failed to fetch active options from DB:", error.message);
         return [];
     }
 }
@@ -111,7 +111,7 @@ async function fetchQuotes(keys: string[], accessToken: string): Promise<Record<
         }
         return null;
     } catch (error: any) {
-        logger.error(
+        devError(
             "❌ Failed to fetch quotes batch:",
             error.response?.data?.errors || error.message
         );
@@ -127,22 +127,22 @@ async function getCoveredCallCandidates(accessToken: string): Promise<CoveredCal
         // 1. Get all active CE options with underlying info
         const options = await getActiveOptions();
         if (options.length === 0) {
-            logger.info("⚠️ No active CE options found.");
+            devLog("⚠️ No active CE options found.");
             return [];
         }
 
-        logger.info(`📊 Found ${options.length} active CE options. Fetching quotes...`);
+        devLog(`📊 Found ${options.length} active CE options. Fetching quotes...`);
 
         // 2. Collect unique underlying equity Upstox IDs
         const underlyingIds = [...new Set(options.map(o => o.underlyingUpstoxId))];
-        logger.info(`📊 Found ${underlyingIds.length} unique underlying equities.`);
+        devLog(`📊 Found ${underlyingIds.length} unique underlying equities.`);
 
         // 3. Fetch underlying equity quotes (for CMP)
         const equityQuotes: Record<string, number> = {};
         for (let i = 0; i < underlyingIds.length; i += BATCH_SIZE) {
             const batch = underlyingIds.slice(i, i + BATCH_SIZE);
             const quotes = await fetchQuotes(batch, accessToken);
-            
+
             if (quotes) {
                 for (const key of Object.keys(quotes)) {
                     const quote = quotes[key];
@@ -160,7 +160,7 @@ async function getCoveredCallCandidates(accessToken: string): Promise<CoveredCal
             await new Promise(r => setTimeout(r, 100));
         }
 
-        logger.info(`📊 Fetched ${Object.keys(equityQuotes).length} equity quotes.`);
+        devLog(`📊 Fetched ${Object.keys(equityQuotes).length} equity quotes.`);
 
         // 4. Fetch option quotes (for premium/LTP)
         const optionUpstoxIds = options.map(o => o.upstoxId);
@@ -188,7 +188,7 @@ async function getCoveredCallCandidates(accessToken: string): Promise<CoveredCal
             await new Promise(r => setTimeout(r, 100));
         }
 
-        logger.info(`📊 Fetched ${Object.keys(optionQuotes).length} option quotes.`);
+        devLog(`📊 Fetched ${Object.keys(optionQuotes).length} option quotes.`);
 
         // 5. Build candidates by combining option metadata with live prices
         const candidates: CoveredCallRow[] = [];
@@ -222,10 +222,10 @@ async function getCoveredCallCandidates(accessToken: string): Promise<CoveredCal
             });
         }
 
-        logger.info(`✅ Built ${candidates.length} covered call candidates with live prices.`);
+        devLog(`✅ Built ${candidates.length} covered call candidates with live prices.`);
         return candidates;
     } catch (error: any) {
-        logger.error("❌ Failed to fetch covered call candidates:", error.message);
+        devError("❌ Failed to fetch covered call candidates:", error.message);
         return [];
     }
 }
@@ -235,13 +235,13 @@ async function getCoveredCallCandidates(accessToken: string): Promise<CoveredCal
  */
 export async function executeCoveredCallAlertJob() {
     const startTime = Date.now();
-    logger.info(`⏰ Starting Covered Call Alert Job at ${new Date().toISOString()}`);
+    devLog(`⏰ Starting Covered Call Alert Job at ${new Date().toISOString()}`);
 
     try {
         // 1. Get Upstox Access Token
         const token = await upstoxAuthService.getAccessToken();
         if (!token) {
-            logger.error("❌ No Upstox Access Token available. Skipping job.");
+            devError("❌ No Upstox Access Token available. Skipping job.");
             return;
         }
 
@@ -249,11 +249,11 @@ export async function executeCoveredCallAlertJob() {
         const candidates = await getCoveredCallCandidates(token);
 
         if (candidates.length === 0) {
-            logger.info("⚠️ No covered call candidates found.");
+            devLog("⚠️ No covered call candidates found.");
             return;
         }
 
-        logger.info(`📊 Processing ${candidates.length} covered call candidates...`);
+        devLog(`📊 Processing ${candidates.length} covered call candidates...`);
 
         // 3. Process through alert service
         await processCoveredCallData(
@@ -271,9 +271,9 @@ export async function executeCoveredCallAlertJob() {
         );
 
         const duration = (Date.now() - startTime) / 1000;
-        logger.info(`✅ Covered Call Alert Job Completed in ${duration.toFixed(2)}s.`);
+        devLog(`✅ Covered Call Alert Job Completed in ${duration.toFixed(2)}s.`);
     } catch (error: any) {
-        logger.error("❌ Critical Error in Covered Call Alert Job:", error.message);
+        devError("❌ Critical Error in Covered Call Alert Job:", error.message);
     }
 }
 
@@ -288,7 +288,7 @@ export function initializeCoveredCallAlertJob(): void {
         timezone: "Asia/Kolkata",
     });
 
-    logger.info(`📢 Covered Call Alert Job Scheduled (${schedule})`);
+    devLog(`📢 Covered Call Alert Job Scheduled (${schedule})`);
 
     // Optional: Run once on start for DEV verification
     if (process.env.NODE_ENV === "development") {

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
-import { logger } from "../utils/logger";
+
+import { devError } from "../utils/errorLogger";
 
 export const getBseEquityData = async (req: Request, res: Response) => {
   try {
@@ -43,7 +44,7 @@ export const getBseEquityData = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    logger.error("Error fetching BSE equity data:", error);
+    devError("Error fetching BSE equity data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch BSE equity data",
@@ -65,7 +66,7 @@ export const getBseEquitySymbols = async (req: Request, res: Response) => {
       data: symbols.map((s) => s.symbol),
     });
   } catch (error: any) {
-    logger.error("Error fetching BSE equity symbols:", error);
+    devError("Error fetching BSE equity symbols:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch BSE equity symbols",
@@ -95,7 +96,7 @@ export const getBseEquityLatest = async (req: Request, res: Response) => {
       data: latest,
     });
   } catch (error: any) {
-    logger.error("Error fetching latest BSE equity data:", error);
+    devError("Error fetching latest BSE equity data:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch latest BSE equity data",

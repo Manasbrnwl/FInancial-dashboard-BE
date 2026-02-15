@@ -2,6 +2,7 @@ import axios from "axios";
 import { getAccessToken } from "../config/store";
 import { PrismaClient } from "@prisma/client";
 import { logger } from "../utils/logger";
+import { devError, devLog } from "../utils/errorLogger";
 
 const prisma = new PrismaClient();
 
@@ -30,7 +31,7 @@ async function getNseOptionsHistory(date: string) {
           segment: "fo",
         },
       });
-      logger.info("Bhavcopy not found");
+      devLog("Bhavcopy not found");
       return false;
     } else {
       // Add small delay between status check and actual data fetch
@@ -46,7 +47,7 @@ async function getNseOptionsHistory(date: string) {
       return bhavcopy.data;
     }
   } catch (error) {
-    logger.error("Error fetching NSE Options history:", error);
+    devError("Error fetching NSE Options history:", error);
     return false;
   }
 }

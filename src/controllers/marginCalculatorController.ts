@@ -7,6 +7,7 @@ import {
   TransactionType,
   ProductType,
 } from "../services/marginCalculatorService";
+import { devError } from "../utils/errorLogger";
 
 /**
  * Calculate margin for a single order
@@ -72,7 +73,7 @@ export const calculateMargin = async (req: Request, res: Response) => {
       data: marginData,
     });
   } catch (error: any) {
-    logger.error("Error calculating margin:", error);
+    devError("Error calculating margin:", error);
     res.status(500).json({
       success: false,
       error: "Failed to calculate margin",
@@ -121,7 +122,7 @@ export const calculateMarginOnly = async (req: Request, res: Response) => {
       data: marginData,
     });
   } catch (error: any) {
-    logger.error("Error calculating margin:", error);
+    devError("Error calculating margin:", error);
     res.status(500).json({
       success: false,
       error: "Failed to calculate margin",
@@ -163,7 +164,7 @@ export const calculateBulkMargins = async (req: Request, res: Response) => {
       data: result,
     });
   } catch (error: any) {
-    logger.error("Error calculating bulk margins:", error);
+    devError("Error calculating bulk margins:", error);
     res.status(500).json({
       success: false,
       error: "Failed to calculate bulk margins",
@@ -193,7 +194,7 @@ export const getStoredMargins = async (req: Request, res: Response) => {
       count: margins.length,
     });
   } catch (error: any) {
-    logger.error("Error fetching stored margins:", error);
+    devError("Error fetching stored margins:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch stored margins",
@@ -233,7 +234,7 @@ export const getLatestMargin = async (req: Request, res: Response) => {
       data: margin,
     });
   } catch (error: any) {
-    logger.error("Error fetching latest margin:", error);
+    devError("Error fetching latest margin:", error);
     res.status(500).json({
       success: false,
       error: "Failed to fetch latest margin",
@@ -258,7 +259,7 @@ export const cleanupOldMargins = async (req: Request, res: Response) => {
       deletedCount,
     });
   } catch (error: any) {
-    logger.error("Error cleaning up margins:", error);
+    devError("Error cleaning up margins:", error);
     res.status(500).json({
       success: false,
       error: "Failed to cleanup margins",

@@ -242,27 +242,18 @@ export class UpstoxWebSocketService {
                 this.scheduleNextMarketOpen();
             });
 
+            // Polyfill for SDK bug: clearSubscriptions method may not exist
+            if (typeof (this.streamer as any).clearSubscriptions !== 'function') {
+                (this.streamer as any).clearSubscriptions = () => {
+                    devLog('⚠️ clearSubscriptions polyfill called');
+                };
+            }
+
             // Enable Auto Reconnect
             this.streamer.autoReconnect(true, 5, 20); // enable, interval(sec), retryCount
 
-            // Monkey-patch connect() so we can polyfill the internal feeder after each connect/reconnect.
-            // The SDK's Streamer.js:94 calls `this.streamer.clearSubscriptions()` where `this.streamer`
-            // is the internal MarketDataFeederV3 instance — which doesn't have that method (SDK bug).
-            // We must patch the feeder AFTER connect() creates it, and re-patch on every reconnect.
-            const originalConnect = this.streamer.connect.bind(this.streamer);
-            (this.streamer as any).connect = async () => {
-                await originalConnect();
-                // Patch clearSubscriptions on the internal feeder if it doesn't exist
-                const internalFeeder = (this.streamer as any)?.streamer;
-                if (internalFeeder && typeof internalFeeder.clearSubscriptions !== 'function') {
-                    internalFeeder.clearSubscriptions = () => {
-                        devLog('⚠️ clearSubscriptions polyfill called on internal feeder');
-                    };
-                }
-            };
-
-            // Connect (uses patched connect which will apply the polyfill)
-            await (this.streamer as any).connect();
+            // Connect
+            await this.streamer.connect();
 
             this.startMarketHoursMonitoring();
 

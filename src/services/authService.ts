@@ -89,8 +89,12 @@ export const createOtpForUser = async (
 
   otpStore.set(username, { otp, expiresAt });
 
-  // Bypass actual email sending for simplicity.
-  console.log(`[Dev Bypass] OTP generated for ${username}: ${otp}. Any 6-digit number will be accepted.`);
+  const subject = "Your login verification code";
+  const text = `Your login OTP is ${otp}. It expires in ${otpExpiryMinutes} minutes.`;
+  const html = `<p>Your login OTP is <strong>${otp}</strong>. It expires in ${otpExpiryMinutes} minutes.</p>`;
+
+  await sendEmailNotification(recipient, subject, text, html);
+  console.log(`[Dev] OTP generated for ${username}: ${otp}. Any 6-digit number will be accepted.`);
 
   return { expiresAt, recipient };
 };

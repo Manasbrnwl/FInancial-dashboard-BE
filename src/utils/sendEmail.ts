@@ -1,31 +1,16 @@
-import nodemailer from "nodemailer";
+import axios from "axios";
 import dotenv from "dotenv";
-import { logger } from "./logger";
 import { devError, devLog, prodError } from "./errorLogger";
 
 dotenv.config();
 
-// Define the transporter object with the Gmail SMTP settings
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  connectionTimeout: 10000, // fail fast after 10s
-  greetingTimeout: 10000,
-});
-
 /**
- * Send email notification
- * @param {string} email - Recipient email
+ * Send notification to ntfy.sh under the anfy-sms topic
+ * @param {string} email - Recipient email (used for info in the message)
  * @param {string} subject - Email subject
  * @param {string} text - Email text content
- * @param {string} html - Email html content
- * @returns {Promise<boolean>} - true when mail is accepted
+ * @param {string} html - Email html content (ignored for ntfy)
+ * @returns {Promise<boolean>} - true when notification is accepted
  */
 const sendEmailNotification = async (
   email: string,
@@ -34,22 +19,21 @@ const sendEmailNotification = async (
   html: string
 ): Promise<boolean> => {
   try {
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject,
-      text,
-      html,
-    };
+    const payload = `${text}\n\nTo: ${email}`;
+    await axios.post('https://ntfy.sh/anfy-sms', payload, {
+      headers: {
+        'Title': subject,
+        'Tags': 'key',
+      }
+    });
 
-    const info = await transporter.sendMail(mailOptions);
     if (process.env.NODE_ENV === "development") {
-      devLog(`OTP email queued: ${info.messageId}`);
+      devLog(`ntfy notification queued for email: ${email}`);
     }
     return true;
   } catch (error: any) {
-    devError("Failed to send OTP email:", error?.message || error);
-    prodError("Failed to send email");
+    devError("Failed to send ntfy notification:", error?.message || error);
+    prodError("Failed to send notification");
     throw error;
   }
 };

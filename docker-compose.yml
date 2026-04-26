@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: financial-dashboard-be
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file:
+      - .env
+    restart: always
+    # Uncomment and adjust if you need a local database
+    # depends_on:
+    #   - db
+
+# networks:
+#   default:
+#     name: financial-network

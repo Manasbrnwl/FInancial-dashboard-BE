@@ -53,7 +53,7 @@ app.use(
 );
 
 app.use(express.json());
-app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+app.use(morgan(process.env.NODE_ENV === "production" ? "dev" : "combined"));
 // Routes
 app.use("/api/auth", authRouter);
 app.use("/api/websocket", authenticateRequest, websocketRouter);

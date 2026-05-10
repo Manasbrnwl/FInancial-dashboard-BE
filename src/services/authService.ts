@@ -1,118 +1,137 @@
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import type { SignOptions } from "jsonwebtoken";
-import { sendEmailNotification } from "../utils/sendEmail";
-
-type OtpEntry = {
-  otp: string;
-  expiresAt: number;
-};
+import bcrypt from "bcryptjs";
+import prisma from "../config/prisma";
+import { sendOtpEmail, sendPasswordResetEmail } from "./emailService";
 
 type JwtExpiresIn = NonNullable<SignOptions["expiresIn"]>;
-
-const otpStore: Map<string, OtpEntry> = new Map();
 
 const getOtpExpirationMinutes = (): number =>
   Number(process.env.OTP_EXPIRATION_MINUTES) || 10;
 
-const getAllowedEmails = (): string[] => {
-  const raw = process.env.AUTH_ALLOWED_EMAILS;
-
-  if (!raw) {
-    return [];
-  }
-
-  const normalized = raw.trim();
-
-  try {
-    const parsed = JSON.parse(normalized);
-    if (Array.isArray(parsed)) {
-      return parsed
-        .map((item) => String(item).trim().toLowerCase())
-        .filter(Boolean);
-    }
-  } catch {
-    // fall back to comma parsing
-  }
-
-  return raw
-    .replace(/[\[\]]/g, "")
-    .split(",")
-    .map((item) => item.replace(/['"]/g, "").trim().toLowerCase())
-    .filter(Boolean);
-};
-
 const getJwtExpiresIn = (): JwtExpiresIn => {
   const configuredValue = process.env.JWT_EXPIRES_IN;
-
-  if (!configuredValue) {
-    return "1h";
-  }
-
+  if (!configuredValue) return "1h";
   const numericValue = Number(configuredValue);
-
-  if (!Number.isNaN(numericValue)) {
-    return numericValue as JwtExpiresIn;
-  }
-
-  return configuredValue as JwtExpiresIn;
+  return !Number.isNaN(numericValue) ? (numericValue as JwtExpiresIn) : (configuredValue as JwtExpiresIn);
 };
-
-const getOtpRecipient = (username: string): string | undefined => username;
 
 const generateOtp = (): string => {
-  const otp = crypto.randomInt(100000, 999999);
-  return otp.toString();
+  return crypto.randomInt(100000, 999999).toString();
 };
 
-export const isValidUser = (username: string): boolean => {
-  const trimmed = username.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-    return false;
-  }
+const generateToken = (): string => {
+  return crypto.randomBytes(32).toString("hex");
+};
 
-  const allowedEmails = getAllowedEmails();
-  return allowedEmails.includes(trimmed);
+export const findUserByEmail = async (email: string) => {
+  return await prisma.user.findUnique({
+    where: { email: email.trim().toLowerCase() },
+  });
 };
 
 export const createOtpForUser = async (
-  username: string
-): Promise<{ expiresAt: number; recipient: string }> => {
+  email: string
+): Promise<{ expiresAt: Date }> => {
   const otp = generateOtp();
   const otpExpiryMinutes = getOtpExpirationMinutes();
-  const expiresAt = Date.now() + otpExpiryMinutes * 60 * 1000;
-  const recipient = getOtpRecipient(username);
+  const expiresAt = new Date(Date.now() + otpExpiryMinutes * 60 * 1000);
 
-  if (!recipient) {
-    throw new Error("OTP recipient email is not configured");
+  await prisma.user.update({
+    where: { email: email.trim().toLowerCase() },
+    data: {
+      otp,
+      otpExpiresAt: expiresAt,
+    },
+  });
+
+  await sendOtpEmail(email, otp, otpExpiryMinutes);
+  
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[Dev] OTP generated for ${email}: ${otp}`);
   }
 
-  otpStore.set(username, { otp, expiresAt });
-
-  const subject = "Your login verification code";
-  const text = `Your login OTP is ${otp}. It expires in ${otpExpiryMinutes} minutes.`;
-  const html = `<p>Your login OTP is <strong>${otp}</strong>. It expires in ${otpExpiryMinutes} minutes.</p>`;
-
-  await sendEmailNotification(recipient, subject, text, html);
-  console.log(`[Dev] OTP generated for ${username}: ${otp}. Any 6-digit number will be accepted.`);
-
-  return { expiresAt, recipient };
+  return { expiresAt };
 };
 
-export const verifyOtpCode = (
-  username: string,
+export const verifyOtpCode = async (
+  email: string,
   otp: string
-): { valid: boolean; reason?: "OTP_EXPIRED" | "OTP_INVALID" | "OTP_NOT_FOUND" } => {
-  // Accept ANY 6 digit string
-  if (/^\d{6}$/.test(otp)) {
-    return { valid: true };
+): Promise<{ valid: boolean; reason?: "OTP_EXPIRED" | "OTP_INVALID" | "OTP_NOT_FOUND" }> => {
+  const user = await findUserByEmail(email);
+
+  if (!user || !user.otp) {
+    return { valid: false, reason: "OTP_NOT_FOUND" };
   }
-  
-  return { valid: false, reason: "OTP_INVALID" };
+
+  if (user.otp !== otp) {
+    return { valid: false, reason: "OTP_INVALID" };
+  }
+
+  if (user.otpExpiresAt && user.otpExpiresAt < new Date()) {
+    return { valid: false, reason: "OTP_EXPIRED" };
+  }
+
+  // Clear OTP after successful verification
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { otp: null, otpExpiresAt: null },
+  });
+
+  return { valid: true };
+};
+
+export const hashPassword = async (password: string): Promise<string> => {
+  return await bcrypt.hash(password, 10);
+};
+
+export const verifyPassword = async (password: string, hashed: string): Promise<boolean> => {
+  return await bcrypt.compare(password, hashed);
+};
+
+export const createPasswordResetToken = async (email: string) => {
+  const token = generateToken();
+  const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 hour
+
+  await prisma.user.update({
+    where: { email: email.trim().toLowerCase() },
+    data: {
+      resetToken: token,
+      resetTokenExpires: expiresAt,
+    },
+  });
+
+  await sendPasswordResetEmail(email, token, 1);
+  return token;
+};
+
+export const resetUserPassword = async (token: string, newPassword: string) => {
+  const user = await prisma.user.findFirst({
+    where: {
+      resetToken: token,
+      resetTokenExpires: { gte: new Date() },
+    },
+  });
+
+  if (!user) return false;
+
+  const hashedPassword = await hashPassword(newPassword);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      password: hashedPassword,
+      resetToken: null,
+      resetTokenExpires: null,
+    },
+  });
+
+  return true;
 };
 
 export const issueJwtToken = (
-  username: string
+  email: string
 ): { token: string; expiresIn: string } => {
   const secret = process.env.JWT_SECRET;
   const expiresIn = getJwtExpiresIn();
@@ -121,7 +140,7 @@ export const issueJwtToken = (
     throw new Error("JWT_SECRET is not configured");
   }
 
-  const token = jwt.sign({ username }, secret, {
+  const token = jwt.sign({ email }, secret, {
     expiresIn,
   });
 

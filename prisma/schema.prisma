@@ -107,6 +107,21 @@ model nse_options {
   @@schema("market_data")
 }
 
+model User {
+  id                Int       @id @default(autoincrement())
+  email             String    @unique
+  password          String?   // Hashed password
+  otp               String?
+  otpExpiresAt      DateTime?
+  resetToken        String?
+  resetTokenExpires DateTime?
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@schema("market_data")
+}
+
 model instrument_lists {
   id              Int                  @id @default(autoincrement())
   exchange        String               @db.VarChar(100)

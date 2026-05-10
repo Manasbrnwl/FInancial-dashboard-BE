@@ -6,7 +6,6 @@ import morgan from "morgan";
 import cron from "node-cron";
 import { devLog, devError, prodError } from "./utils/errorLogger";
 import { globalErrorHandler } from "./middleware/errorHandler";
-// import healthRouter from "./routes/health";
 import websocketRouter from "./routes/websocket";
 import { loadEnv } from "./config/env";
 import { upstoxWebSocketService } from "./services/upstoxWebsocketService";
@@ -25,6 +24,7 @@ import { initializeDailyOhlcUpstoxJob } from "./jobs/dailyOhlcUpstoxJob";
 import { initializeCoveredCallAlertJob } from "./jobs/coveredCallAlertJob";
 import { upstoxInstrumentService } from "./services/upstoxInstrumentService";
 import { initializeLoginReminderJob } from "./jobs/dailyLoginEmailJob";
+import { preloadInstrumentCache } from "./cache/instrumentCache";
 
 dotenv.config();
 loadEnv();
@@ -102,6 +102,9 @@ devLog("📅 Weekly Upstox Instrument Sync scheduled (Every Tuesday 6 AM IST)");
 if (process.env.NODE_ENV === "development") {
   syncUpstoxInstruments();
 }
+
+// Preload instrument metadata cache for faster lookups
+preloadInstrumentCache();
 
 initializeHourlyTicksNseOptJob();
 

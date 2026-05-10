@@ -1,12 +1,31 @@
-import { logger } from "./logger";
+import logger from './logger';
 
-// Helper functions for dev-only logging
-const isDev = process.env.NODE_ENV === 'development';
-export const devLog = (...args: any[]) => { if (isDev) logger.info(...args); };
-export const devWarn = (...args: any[]) => { if (isDev) logger.warn(...args); };
-export const devError = (...args: any[]) => { if (isDev) logger.error(...args); };
+/**
+ * @deprecated Use logger directly (e.g., logger.debug, logger.info)
+ */
+export const devLog = (...args: any[]) => logger.debug(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
 
-const isProd = process.env.NODE_ENV === 'production';
-export const prodLog = (...args: any[]) => { if (isProd) logger.info(...args); };
-export const prodWarn = (...args: any[]) => { if (isProd) logger.warn(...args); };
-export const prodError = (...args: any[]) => { if (isProd) logger.error(...args); };
+/**
+ * @deprecated Use logger.warn
+ */
+export const devWarn = (...args: any[]) => logger.warn(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+
+/**
+ * @deprecated Use logger.error
+ */
+export const devError = (...args: any[]) => logger.error(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+
+/**
+ * @deprecated Use logger.info
+ */
+export const prodLog = (...args: any[]) => logger.info(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+
+/**
+ * @deprecated Use logger.warn
+ */
+export const prodWarn = (...args: any[]) => logger.warn(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));
+
+/**
+ * @deprecated Use logger.error
+ */
+export const prodError = (...args: any[]) => logger.error(args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' '));

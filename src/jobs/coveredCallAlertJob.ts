@@ -6,6 +6,7 @@ import { upstoxAuthService } from "../services/upstoxAuthService";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { loadEnv } from "../config/env";
 import { devLog, devError, prodError } from "../utils/errorLogger";
+import { getCachedName } from "../cache/instrumentCache";
 
 loadEnv();
 const prisma = new PrismaClient();
@@ -48,7 +49,6 @@ async function getActiveOptions(): Promise<OptionInstrument[]> {
             upstox_id: string;
             upstox_symbol: string;
             instrument_id: number;
-            instrument_name: string;
             strike: string;
             option_type: string;
             expiry_date: Date;
@@ -60,19 +60,17 @@ async function getActiveOptions(): Promise<OptionInstrument[]> {
         sl.upstox_id,
         sl.upstox_symbol,
         sl.instrument_id,
-        il.instrument_type AS instrument_name,
         sl.strike,
         sl.option_type,
         sl.expiry_date,
         il.upstox_id AS underlying_upstox_id
       FROM market_data.symbols_list sl
-      JOIN market_data.instrument_lists il ON sl.instrument_id = il.id
+      INNER JOIN market_data.instrument_lists il ON sl.instrument_id = il.id
       WHERE sl.segment = 'OPT'
         AND sl.expiry_date >= CURRENT_DATE
         AND sl.upstox_id IS NOT NULL
-        AND il.upstox_id IS NOT NULL
         AND il.upstox_id LIKE 'NSE_EQ|IN%'
-      ORDER BY sl.instrument_id, sl.strike::numeric
+      ORDER BY sl.instrument_id, sl.expiry_date
     `;
 
         return options.map(o => ({
@@ -81,7 +79,7 @@ async function getActiveOptions(): Promise<OptionInstrument[]> {
             upstoxId: o.upstox_id,
             upstoxSymbol: o.upstox_symbol || o.symbol,
             instrumentId: o.instrument_id,
-            instrumentName: o.instrument_name,
+            instrumentName: getCachedName(o.instrument_id),
             strike: parseFloat(o.strike),
             optionType: o.option_type,
             expiryDate: new Date(o.expiry_date),

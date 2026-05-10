@@ -1,28 +1,28 @@
-const isProduction = process.env.NODE_ENV === "production";
+import winston from 'winston';
+
+const { combine, timestamp, printf, colorize, errors } = winston.format;
+
+const logFormat = printf(({ level, message, timestamp, stack }) => {
+  return `${timestamp} [${level}]: ${stack || message}`;
+});
 
 /**
- * Centralized logger that suppresses info/debug logs in production.
- * - info / debug: only log in development
- * - warn / error: always log (operational awareness)
+ * Unified Winston logger instance.
+ * Levels: error, warn, info, debug
  */
-export const logger = {
-    /** General informational messages — suppressed in production */
-    info: (...args: any[]) => {
-        if (!isProduction) console.log(...args);
-    },
+const logger = winston.createLogger({
+  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+  format: combine(
+    timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    errors({ stack: true }),
+    logFormat
+  ),
+  transports: [
+    new winston.transports.Console({
+      format: combine(colorize(), logFormat),
+    }),
+  ],
+});
 
-    /** Verbose debug output — suppressed in production */
-    debug: (...args: any[]) => {
-        if (!isProduction) console.log(...args);
-    },
-
-    /** Warnings — always logged */
-    warn: (...args: any[]) => {
-        console.warn(...args);
-    },
-
-    /** Errors — always logged server-side (never exposed to client) */
-    error: (...args: any[]) => {
-        console.error(...args);
-    },
-};
+export default logger;
+export { logger };

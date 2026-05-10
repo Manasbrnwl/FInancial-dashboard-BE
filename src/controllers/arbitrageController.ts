@@ -15,13 +15,15 @@ export const getArbitrageData = async (req: Request, res: Response) => {
       }>
     >`
   WITH latest_tick_fut AS (
-    SELECT *, ROW_NUMBER() OVER (PARTITION BY "instrumentId" ORDER BY id DESC) rn
+    SELECT DISTINCT ON ("instrumentId") "instrumentId", ltp, volume, time
     FROM periodic_market_data."ticksDataNSEFUT" 
-    WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+    WHERE time >= CURRENT_DATE - INTERVAL '1 day'
+    ORDER BY "instrumentId", id DESC
   ), latest_tick_eq AS (
-    SELECT *, ROW_NUMBER() OVER (PARTITION BY "instrumentId" ORDER BY id DESC) rn
+    SELECT DISTINCT ON ("instrumentId") "instrumentId", ltp, time
     FROM periodic_market_data."ticksDataNSEEQ" 
-    WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+    WHERE time >= CURRENT_DATE - INTERVAL '1 day'
+    ORDER BY "instrumentId", id DESC
   )
   SELECT
     il.id AS instrumentid,
@@ -42,9 +44,9 @@ export const getArbitrageData = async (req: Request, res: Response) => {
   INNER JOIN market_data.instrument_lists il
     ON sl.instrument_id = il.id
   INNER JOIN latest_tick_fut tf
-    ON sl.id = tf."instrumentId" AND tf.rn = 1
+    ON sl.id = tf."instrumentId"
   INNER JOIN latest_tick_eq te
-    ON sl.instrument_id = te."instrumentId" AND te.rn = 1
+    ON sl.instrument_id = te."instrumentId"
   WHERE sl.segment = 'FUT' and sl.expiry_date >= CURRENT_DATE
   GROUP BY il.id, il.instrument_type, te.ltp, te.time
   ORDER BY il.instrument_type

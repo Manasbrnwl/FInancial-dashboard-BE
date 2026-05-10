@@ -9,7 +9,7 @@ datasource db {
 }
 
 model bse_equity {
-  id         Int       @id @default(autoincrement())
+  id         Int       @default(autoincrement())
   symbol_id  String?
   symbol     String    @db.VarChar(50)
   date       DateTime  @db.Date
@@ -25,11 +25,12 @@ model bse_equity {
 
   @@unique([symbol, date], map: "bse_equity_symbol_date_unique")
   @@index([symbol, date], map: "idx_bse_eq_symbol_date")
+  @@index([date(sort: Desc)])
   @@schema("market_data")
 }
 
 model nse_equity {
-  id         BigInt    @id @default(autoincrement())
+  id         BigInt    @default(autoincrement())
   symbol_id  Int?
   symbol     String    @db.VarChar(50)
   date       DateTime  @db.Date
@@ -47,11 +48,13 @@ model nse_equity {
   @@index([symbol, date], map: "idx_nse_eq_symbol_date")
   @@index([symbol_id, date], map: "idx_nse_equity_symbol_id_date")
   @@index([symbol, date], map: "idx_nse_equity_symbol_date")
+  @@index([date(sort: Desc)])
   @@schema("market_data")
 }
 
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model nse_futures {
-  id          BigInt    @id @default(autoincrement())
+  id          BigInt    @default(autoincrement())
   symbol_id   String?
   symbol      Int
   date        DateTime  @db.Date
@@ -66,13 +69,16 @@ model nse_futures {
   created_at  DateTime? @default(now()) @db.Timestamp(6)
   updated_at  DateTime? @updatedAt @db.Timestamp(6)
 
+  @@id([id, date])
   @@unique([symbol, date, underlying, expiry_date], map: "nse_futures_symbol_date_underlying_expir_unique")
   @@index([symbol, date], map: "idx_nse_fut_symbol_date")
+  @@index([date(sort: Desc)])
   @@schema("market_data")
 }
 
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model nse_options {
-  id           BigInt    @id @default(autoincrement())
+  id           BigInt    @default(autoincrement())
   symbol_id    String?
   symbol       Int
   date         DateTime  @db.Date
@@ -90,6 +96,7 @@ model nse_options {
   updated_at   DateTime? @updatedAt @db.Timestamp(6)
   expiry_month String?
 
+  @@id([id, date])
   @@unique([symbol, date, underlying, expiry_date, option_type], map: "nse_options_symbol_date_underlying_expiry_unique")
   @@index([strike, date], map: "idx_nse_opt_strike_date")
   @@index([symbol, date], map: "idx_nse_opt_symbol_date")
@@ -116,9 +123,6 @@ model instrument_lists {
   @@index([instrument_type], map: "idx_instr_instrumenttype")
   @@index([instrument_type(ops: raw("gin_trgm_ops"))], map: "idx_underlying_trgm", type: Gin)
   @@index([exchange, instrument_type, upstox_id], map: "idx_instrument_lists_exchange_instrument_type_upstox_id")
-  @@index([id, instrument_type], map: "idx_instrument_lists_id_instrument_type")
-  @@index([id, instrument_type], map: "idx_instrument_lists_id_type")
-  @@index([instrument_type])
   @@schema("market_data")
 }
 
@@ -192,7 +196,7 @@ model symbols_list {
 }
 
 model ohlcDataNSE {
-  id           BigInt   @id @default(autoincrement())
+  id           BigInt   @default(autoincrement())
   instrumentId Int
   open         String
   high         String
@@ -211,7 +215,7 @@ model ohlcDataNSE {
 }
 
 model ohlcEQDataBSE {
-  id           BigInt   @id @default(autoincrement())
+  id           BigInt   @default(autoincrement())
   instrumentId BigInt
   open         String
   high         String
@@ -231,7 +235,7 @@ model ohlcEQDataBSE {
 
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model ticksDataNSEEQ {
-  id           BigInt    @id @default(autoincrement())
+  id           BigInt    @default(autoincrement())
   instrumentId Int
   ltp          String
   volume       String?   @default("0")
@@ -257,7 +261,7 @@ model ticksDataNSEEQ {
 }
 
 model ticksDataNSEFUT {
-  id           BigInt   @id @default(autoincrement())
+  id           BigInt   @default(autoincrement())
   instrumentId Int
   ltp          String
   volume       String?  @default("0")
@@ -277,7 +281,7 @@ model ticksDataNSEFUT {
 }
 
 model ticksDataNSEOPT {
-  id           BigInt   @id @default(autoincrement())
+  id           BigInt   @default(autoincrement())
   instrumentId Int
   ltp          String
   volume       String?  @default("0")

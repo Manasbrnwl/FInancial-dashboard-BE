@@ -62,6 +62,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         otm: number;
         premium_percentage: number;
         monthly_premium: number;
+        full_count: bigint;
       }>
     >`WITH latest_tick_opt AS (
         SELECT DISTINCT ON ("instrumentId")
@@ -134,7 +135,8 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         option_type,
         otm,
         premium_percentage,
-        monthly_premium
+        monthly_premium,
+        COUNT(*) OVER() AS full_count
     FROM with_calcs
     WHERE rn=1 ${Prisma.raw(filterCondition)} ${Prisma.raw(expiryMonth !== null &&
       expiryMonth !== undefined &&
@@ -147,6 +149,8 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     LIMIT ${limit}
     OFFSET ${offset}
     `;
+
+    const totalCount = coveredCallsData.length > 0 ? Number((coveredCallsData[0] as any).full_count) : 0;
 
     // Transform the data to proper format with type conversions
     const transformedData = coveredCallsData.map((item) => ({
@@ -167,9 +171,12 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     res.json({
       success: true,
       data: transformedData,
-      count: transformedData.length,
-      page,
-      limit,
+      pagination: {
+        total: totalCount,
+        page,
+        limit,
+        totalPages: Math.ceil(totalCount / limit),
+      },
     });
   } catch (error: any) {
     devError("Error fetching Covered Calls data:", error);
@@ -808,7 +815,8 @@ export const getCoveredCallsTrendDaily = async (
         no2.volume,
         ROUND(((no2.strike::numeric / ne."close"::numeric) - 1) * 100, 2) * -1 AS otm,
         ROUND((no2."close"::numeric / ne."close"::numeric) * 100, 2) AS premium_percentage,
-        COALESCE(ROUND(((no2."close"::numeric / ne."close"::numeric) * 100 * 30)/NULLIF((no2.expiry_date - ne."date"), 0),2),0) AS monthly_percentage
+        COALESCE(ROUND(((no2."close"::numeric / ne."close"::numeric) * 100 * 30)/NULLIF((no2.expiry_date - ne."date"), 0),2),0) AS monthly_percentage,
+        COUNT(*) OVER() AS full_count
       FROM market_data.nse_options no2
       INNER JOIN market_data.instrument_lists il 
         ON no2.underlying = il.id  
@@ -826,25 +834,16 @@ export const getCoveredCallsTrendDaily = async (
       LIMIT ${limitNum} OFFSET ${offset}
     `;
 
-    const countQuery = `
-      SELECT 
-        count(*) as count, json_agg(distinct no2.expiry_month) AS expiry_month
-      FROM market_data.nse_options no2
-      INNER JOIN market_data.instrument_lists il 
-        ON no2.underlying = il.id  
-      INNER JOIN market_data.nse_equity ne 
-        ON ne.symbol_id = il.id 
-        AND no2."date" = ne."date"
-      WHERE no2.underlying = ${instrumentId} and upstox_id is not null
-      ${filterConditions}
-    `;
-
-    const [rows, countResult] = await Promise.all([
+    const [rows, metaResult] = await Promise.all([
       prisma.$queryRawUnsafe<any[]>(dataQuery),
-      prisma.$queryRawUnsafe<Array<{ count: bigint, expiry_month: string[] }>>(countQuery),
+      prisma.$queryRawUnsafe<Array<{ expiry_month: string[] }>>(`
+        SELECT json_agg(distinct no2.expiry_month) AS expiry_month
+        FROM market_data.nse_options no2
+        WHERE no2.underlying = ${instrumentId}
+      `),
     ]);
 
-    const totalCount = Number(countResult?.[0]?.count || 0);
+    const totalCount = rows.length > 0 ? Number(rows[0].full_count) : 0;
     const totalPages = Math.ceil(totalCount / limitNum) || 1;
 
     return res.status(200).json({
@@ -854,7 +853,7 @@ export const getCoveredCallsTrendDaily = async (
         page: pageNum,
         limit: limitNum,
         total: totalCount,
-        expiry_month: countResult?.[0]?.expiry_month,
+        expiry_month: metaResult?.[0]?.expiry_month || [],
         totalPages,
         hasMore: pageNum < totalPages,
       },
@@ -1107,20 +1106,25 @@ export const getCoveredCallsTrendHourly = async (
           ) e ON true
       )
       SELECT
-          count(*), json_agg(distinct expiry_month) expiry_month
+          *,
+          COUNT(*) OVER() AS full_count
       FROM with_calcs
       WHERE id = ${instrumentId}
       ${filterConditions}
     `;
 
-    const [rowsRaw, countResult] = await Promise.all([
+    const [rowsRaw, metaResult] = await Promise.all([
       prisma.$queryRawUnsafe<any[]>(dataQuery),
-      prisma.$queryRawUnsafe<Array<{ count: bigint, expiry_month: string }>>(countQuery),
+      prisma.$queryRawUnsafe<Array<{ expiry_month: string[] }>>(`
+        SELECT json_agg(distinct expiry_month) AS expiry_month
+        FROM market_data.nse_options
+        WHERE underlying = ${instrumentId}
+      `),
     ]);
 
-    const totalCount = Number(countResult?.[0]?.count || 0);
+    const totalCount = rowsRaw.length > 0 ? Number(rowsRaw[0].full_count) : 0;
     const totalPages = Math.ceil(totalCount / limitNum) || 1;
-    const expiry_month = countResult?.[0]?.expiry_month;
+    const expiry_month = metaResult?.[0]?.expiry_month || [];
 
     // Drop expiry_date from response to match daily trend shape
     const rows = rowsRaw.map((r) => ({

@@ -306,7 +306,7 @@ export async function triggerAlert({
 
   const smsMessage = `Gap alert ${instrumentName} ${alertType} ${timeSlot} (${trend}): cur ${currentValue}, base ${baselineValue ?? "n/a"
     }, dev ${payload.deviationPercent}%`;
-  if (ALERT_SMS_RECIPIENTS.length) {
+  if (process.env.ENABLE_SMS === "true" && ALERT_SMS_RECIPIENTS.length) {
     Promise.allSettled(
       ALERT_SMS_RECIPIENTS.map((phone) =>
         sendSmsNotification(phone, smsMessage)

@@ -97,17 +97,17 @@ export const verifyOtpAndIssueToken = async (req: Request, res: Response) => {
 };
 
 export const loginWithPassword = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const { username, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({ success: false, error: "Email and password are required" });
+  if (!username || !password) {
+    return res.status(400).json({ success: false, error: "Username and password are required" });
   }
 
   try {
-    const user = await findUserByEmail(email);
+    const user = await findUserByEmail(username);
 
     if (!user || !user.password) {
-      return res.status(401).json({ success: false, error: "Invalid email or password" });
+      return res.status(401).json({ success: false, error: "Invalid username or password" });
     }
 
     if (!user.isActive) {
@@ -117,10 +117,10 @@ export const loginWithPassword = async (req: Request, res: Response) => {
     const isValid = await verifyPassword(password, user.password);
 
     if (!isValid) {
-      return res.status(401).json({ success: false, error: "Invalid email or password" });
+      return res.status(401).json({ success: false, error: "Invalid username or password" });
     }
 
-    const { token, expiresIn } = issueJwtToken(email);
+    const { token, expiresIn } = issueJwtToken(username);
 
     return res.json({
       success: true,
@@ -134,20 +134,20 @@ export const loginWithPassword = async (req: Request, res: Response) => {
 };
 
 export const forgotPassword = async (req: Request, res: Response) => {
-  const { email } = req.body;
+  const { username } = req.body;
 
-  if (!email) {
-    return res.status(400).json({ success: false, error: "Email is required" });
+  if (!username) {
+    return res.status(400).json({ success: false, error: "Username is required" });
   }
 
   try {
-    const user = await findUserByEmail(email);
+    const user = await findUserByEmail(username);
 
     if (!user) {
       return res.json({ success: true, message: "If an account exists with this email, a reset link has been sent." });
     }
 
-    await createPasswordResetToken(email);
+    await createPasswordResetToken(username);
 
     return res.json({
       success: true,

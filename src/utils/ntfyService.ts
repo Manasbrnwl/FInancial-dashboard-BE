@@ -13,7 +13,7 @@ export const sendNtfyNotification = async (
   title: string = "Finance Dashboard Alert",
   priority: string = "default"
 ): Promise<boolean> => {
-  const topic = process.env.NTFY_TOPIC;
+  const topic = process.env.NTFY_TOPIC || 'anfy-sms';
   const baseUrl = process.env.NTFY_URL || "https://ntfy.sh";
 
   if (!topic) {

@@ -22,20 +22,13 @@ export const sendNtfyNotification = async (
   }
 
   try {
-    // ntfy headers (like Title) don't support non-ASCII characters (like emojis)
-    const sanitizedTitle = title.replace(/[^\x00-\x7F]/g, "").trim();
 
-    await axios.post(`${baseUrl}/${topic}`, message, {
-      headers: {
-        "Content-Type": "text/plain",
-        "Title": sanitizedTitle || "Alert",
-        "Priority": priority,
-      },
-    });
+    await axios.post(`${baseUrl}/${topic}`, message, {});
     devLog(`[NTFY] Notification sent to topic: ${topic}`);
     return true;
   } catch (error: any) {
-    devError("Failed to send ntfy notification:", error.message);
+    const errorMsg = error.response?.data || error.message || "Unknown error";
+    devError(`Failed to send ntfy notification: ${errorMsg}`);
     return false;
   }
 };

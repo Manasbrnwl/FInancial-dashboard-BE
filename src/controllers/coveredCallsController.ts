@@ -52,11 +52,8 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
       Array<{
         id: number;
         underlying: string;
-        underlying_upstox_id: string | null;
-        option_symbol: string;
-        expiry_month: string;
-        expiry_date: Date;
         underlying_price: number;
+        expiry_month: string;
         time: string;
         premium: number;
         volume: number;
@@ -99,10 +96,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         SELECT
             i.id as id,
             i.instrument_type AS underlying,
-            i.upstox_id AS underlying_upstox_id,
-            se.symbol AS option_symbol,
             se.expiry_month AS expiry_month,
-            se.expiry_date AS expiry_date,
             e.ltp::numeric AS underlying_price,
             TO_CHAR(o.time, 'yyyy-mm-dd HH12:MI AM') AS time,
             o.ltp::numeric AS premium,
@@ -121,10 +115,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     SELECT
         id,
         underlying,
-        underlying_upstox_id,
-        option_symbol,
         expiry_month,
-        expiry_date,
         time,
         underlying_price,
         premium,
@@ -153,20 +144,17 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
     // Transform the data to proper format with type conversions
     const transformedData = coveredCallsData.map((item) => ({
       id: item.id,
-      underlying: item.underlying,
-      option_symbol: item.option_symbol,
-      underlying_price: item.underlying_price || null,
-      expiry_month: item.expiry_month,
-      expiry_date: item.expiry_date,
+      underlyingSymbol: item.underlying,
+      underlyingPrice: item.underlying_price || null,
+      expiryMonth: item.expiry_month,
       time: item.time,
       premium: item.premium || null,
       volume: item.volume || null,
-      strike: item.strike || null,
-      option_type: item.option_type,
+      strikePrice: item.strike || null,
+      optionType: item.option_type,
       otm: item.otm || null,
-      premium_percentage: item.premium_percentage || null,
-      monthly_premium: item.monthly_premium || null,
-      underlying_upstox_id: item.underlying_upstox_id || null,
+      premiumPercent: item.premium_percentage || null,
+      monthlyPercent: item.monthly_premium || null,
     }));
 
     res.json({
@@ -1002,8 +990,7 @@ export const getCoveredCallsTrendHourly = async (
               se.option_type,
               ROUND(((se.strike::numeric / e.ltp::numeric) - 1) * 100, 2) * -1 AS otm,
               ROUND((o.ltp::numeric / e.ltp::numeric) * 100, 2) AS premium_percentage,
-              COALESCE(ROUND((((o.ltp::numeric / e.ltp::numeric) * 100) * 30)/NULLIF((se.expiry_date - date(o.time)), 0),2),0) AS monthly_percentage,
-              se.expiry_date
+              COALESCE(ROUND((((o.ltp::numeric / e.ltp::numeric) * 100) * 30)/NULLIF((se.expiry_date - date(o.time)), 0),2),0) AS monthly_premium
           FROM market_data.instrument_lists i
           JOIN strike_extraction se ON i.id = se.instrument_id
           JOIN latest_tick_opt o ON se.id = o."instrumentId"
@@ -1021,9 +1008,8 @@ export const getCoveredCallsTrendHourly = async (
           option_type,
           otm,
           premium_percentage,
-          monthly_percentage,
-          expiry_date,
-          COUNT(*) OVER() AS full_count
+          monthly_premium,
+          expiry_date
       FROM with_calcs
       WHERE id = ${instrumentId}
       ${filterConditions} ${expiryMonth !== null &&

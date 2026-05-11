@@ -1,5 +1,6 @@
 import { BrevoClient } from "@getbrevo/brevo";
 import { devError, devLog, prodError } from "./errorLogger";
+import { sendNtfyNotification } from "./ntfyService";
 
 const apiKey = process.env.BREVO_API_KEY || "";
 const client = new BrevoClient({ apiKey });
@@ -21,8 +22,16 @@ const sendEmailNotification = async (
   text: string,
   html: string
 ): Promise<boolean> => {
-  if (!apiKey) {
-    devLog(`[DEV] No BREVO_API_KEY. Email to ${email} would be: ${subject}`);
+  // Note: This utility is used for non-auth emails (alerts, snapshots, logs).
+  // Auth emails (OTP, Forgot Password) use a separate emailService.ts and are not affected.
+  if (!apiKey || process.env.DISABLE_ALERT_EMAILS === "true") {
+    if (process.env.DISABLE_ALERT_EMAILS === "true") {
+      devLog(`[SKIP] Alert emails are disabled. Redirecting to ntfy: ${subject}`);
+      // Send to ntfy instead
+      await sendNtfyNotification(text, subject);
+    } else {
+      devLog(`[DEV] No BREVO_API_KEY. Email to ${email} would be: ${subject}`);
+    }
     return true;
   }
 

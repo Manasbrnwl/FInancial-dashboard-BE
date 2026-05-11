@@ -22,10 +22,14 @@ export const sendNtfyNotification = async (
   }
 
   try {
+    // ntfy headers (like Title) don't support non-ASCII characters (like emojis)
+    const sanitizedTitle = title.replace(/[^\x00-\x7F]/g, "").trim();
+
     await axios.post(`${baseUrl}/${topic}`, message, {
       headers: {
-        Title: title,
-        Priority: priority,
+        "Content-Type": "text/plain",
+        "Title": sanitizedTitle || "Alert",
+        "Priority": priority,
       },
     });
     devLog(`[NTFY] Notification sent to topic: ${topic}`);

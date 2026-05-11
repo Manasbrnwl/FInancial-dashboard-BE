@@ -211,25 +211,39 @@ export const getFuturesDateRangeController = async (
       });
     }
 
-    const rows = await prisma.$queryRaw<
-      { min_date: Date | null; max_date: Date | null }[]
-    >`
-      SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
-      FROM market_data.nse_futures nf
-      WHERE  (${param}::text IS NULL OR nf.underlying = ${param})
-    `;
+    let row, hourly_row;
 
-    const hourlyrows = await prisma.$queryRaw<
-      { min_date: Date | null; max_date: Date | null }[]
-    >`
-      SELECT TO_CHAR(MIN(time), 'yyyy-mm-dd HH12:MI AM') AS min_date, TO_CHAR(MAX(time), 'yyyy-mm-dd HH12:MI AM') AS max_date 
-      FROM periodic_market_data."ticksDataNSEFUT" nf 
-      INNER JOIN market_data.symbols_list sl ON nf."instrumentId" = sl.id 
-      WHERE (${param}::text IS NULL OR sl.instrument_id = ${param})
-    `;
-
-    const row = rows[0] || { min_date: null, max_date: null };
-    const hourly_row = hourlyrows[0] || { min_date: null, max_date: null };
+    if (param === null) {
+      // Global min/max is much faster without JOINs and ORs
+      const [globalRows, globalHourlyRows] = await Promise.all([
+        prisma.$queryRaw<{ min_date: string | null; max_date: string | null }[]>`
+          SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
+          FROM market_data.nse_futures
+        `,
+        prisma.$queryRaw<{ min_date: string | null; max_date: string | null }[]>`
+          SELECT TO_CHAR(MIN(time), 'yyyy-mm-dd HH12:MI AM') AS min_date, TO_CHAR(MAX(time), 'yyyy-mm-dd HH12:MI AM') AS max_date 
+          FROM periodic_market_data."ticksDataNSEFUT"
+        `
+      ]);
+      row = globalRows[0] || { min_date: null, max_date: null };
+      hourly_row = globalHourlyRows[0] || { min_date: null, max_date: null };
+    } else {
+      const [filteredRows, filteredHourlyRows] = await Promise.all([
+        prisma.$queryRaw<{ min_date: string | null; max_date: string | null }[]>`
+          SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
+          FROM market_data.nse_futures
+          WHERE underlying = ${param}
+        `,
+        prisma.$queryRaw<{ min_date: string | null; max_date: string | null }[]>`
+          SELECT TO_CHAR(MIN(nf.time), 'yyyy-mm-dd HH12:MI AM') AS min_date, TO_CHAR(MAX(nf.time), 'yyyy-mm-dd HH12:MI AM') AS max_date 
+          FROM periodic_market_data."ticksDataNSEFUT" nf 
+          INNER JOIN market_data.symbols_list sl ON nf."instrumentId" = sl.id 
+          WHERE sl.instrument_id = ${param}
+        `
+      ]);
+      row = filteredRows[0] || { min_date: null, max_date: null };
+      hourly_row = filteredHourlyRows[0] || { min_date: null, max_date: null };
+    }
     res.json({
       success: true,
       min_date: row.min_date && row.min_date,

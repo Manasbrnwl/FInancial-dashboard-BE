@@ -72,13 +72,11 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         ORDER BY "instrumentId", id DESC
     ),
     latest_tick_eq AS (
-        SELECT DISTINCT ON ("instrumentId", time_bucket)
-       		"instrumentId", ltp, time, time_bucket
-		FROM (
-    		SELECT * FROM periodic_market_data."ticksDataNSEEQ"
-		) t 
-     WHERE time >= CURRENT_DATE - INTERVAL '3 days'
-     ORDER BY "instrumentId", time_bucket, time DESC
+        SELECT DISTINCT ON ("instrumentId")
+       		"instrumentId", ltp, time
+		FROM periodic_market_data."ticksDataNSEEQ"
+        WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+        ORDER BY "instrumentId", id DESC
     ),
     strike_extraction AS (
         SELECT
@@ -239,13 +237,11 @@ export const getCoveredCallsStats = async (req: Request, res: Response) => {
         ORDER BY "instrumentId", id DESC
     ),
     latest_tick_eq AS (
-        SELECT DISTINCT ON ("instrumentId", time_bucket)
-       		"instrumentId", ltp, time, time_bucket
-		FROM (
-    		SELECT * FROM periodic_market_data."ticksDataNSEEQ"
-		) t 
-     WHERE time >= CURRENT_DATE - INTERVAL '3 days'
-     ORDER BY "instrumentId", time_bucket, time DESC
+        SELECT DISTINCT ON ("instrumentId")
+       		"instrumentId", ltp, time
+		FROM periodic_market_data."ticksDataNSEEQ"
+        WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+        ORDER BY "instrumentId", id DESC
     ),
     strike_extraction AS (
         SELECT
@@ -508,18 +504,22 @@ export const getFilteredCoveredCallsDetails = async (
     // Base query with all CTEs
     const baseQuery = `
       WITH latest_tick_opt AS (
-          SELECT DISTINCT
+          SELECT DISTINCT ON ("instrumentId")
               op.id, "instrumentId", ltp, volume, time
           FROM periodic_market_data."ticksDataNSEOPT" op
           INNER JOIN market_data.symbols_list sl ON sl.id = op."instrumentId"
-          WHERE sl.instrument_id = ${instrumentId} and sl.upstox_id is not null
+          WHERE sl.instrument_id = ${instrumentId} 
+            AND sl.upstox_id is not null
+            AND op.time >= CURRENT_DATE - INTERVAL '3 days'
           ORDER BY "instrumentId", op.id DESC
       ),
       latest_tick_eq AS (
-          SELECT DISTINCT ON ("instrumentId")
-              "instrumentId", ltp
+          SELECT ltp
           FROM periodic_market_data."ticksDataNSEEQ"
-          ORDER BY "instrumentId", id DESC
+          WHERE "instrumentId" = ${instrumentId}
+            AND time >= CURRENT_DATE - INTERVAL '3 days'
+          ORDER BY id DESC
+          LIMIT 1
       ),
       strike_extraction AS (
           SELECT
@@ -531,7 +531,9 @@ export const getFilteredCoveredCallsDetails = async (
               s.expiry_date,
               s.upstox_id
           FROM market_data.symbols_list s
-          WHERE s.segment = 'OPT'
+          WHERE s.instrument_id = ${instrumentId} 
+            AND s.segment = 'OPT'
+            AND s.upstox_id IS NOT NULL
       ),
       with_calcs AS (
           SELECT
@@ -552,7 +554,8 @@ export const getFilteredCoveredCallsDetails = async (
           FROM market_data.instrument_lists i
           JOIN strike_extraction se ON i.id = se.instrument_id
           JOIN latest_tick_opt o ON se.id = o."instrumentId"
-          JOIN latest_tick_eq e ON i.id = e."instrumentId"
+          CROSS JOIN latest_tick_eq e
+          WHERE i.id = ${instrumentId}
       )
       SELECT
           id,
@@ -955,23 +958,27 @@ export const getCoveredCallsTrendHourly = async (
 
     const dataQuery = `
       WITH latest_tick_opt AS (
-          SELECT DISTINCT
+          SELECT DISTINCT ON ("instrumentId", time_bucket)
               op.id,
               op."instrumentId",
               op.ltp,
               op.volume,
-              op.time
+              op.time,
+              date_trunc('hour', op.time) + floor(EXTRACT(minute FROM op.time)::int / 5) * interval '5 minutes' as time_bucket
           FROM periodic_market_data."ticksDataNSEOPT" op
           INNER JOIN market_data.symbols_list sl ON sl.id = op."instrumentId"
-          WHERE sl.instrument_id = ${instrumentId} and upstox_id is not null
-          ORDER BY op."instrumentId", op.id DESC
+          WHERE sl.instrument_id = ${instrumentId} 
+            AND sl.upstox_id is not null
+            AND op.time >= CURRENT_DATE - INTERVAL '7 days'
+          ORDER BY op."instrumentId", time_bucket, op.id DESC
       ),
       latest_tick_eq AS (
-        SELECT DISTINCT ON ("instrumentId", time_bucket)
+        SELECT DISTINCT ON (time_bucket)
        		"instrumentId", ltp, time, time_bucket
-		FROM (
-    		SELECT * FROM periodic_market_data."ticksDataNSEEQ"
-		) t ORDER BY "instrumentId", time_bucket, time DESC
+		FROM periodic_market_data."ticksDataNSEEQ"
+        WHERE "instrumentId" = ${instrumentId}
+          AND time >= CURRENT_DATE - INTERVAL '7 days'
+        ORDER BY time_bucket, time DESC
     ),
     strike_extraction AS (
         SELECT
@@ -983,8 +990,9 @@ export const getCoveredCallsTrendHourly = async (
             s.expiry_month,
             s.expiry_date
         FROM market_data.symbols_list s
-        WHERE s.segment = 'OPT'
-        AND s.expiry_date >= CURRENT_DATE
+        WHERE s.instrument_id = ${instrumentId}
+          AND s.segment = 'OPT'
+          AND s.expiry_date >= CURRENT_DATE
     ),
       with_calcs AS (
           SELECT
@@ -993,7 +1001,7 @@ export const getCoveredCallsTrendHourly = async (
               se.expiry_month AS expiry_month,
               se.expiry_date AS expiry_date,
               e.ltp::numeric AS underlying_price,
-              TO_CHAR(o.time, 'yyyy-mm-dd HH12:MI AM') AS time,
+              TO_CHAR(o.time_bucket, 'yyyy-mm-dd HH12:MI AM') AS time,
               o.ltp::numeric AS premium,
               o.volume,
               se.strike,
@@ -1004,17 +1012,7 @@ export const getCoveredCallsTrendHourly = async (
           FROM market_data.instrument_lists i
           JOIN strike_extraction se ON i.id = se.instrument_id
           JOIN latest_tick_opt o ON se.id = o."instrumentId"
-          JOIN LATERAL (
-              SELECT *
-              FROM latest_tick_eq e
-              WHERE e."instrumentId" = i.id
-              AND e.time_bucket IN (
-                  date_trunc('hour', o.time) + floor(EXTRACT(minute FROM o.time)::int / 5) * interval '5 minutes',
-                  date_trunc('hour', o.time) + (floor(EXTRACT(minute FROM o.time)::int / 5) + 4) * interval '5 minutes'
-              )
-              ORDER BY ABS(EXTRACT(EPOCH FROM (e.time - o.time)))
-              LIMIT 1
-          ) e ON true
+          JOIN latest_tick_eq e ON e."instrumentId" = i.id AND e.time_bucket = o.time_bucket
       )
       SELECT
           id,
@@ -1044,23 +1042,27 @@ export const getCoveredCallsTrendHourly = async (
 
     const countQuery = `
       WITH latest_tick_opt AS (
-          SELECT DISTINCT
+          SELECT DISTINCT ON ("instrumentId", time_bucket)
               op.id,
               op."instrumentId",
               op.ltp,
               op.volume,
-              op.time
+              op.time,
+              date_trunc('hour', op.time) + floor(EXTRACT(minute FROM op.time)::int / 5) * interval '5 minutes' as time_bucket
           FROM periodic_market_data."ticksDataNSEOPT" op
           INNER JOIN market_data.symbols_list sl ON sl.id = op."instrumentId"
-          WHERE sl.instrument_id = ${instrumentId} and upstox_id is not null
-          ORDER BY op."instrumentId", op.id DESC
+          WHERE sl.instrument_id = ${instrumentId} 
+            AND sl.upstox_id is not null
+            AND op.time >= CURRENT_DATE - INTERVAL '7 days'
+          ORDER BY op."instrumentId", time_bucket, op.id DESC
       ),
       latest_tick_eq AS (
-        SELECT DISTINCT ON ("instrumentId", time_bucket)
+        SELECT DISTINCT ON (time_bucket)
        		"instrumentId", ltp, time, time_bucket
-		FROM (
-    		SELECT * FROM periodic_market_data."ticksDataNSEEQ"
-		) t ORDER BY "instrumentId", time_bucket, time DESC
+		FROM periodic_market_data."ticksDataNSEEQ"
+        WHERE "instrumentId" = ${instrumentId}
+          AND time >= CURRENT_DATE - INTERVAL '7 days'
+        ORDER BY time_bucket, time DESC
     ),
     strike_extraction AS (
         SELECT
@@ -1072,8 +1074,9 @@ export const getCoveredCallsTrendHourly = async (
             s.expiry_month,
             s.expiry_date
         FROM market_data.symbols_list s
-        WHERE s.segment = 'OPT'
-        AND s.expiry_date >= CURRENT_DATE
+        WHERE s.instrument_id = ${instrumentId}
+          AND s.segment = 'OPT'
+          AND s.expiry_date >= CURRENT_DATE
     ),
       with_calcs AS (
           SELECT
@@ -1082,7 +1085,7 @@ export const getCoveredCallsTrendHourly = async (
               se.expiry_month AS expiry_month,
               se.expiry_date AS expiry_date,
               e.ltp::numeric AS underlying_price,
-              TO_CHAR(o.time, 'yyyy-mm-dd HH12:MI AM') AS time,
+              TO_CHAR(o.time_bucket, 'yyyy-mm-dd HH12:MI AM') AS time,
               o.ltp::numeric AS premium,
               o.volume,
               se.strike,
@@ -1093,17 +1096,7 @@ export const getCoveredCallsTrendHourly = async (
           FROM market_data.instrument_lists i
           JOIN strike_extraction se ON i.id = se.instrument_id
           JOIN latest_tick_opt o ON se.id = o."instrumentId"
-          JOIN LATERAL (
-              SELECT *
-              FROM latest_tick_eq e
-              WHERE e."instrumentId" = i.id
-              AND e.time_bucket IN (
-                  date_trunc('hour', o.time) + floor(EXTRACT(minute FROM o.time)::int / 5) * interval '5 minutes',
-                  date_trunc('hour', o.time) + (floor(EXTRACT(minute FROM o.time)::int / 5) + 4) * interval '5 minutes'
-              )
-              ORDER BY ABS(EXTRACT(EPOCH FROM (e.time - o.time)))
-              LIMIT 1
-          ) e ON true
+          JOIN latest_tick_eq e ON e."instrumentId" = i.id AND e.time_bucket = o.time_bucket
       )
       SELECT
           *,

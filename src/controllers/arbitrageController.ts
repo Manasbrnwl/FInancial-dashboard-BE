@@ -17,12 +17,12 @@ export const getArbitrageData = async (req: Request, res: Response) => {
   WITH latest_tick_fut AS (
     SELECT DISTINCT ON ("instrumentId") "instrumentId", ltp, volume, time
     FROM periodic_market_data."ticksDataNSEFUT" 
-    WHERE time >= CURRENT_DATE - INTERVAL '1 day'
+    WHERE time >= CURRENT_DATE - INTERVAL '3 days'
     ORDER BY "instrumentId", id DESC
   ), latest_tick_eq AS (
     SELECT DISTINCT ON ("instrumentId") "instrumentId", ltp, time
     FROM periodic_market_data."ticksDataNSEEQ" 
-    WHERE time >= CURRENT_DATE - INTERVAL '1 day'
+    WHERE time >= CURRENT_DATE - INTERVAL '3 days'
     ORDER BY "instrumentId", id DESC
   )
   SELECT

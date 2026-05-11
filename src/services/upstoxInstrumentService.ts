@@ -114,32 +114,53 @@ export const upstoxInstrumentService = {
             let errorCount = 0;
 
             // Process in chunks
-            const chunkSize = 50;
+            const chunkSize = 20; // Reduced chunk size to avoid overloading DB
             for (let i = 0; i < data.length; i += chunkSize) {
                 const chunk = data.slice(i, i + chunkSize);
                 await Promise.all(chunk.map(async (inst) => {
                     try {
-                        await prisma.instrument_lists.upsert({
-                            where: {
-                                exchange_instrument_type: {
+                        // First check if this upstox_id already exists in any record
+                        // This prevents unique constraint failures if the symbol has changed
+                        const existingByUpstoxId = await prisma.instrument_lists.findUnique({
+                            where: { upstox_id: inst.instrumentKey }
+                        });
+
+                        if (existingByUpstoxId) {
+                            // If it exists, update it to ensure symbol and other info are in sync
+                            await prisma.instrument_lists.update({
+                                where: { id: existingByUpstoxId.id },
+                                data: {
                                     exchange: "NSE",
                                     instrument_type: inst.tradingSymbol,
+                                    upstox_symbol: inst.tradingSymbol,
                                 }
-                            },
-                            update: {
-                                upstox_id: inst.instrumentKey,
-                                upstox_symbol: inst.tradingSymbol,
-                            },
-                            create: {
-                                exchange: "NSE",
-                                instrument_type: inst.tradingSymbol,
-                                upstox_id: inst.instrumentKey,
-                                upstox_symbol: inst.tradingSymbol,
-                            }
-                        });
+                            });
+                        } else {
+                            // If not found by upstox_id, try upsert by composite key
+                            // This will connect existing records (without upstox_id) to their IDs
+                            await prisma.instrument_lists.upsert({
+                                where: {
+                                    exchange_instrument_type: {
+                                        exchange: "NSE",
+                                        instrument_type: inst.tradingSymbol,
+                                    }
+                                },
+                                update: {
+                                    upstox_id: inst.instrumentKey,
+                                    upstox_symbol: inst.tradingSymbol,
+                                },
+                                create: {
+                                    exchange: "NSE",
+                                    instrument_type: inst.tradingSymbol,
+                                    upstox_id: inst.instrumentKey,
+                                    upstox_symbol: inst.tradingSymbol,
+                                }
+                            });
+                        }
                         successCount++;
                     } catch (error: any) {
                         errorCount++;
+                        devError(`❌ Error syncing EQ ${inst.tradingSymbol}: ${error.message}`);
                     }
                 }));
             }
@@ -170,7 +191,7 @@ export const upstoxInstrumentService = {
             let successCount = 0;
             let errorCount = 0;
 
-            const chunkSize = 50;
+            const chunkSize = 20;
             for (let i = 0; i < futInstruments.length; i += chunkSize) {
                 const chunk = futInstruments.slice(i, i + chunkSize);
                 await Promise.all(chunk.map(async (inst) => {
@@ -257,7 +278,7 @@ export const upstoxInstrumentService = {
             let errorCount = 0;
 
             // Process in chunks to avoid overwhelming the database
-            const chunkSize = 100;
+            const chunkSize = 50;
             for (let i = 0; i < optInstruments.length; i += chunkSize) {
                 const chunk = optInstruments.slice(i, i + chunkSize);
                 

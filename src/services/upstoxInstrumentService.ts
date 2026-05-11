@@ -188,21 +188,28 @@ export const upstoxInstrumentService = {
                         let instrumentId = instrumentMap.get(underlying);
 
                         if (!instrumentId) {
-                            const newInstrument = await prisma.instrument_lists.upsert({
+                            const existing = await prisma.instrument_lists.findUnique({
                                 where: {
                                     exchange_instrument_type: {
                                         exchange: "NSE",
                                         instrument_type: underlying,
                                     }
                                 },
-                                update: {},
-                                create: {
-                                    exchange: "NSE",
-                                    instrument_type: underlying,
-                                },
                                 select: { id: true }
                             });
-                            instrumentId = newInstrument.id;
+                            
+                            if (existing) {
+                                instrumentId = existing.id;
+                            } else {
+                                const newInstrument = await prisma.instrument_lists.create({
+                                    data: {
+                                        exchange: "NSE",
+                                        instrument_type: underlying,
+                                    },
+                                    select: { id: true }
+                                });
+                                instrumentId = newInstrument.id;
+                            }
                             instrumentMap.set(underlying, instrumentId);
                         }
 
@@ -211,23 +218,23 @@ export const upstoxInstrumentService = {
                             expiryDate = new Date(inst.expiry);
                         }
 
-                        await prisma.symbols_list.upsert({
-                            where: { upstox_id: inst.instrumentKey },
-                            update: {
-                                upstox_symbol: inst.tradingSymbol,
-                                expiry_date: expiryDate,
-                                expiry_month: expiryDate ? expiryDate.toLocaleString('default', { month: 'long' }).toUpperCase() : null,
-                            },
-                            create: {
-                                instrument_id: instrumentId,
-                                symbol: inst.tradingSymbol,
-                                segment: "FUT",
-                                expiry_date: expiryDate,
-                                upstox_id: inst.instrumentKey,
-                                upstox_symbol: inst.tradingSymbol,
-                                expiry_month: expiryDate ? expiryDate.toLocaleString('default', { month: 'long' }).toUpperCase() : null,
-                            }
+                        const existingSymbol = await prisma.symbols_list.findUnique({
+                            where: { upstox_id: inst.instrumentKey }
                         });
+
+                        if (!existingSymbol) {
+                            await prisma.symbols_list.create({
+                                data: {
+                                    instrument_id: instrumentId,
+                                    symbol: inst.tradingSymbol,
+                                    segment: "FUT",
+                                    expiry_date: expiryDate,
+                                    upstox_id: inst.instrumentKey,
+                                    upstox_symbol: inst.tradingSymbol,
+                                    expiry_month: expiryDate ? expiryDate.toLocaleString('default', { month: 'long' }).toUpperCase() : null,
+                                }
+                            });
+                        }
                         successCount++;
                     } catch (error: any) {
                         errorCount++;
@@ -276,22 +283,28 @@ export const upstoxInstrumentService = {
                         let instrumentId = instrumentMap.get(underlying);
 
                         if (!instrumentId) {
-                            // If missing, create it (rare case if EQ sync ran first)
-                            const newInstrument = await prisma.instrument_lists.upsert({
+                            const existing = await prisma.instrument_lists.findUnique({
                                 where: {
                                     exchange_instrument_type: {
                                         exchange: "NSE",
                                         instrument_type: underlying,
                                     }
                                 },
-                                update: {},
-                                create: {
-                                    exchange: "NSE",
-                                    instrument_type: underlying,
-                                },
                                 select: { id: true }
                             });
-                            instrumentId = newInstrument.id;
+
+                            if (existing) {
+                                instrumentId = existing.id;
+                            } else {
+                                const newInstrument = await prisma.instrument_lists.create({
+                                    data: {
+                                        exchange: "NSE",
+                                        instrument_type: underlying,
+                                    },
+                                    select: { id: true }
+                                });
+                                instrumentId = newInstrument.id;
+                            }
                             instrumentMap.set(underlying, instrumentId);
                         }
 
@@ -300,28 +313,25 @@ export const upstoxInstrumentService = {
                             expiryDate = new Date(inst.expiry);
                         }
 
-                        // Use upsert to handle create/update in one call based on upstox_id
-                        await prisma.symbols_list.upsert({
-                            where: { upstox_id: inst.instrumentKey },
-                            update: {
-                                upstox_symbol: inst.tradingSymbol,
-                                expiry_date: expiryDate,
-                                strike: inst.strike?.toString() || null,
-                                option_type: inst.optionType,
-                                expiry_month: expiryDate ? expiryDate.toLocaleString('default', { month: 'long' }).toUpperCase() : null,
-                            },
-                            create: {
-                                instrument_id: instrumentId,
-                                symbol: inst.tradingSymbol,
-                                segment: "OPT",
-                                expiry_date: expiryDate,
-                                upstox_id: inst.instrumentKey,
-                                upstox_symbol: inst.tradingSymbol,
-                                strike: inst.strike?.toString() || null,
-                                option_type: inst.optionType,
-                                expiry_month: expiryDate ? expiryDate.toLocaleString('default', { month: 'long' }).toUpperCase() : null,
-                            }
+                        const existingSymbol = await prisma.symbols_list.findUnique({
+                            where: { upstox_id: inst.instrumentKey }
                         });
+
+                        if (!existingSymbol) {
+                            await prisma.symbols_list.create({
+                                data: {
+                                    instrument_id: instrumentId,
+                                    symbol: inst.tradingSymbol,
+                                    segment: "OPT",
+                                    expiry_date: expiryDate,
+                                    upstox_id: inst.instrumentKey,
+                                    upstox_symbol: inst.tradingSymbol,
+                                    strike: inst.strike?.toString() || null,
+                                    option_type: inst.optionType,
+                                    expiry_month: expiryDate ? expiryDate.toLocaleString('default', { month: 'long' }).toUpperCase() : null,
+                                }
+                            });
+                        }
                         
                         successCount++;
                     } catch (error: any) {

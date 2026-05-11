@@ -110,6 +110,45 @@ function getTimestampDate(timestamp?: string | Date): Date {
 // Configuration
 // ─────────────────────────────────────────────────────────────────────────────
 
+async function preloadConfigs(): Promise<void> {
+    const configs = await prisma.covered_call_alert_config.findMany({
+        where: { is_active: true },
+    });
+
+    // Clear cache first
+    configCache.clear();
+
+    // Process global first
+    const dbGlobal = configs.find((c) => c.instrument_id === null);
+    const globalConfig: AlertConfig = {
+        minOtmPercent: dbGlobal?.min_otm_percent ?? DEFAULT_CONFIG.minOtmPercent,
+        maxOtmPercent: dbGlobal?.max_otm_percent ?? DEFAULT_CONFIG.maxOtmPercent,
+        minPremiumPercent: dbGlobal?.min_premium_percent ?? DEFAULT_CONFIG.minPremiumPercent,
+        maxPremiumPercent: dbGlobal?.max_premium_percent ?? DEFAULT_CONFIG.maxPremiumPercent,
+        minUpsidePercent: dbGlobal?.min_upside_percent ?? DEFAULT_CONFIG.minUpsidePercent,
+        maxUpsidePercent: dbGlobal?.max_upside_percent ?? DEFAULT_CONFIG.maxUpsidePercent,
+        consecutiveCount: dbGlobal?.consecutive_count ?? DEFAULT_CONFIG.consecutiveCount,
+        cooldownMinutes: dbGlobal?.cooldown_minutes ?? DEFAULT_CONFIG.cooldownMinutes,
+    };
+    configCache.set("global", globalConfig);
+
+    // Then process specific configs
+    for (const cfg of configs) {
+        if (cfg.instrument_id !== null) {
+            configCache.set(cfg.instrument_id, {
+                minOtmPercent: cfg.min_otm_percent ?? globalConfig.minOtmPercent,
+                maxOtmPercent: cfg.max_otm_percent ?? globalConfig.maxOtmPercent,
+                minPremiumPercent: cfg.min_premium_percent ?? globalConfig.minPremiumPercent,
+                maxPremiumPercent: cfg.max_premium_percent ?? globalConfig.maxPremiumPercent,
+                minUpsidePercent: cfg.min_upside_percent ?? globalConfig.minUpsidePercent,
+                maxUpsidePercent: cfg.max_upside_percent ?? globalConfig.maxUpsidePercent,
+                consecutiveCount: cfg.consecutive_count ?? globalConfig.consecutiveCount,
+                cooldownMinutes: cfg.cooldown_minutes ?? globalConfig.cooldownMinutes,
+            });
+        }
+    }
+}
+
 async function getAlertConfig(instrumentId?: number): Promise<AlertConfig> {
     if (instrumentId && configCache.has(instrumentId)) {
         return configCache.get(instrumentId)!;
@@ -118,6 +157,7 @@ async function getAlertConfig(instrumentId?: number): Promise<AlertConfig> {
     let globalConfig = configCache.get("global");
 
     if (!globalConfig) {
+        // Fallback if not preloaded (should not happen with processCoveredCallData)
         const dbGlobal = await prisma.covered_call_alert_config.findFirst({
             where: { instrument_id: null, is_active: true },
         });
@@ -379,7 +419,7 @@ async function sendConsolidatedAlertEmail(alerts: AlertPayload[]): Promise<void>
 // Main Processor
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PROCESS_BATCH_SIZE = 50; // Process candidates in batches to avoid connection pool exhaustion
+const PROCESS_BATCH_SIZE = 10; // Reduced batch size to avoid connection pool exhaustion
 
 /**
  * Process covered call candidates every 5 minutes.
@@ -391,8 +431,9 @@ export async function processCoveredCallData(
 ): Promise<void> {
     const suppressAlerts = options.suppressAlerts || false;
 
-    // Pre-load global config once before parallel processing to avoid repeated DB queries
-    const globalConfig = await getAlertConfig();
+    // Pre-load all configurations into cache once before parallel processing 
+    // This avoids repeated DB queries per candidate and prevents connection exhaustion
+    await preloadConfigs();
 
     // Collect all triggered alerts for consolidated email
     const triggeredAlerts: AlertPayload[] = [];

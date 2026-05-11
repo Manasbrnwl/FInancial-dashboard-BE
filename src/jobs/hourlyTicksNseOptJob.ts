@@ -1,14 +1,14 @@
 import axios from "axios";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import cron from "node-cron";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { loadEnv } from "../config/env";
 import { devLog, devError, prodError } from "../utils/errorLogger";
+import { upstoxQuoteService } from "../services/upstoxQuoteService";
 
 loadEnv();
-const prisma = new PrismaClient();
 
 // Batch size for Upstox Quote API (Upstox supports up to 500)
 const BATCH_SIZE = 500;
@@ -53,37 +53,6 @@ async function getActiveOptions(): Promise<InstrumentMap[]> {
   }
 }
 
-/**
- * Fetch Market Quotes from Upstox for a batch of keys.
- */
-async function fetchQuotes(keys: string[], accessToken: string) {
-  try {
-    const url = `${UPSTOX_CONFIG.BASE_URL}/market-quote/quotes`;
-    const params = new URLSearchParams({
-      instrument_key: keys.join(","),
-    });
-
-    const response = await axios.get(url, {
-      params,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
-    });
-
-    if (response.data.status === "success") {
-      return response.data.data;
-    }
-    return null;
-  } catch (error: any) {
-    devError(
-      "❌ Failed to fetch quotes batch:",
-      error.response?.data?.message || error.message
-    );
-    prodError("Failed to fetch quotes batch");
-    return null;
-  }
-}
 
 /**
  * Main execution function for the 5-minute job.
@@ -121,7 +90,7 @@ export async function executeFiveMinuteJob() {
       const batchInstruments = instruments.slice(i, i + BATCH_SIZE);
       const batchKeys = batchInstruments.map(inst => inst.upstoxId);
 
-      const quotes = await fetchQuotes(batchKeys, token);
+      const quotes = await upstoxQuoteService.fetchQuotesResilient(batchKeys, token);
 
       if (quotes) {
         const dbRecords = [];

@@ -1,15 +1,15 @@
 import axios from "axios";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import cron from "node-cron";
 import { processCoveredCallData } from "../services/coveredCallAlertService";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { loadEnv } from "../config/env";
 import { devLog, devError, prodError } from "../utils/errorLogger";
+import { upstoxQuoteService } from "../services/upstoxQuoteService";
 import { getCachedName } from "../cache/instrumentCache";
 
 loadEnv();
-const prisma = new PrismaClient();
 
 const BATCH_SIZE = 500;
 
@@ -92,32 +92,6 @@ async function getActiveOptions(): Promise<OptionInstrument[]> {
     }
 }
 
-/**
- * Fetch Market Quotes from Upstox for a batch of instrument keys.
- */
-async function fetchQuotes(keys: string[], accessToken: string): Promise<Record<string, any> | null> {
-    try {
-        const url = `${UPSTOX_CONFIG.BASE_URL}/market-quote/quotes?instrument_key=${keys.join(",")}`;
-        const response = await axios.get(url, {
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-                Accept: "application/json",
-            },
-        });
-
-        if (response.data.status === "success") {
-            return response.data.data;
-        }
-        return null;
-    } catch (error: any) {
-        devError(
-            "❌ Failed to fetch quotes batch:",
-            error.response?.data?.errors || error.message
-        );
-        prodError("Failed to fetch quotes batch");
-        return null;
-    }
-}
 
 /**
  * Fetch covered call candidates using Upstox API for real-time prices.
@@ -141,7 +115,7 @@ async function getCoveredCallCandidates(accessToken: string): Promise<CoveredCal
         const equityQuotes: Record<string, number> = {};
         for (let i = 0; i < underlyingIds.length; i += BATCH_SIZE) {
             const batch = underlyingIds.slice(i, i + BATCH_SIZE);
-            const quotes = await fetchQuotes(batch, accessToken);
+            const quotes = await upstoxQuoteService.fetchQuotesResilient(batch, accessToken);
 
             if (quotes) {
                 for (const key of Object.keys(quotes)) {
@@ -168,7 +142,7 @@ async function getCoveredCallCandidates(accessToken: string): Promise<CoveredCal
 
         for (let i = 0; i < optionUpstoxIds.length; i += BATCH_SIZE) {
             const batch = optionUpstoxIds.slice(i, i + BATCH_SIZE);
-            const quotes = await fetchQuotes(batch, accessToken);
+            const quotes = await upstoxQuoteService.fetchQuotesResilient(batch, accessToken);
 
             if (quotes) {
                 for (const key of Object.keys(quotes)) {

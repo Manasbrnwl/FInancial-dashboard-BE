@@ -110,16 +110,7 @@ export const getCoveredCallsData = async (req: Request, res: Response) => {
         FROM market_data.instrument_lists i
         JOIN strike_extraction se ON i.id = se.instrument_id
         JOIN latest_tick_opt o ON se.id = o."instrumentId"       
-		JOIN LATERAL (
-        SELECT * FROM latest_tick_eq e
-    		WHERE e."instrumentId" = i.id 
-        AND e.time_bucket IN (
-              date_trunc('hour', o.time) + floor(EXTRACT(minute FROM o.time)::int / 5) * interval '5 minutes',
-              date_trunc('hour', o.time) + (floor(EXTRACT(minute FROM o.time)::int / 5) + 4) * interval '5 minutes'
-          )
-        ORDER BY ABS(EXTRACT(EPOCH FROM (e.time - o.time)))
-    		LIMIT 1
-		) e ON true
+		JOIN latest_tick_eq e ON e."instrumentId" = i.id
  	)
     SELECT
         id,
@@ -275,16 +266,7 @@ export const getCoveredCallsStats = async (req: Request, res: Response) => {
         FROM market_data.instrument_lists i
         JOIN strike_extraction se ON i.id = se.instrument_id
         JOIN latest_tick_opt o ON se.id = o."instrumentId"       
-		JOIN LATERAL (
-        SELECT * FROM latest_tick_eq e
-    		WHERE e."instrumentId" = i.id 
-        AND e.time_bucket IN (
-              date_trunc('hour', o.time) + floor(EXTRACT(minute FROM o.time)::int / 5) * interval '5 minutes',
-              date_trunc('hour', o.time) + (floor(EXTRACT(minute FROM o.time)::int / 5) + 4) * interval '5 minutes'
-          )
-        ORDER BY ABS(EXTRACT(EPOCH FROM (e.time - o.time)))
-    		LIMIT 1
-		) e ON true
+		JOIN latest_tick_eq e ON e."instrumentId" = i.id
  	)
     SELECT COUNT(*) as count, 1 as avg_premium, json_agg(distinct trim(expiry_month)) expiry_month
     FROM with_calcs

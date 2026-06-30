@@ -7,7 +7,14 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint . --ext .ts",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "sync:equity": "ts-node src/scripts/historicalDataSync.ts --segment equity",
+    "sync:futures": "ts-node src/scripts/historicalDataSync.ts --segment futures",
+    "sync:options": "ts-node src/scripts/historicalDataSync.ts --segment options",
+    "sync:all": "ts-node src/scripts/historicalDataSync.ts --all",
+    "test:fyers": "ts-node scripts/test-fyers-history.ts",
+    "auth:fyers": "ts-node scripts/fyers-auth.ts",
+    "sync:futopt": "ts-node scripts/historicalDataSync.ts --segment futures_options"
   },
   "keywords": [],
   "author": "",
@@ -38,6 +45,7 @@
     "cron-parser": "^5.4.0",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
+    "fyers-api-v3": "^1.9.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.1",
     "node-cron": "^3.0.3",

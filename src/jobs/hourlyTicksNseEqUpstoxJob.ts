@@ -27,10 +27,11 @@ async function getActiveEquityInstruments(): Promise<InstrumentMap[]> {
         const instruments = await prisma.instrument_lists.findMany({
             where: {
                 exchange: "NSE",
-                upstox_id: {
-                    not: null, // Must have been synced
-                    startsWith: "NSE_EQ"
-                },
+                upstox_id: { not: null },
+                OR: [
+                    { upstox_id: { startsWith: "NSE_EQ" } },
+                    { upstox_id: { startsWith: "NSE_INDEX" } }
+                ]
             },
             select: {
                 id: true,
@@ -43,7 +44,7 @@ async function getActiveEquityInstruments(): Promise<InstrumentMap[]> {
         return instruments.map((s) => ({
             instrumentId: s.id,
             upstoxId: s.upstox_id!,
-            upstoxName: s.upstox_symbol!,
+            upstoxName: s.upstox_symbol || s.instrument_type,
         }));
     } catch (error: any) {
         devError("❌ Failed to fetch active equity instruments from DB:", error.message);
@@ -188,7 +189,8 @@ export async function executeHourlyJob() {
                     // Use the instrument_key (upstoxId) directly as the lookup key
                     // The upstox_id field contains the correct format: NSE_EQ|INE848E01016
                     // This matches exactly what Upstox returns in the API response
-                    const quote = quotes[`NSE_EQ:${inst.upstoxName}`];
+                    const prefix = inst.upstoxId.split("|")[0];
+                    const quote = quotes[`${prefix}:${inst.upstoxName}`];
                     if (!quote) {
                         continue;
                     }

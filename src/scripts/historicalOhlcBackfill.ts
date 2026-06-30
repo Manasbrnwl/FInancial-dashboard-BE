@@ -66,6 +66,7 @@ async function fetchHistoricalCandles(
                 Authorization: `Bearer ${accessToken}`,
                 Accept: "application/json",
             },
+            timeout: 10000,
         });
 
         if (response.data.status === "success" && response.data.data?.candles) {
@@ -98,14 +99,21 @@ async function fetchHistoricalCandles(
 /**
  * Get all NSE Equity instruments with Upstox IDs
  */
-async function getEquityInstruments(): Promise<InstrumentData[]> {
+async function getEquityInstruments(onlyIndices = false): Promise<InstrumentData[]> {
     const instruments = await prisma.instrument_lists.findMany({
         where: {
             exchange: "NSE",
             upstox_id: {
                 not: null,
-                startsWith: "NSE_EQ",
             },
+            OR: onlyIndices
+                ? [
+                      { upstox_id: { startsWith: "NSE_INDEX" } }
+                  ]
+                : [
+                      { upstox_id: { startsWith: "NSE_EQ" } },
+                      { upstox_id: { startsWith: "NSE_INDEX" } }
+                  ]
         },
         select: {
             id: true,
@@ -228,11 +236,23 @@ async function backfillEquityOhlc(
                 }));
 
             if (records.length > 0) {
-                const result = await prisma.nse_equity.createMany({
-                    data: records,
-                    skipDuplicates: true,
-                });
-                totalInserted += result.count;
+                let attempts = 0;
+                while (attempts < 3) {
+                    try {
+                        const result = await prisma.nse_equity.createMany({
+                            data: records,
+                            skipDuplicates: true,
+                        });
+                        totalInserted += result.count;
+                        break;
+                    } catch (err: any) {
+                        attempts++;
+                        if (attempts === 3) throw err;
+                        devError(`⚠️ Prisma insert failed (attempt ${attempts}/3), retrying in 2s...`, err.message);
+                        await new Promise((r) => setTimeout(r, 2000));
+                        await prisma.$connect().catch(() => {});
+                    }
+                }
             }
         }
 
@@ -283,11 +303,23 @@ async function backfillFuturesOhlc(
                 }));
 
             if (records.length > 0) {
-                const result = await prisma.nse_futures.createMany({
-                    data: records,
-                    skipDuplicates: true,
-                });
-                totalInserted += result.count;
+                let attempts = 0;
+                while (attempts < 3) {
+                    try {
+                        const result = await prisma.nse_futures.createMany({
+                            data: records,
+                            skipDuplicates: true,
+                        });
+                        totalInserted += result.count;
+                        break;
+                    } catch (err: any) {
+                        attempts++;
+                        if (attempts === 3) throw err;
+                        devError(`⚠️ Prisma insert failed (attempt ${attempts}/3), retrying in 2s...`, err.message);
+                        await new Promise((r) => setTimeout(r, 2000));
+                        await prisma.$connect().catch(() => {});
+                    }
+                }
             }
         }
 
@@ -341,11 +373,23 @@ async function backfillOptionsOhlc(
                 }));
 
             if (records.length > 0) {
-                const result = await prisma.nse_options.createMany({
-                    data: records,
-                    skipDuplicates: true,
-                });
-                totalInserted += result.count;
+                let attempts = 0;
+                while (attempts < 3) {
+                    try {
+                        const result = await prisma.nse_options.createMany({
+                            data: records,
+                            skipDuplicates: true,
+                        });
+                        totalInserted += result.count;
+                        break;
+                    } catch (err: any) {
+                        attempts++;
+                        if (attempts === 3) throw err;
+                        devError(`⚠️ Prisma insert failed (attempt ${attempts}/3), retrying in 2s...`, err.message);
+                        await new Promise((r) => setTimeout(r, 2000));
+                        await prisma.$connect().catch(() => {});
+                    }
+                }
             }
         }
 
@@ -370,7 +414,8 @@ async function backfillOptionsOhlc(
 export async function backfillHistoricalOhlc(
     fromDate: string,
     toDate: string,
-    segments: ("equity" | "futures" | "options")[] = ["equity", "futures", "options"]
+    segments: ("equity" | "futures" | "options")[] = ["equity", "futures", "options"],
+    onlyIndices = false
 ): Promise<void> {
     const startTime = Date.now();
     devLog(`🕐 Starting Historical OHLC Backfill from ${fromDate} to ${toDate}`);
@@ -390,16 +435,16 @@ export async function backfillHistoricalOhlc(
         let optionsCount = 0;
 
         // 2. Backfill Equity
-        // if (segments.includes("equity")) {
-        //     const instruments = await getEquityInstruments();
-        //     equityCount = await backfillEquityOhlc(instruments, token, fromDate, toDate);
-        // }
+        if (segments.includes("equity")) {
+            const instruments = await getEquityInstruments(onlyIndices);
+            equityCount = await backfillEquityOhlc(instruments, token, fromDate, toDate);
+        }
 
         // 3. Backfill Futures
-        // if (segments.includes("futures")) {
-        //     const symbols = await getFuturesSymbols();
-        //     futuresCount = await backfillFuturesOhlc(symbols, token, fromDate, toDate);
-        // }
+        if (segments.includes("futures")) {
+            const symbols = await getFuturesSymbols();
+            futuresCount = await backfillFuturesOhlc(symbols, token, fromDate, toDate);
+        }
 
         // 4. Backfill Options
         if (segments.includes("options")) {
@@ -431,9 +476,43 @@ export async function runJanuary2026Backfill(): Promise<void> {
     await backfillHistoricalOhlc("2026-01-08", "2026-01-23");
 }
 
+function parseBackfillArgs(): {
+    fromDate: string;
+    toDate: string;
+    segments: ("equity" | "futures" | "options")[];
+    onlyIndices: boolean;
+} {
+    const args = process.argv.slice(2);
+    let fromDate = "2026-01-08";
+    let toDate = "2026-01-23";
+    let segments: ("equity" | "futures" | "options")[] = ["equity", "futures", "options"];
+    let onlyIndices = false;
+
+    for (let i = 0; i < args.length; i++) {
+        if (args[i] === "--from" && args[i + 1]) {
+            fromDate = args[i + 1];
+            i++;
+        } else if (args[i] === "--to" && args[i + 1]) {
+            toDate = args[i + 1];
+            i++;
+        } else if (args[i] === "--segments" && args[i + 1]) {
+            const raw = args[i + 1].split(",").map((s) => s.trim().toLowerCase());
+            segments = raw.filter((s): s is "equity" | "futures" | "options" => 
+                ["equity", "futures", "options"].includes(s)
+            );
+            i++;
+        } else if (args[i] === "--only-indices") {
+            onlyIndices = true;
+        }
+    }
+
+    return { fromDate, toDate, segments, onlyIndices };
+}
+
 // If running directly as a script
 if (require.main === module) {
-    runJanuary2026Backfill()
+    const { fromDate, toDate, segments, onlyIndices } = parseBackfillArgs();
+    backfillHistoricalOhlc(fromDate, toDate, segments, onlyIndices)
         .then(() => {
             devLog("Backfill script completed.");
             process.exit(0);

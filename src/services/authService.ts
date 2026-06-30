@@ -46,7 +46,10 @@ export const createOtpForUser = async (
     },
   });
 
-  await sendOtpEmail(email, otp, otpExpiryMinutes);
+  const emailSent = await sendOtpEmail(email, otp, otpExpiryMinutes);
+  if (!emailSent) {
+    throw new Error("Failed to send OTP email. Please try again or contact support.");
+  }
   
   if (process.env.NODE_ENV === "development") {
     console.log(`[Dev] OTP generated for ${email}: ${otp}`);
@@ -102,7 +105,10 @@ export const createPasswordResetToken = async (email: string) => {
     },
   });
 
-  await sendPasswordResetEmail(email, token, 1);
+  const emailSent = await sendPasswordResetEmail(email, token, 1);
+  if (!emailSent) {
+    throw new Error("Failed to send password reset email.");
+  }
   return token;
 };
 

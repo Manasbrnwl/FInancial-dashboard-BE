@@ -16,6 +16,7 @@ interface InstrumentData {
     id: number;
     instrument_type: string;
     upstox_id: string;
+    upstox_symbol?: string | null;
 }
 
 interface SymbolData {
@@ -38,15 +39,17 @@ async function getActiveEquityInstruments(): Promise<InstrumentData[]> {
         const instruments = await prisma.instrument_lists.findMany({
             where: {
                 exchange: "NSE",
-                upstox_id: {
-                    not: null,
-                    startsWith: "NSE_EQ"
-                },
+                upstox_id: { not: null },
+                OR: [
+                    { upstox_id: { startsWith: "NSE_EQ" } },
+                    { upstox_id: { startsWith: "NSE_INDEX" } }
+                ]
             },
             select: {
                 id: true,
                 instrument_type: true,
                 upstox_id: true,
+                upstox_symbol: true,
             },
         });
 
@@ -54,6 +57,7 @@ async function getActiveEquityInstruments(): Promise<InstrumentData[]> {
             id: s.id,
             instrument_type: s.instrument_type,
             upstox_id: s.upstox_id!,
+            upstox_symbol: s.upstox_symbol,
         }));
     } catch (error: any) {
         devError("❌ Failed to fetch active equity instruments from DB:", error.message);
@@ -268,9 +272,9 @@ async function processEquityOhlc(
 
     const equityRecords = [];
     for (const inst of instruments) {
-        // Response key format: NSE_EQ:SYMBOL
-        const parts = inst.upstox_id.split("|");
-        const lookupKey = `NSE_EQ:${inst.instrument_type}`;
+        const prefix = inst.upstox_id.split("|")[0];
+        const symbolKey = inst.upstox_symbol || inst.instrument_type;
+        const lookupKey = `${prefix}:${symbolKey}`;
         const quote = ohlcData[lookupKey] as OhlcQuote | undefined;
 
         if (!quote) continue;

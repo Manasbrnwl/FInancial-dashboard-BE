@@ -193,7 +193,7 @@ model symbols_list {
   strike        String?   @default(dbgenerated("0")) @db.VarChar(15)
   option_type   String?   @db.VarChar(2)
   expiry_month  String?
-  upstox_id     String?   @unique @db.VarChar(50)
+  upstox_id     String?   @db.VarChar(50)
   upstox_symbol String?   @db.VarChar(100)
 
   @@unique([instrument_id, symbol], map: "instrument_symbol_unique")
@@ -206,6 +206,7 @@ model symbols_list {
   @@index([instrument_id, strike], map: "idx_calc_underlying_strike")
   @@index([segment, expiry_date], map: "idx_symbols_opt_expiry")
   @@index([option_type], map: "idx_symbols_option_type")
+  @@index([upstox_id], map: "idx_symbols_list_upstox_id")
   @@index([instrument_id])
   @@schema("market_data")
 }

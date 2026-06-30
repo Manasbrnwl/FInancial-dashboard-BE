@@ -217,24 +217,33 @@ export const upstoxInstrumentService = {
                         if (inst.expiry) {
                             expiryDate = new Date(inst.expiry);
                         }
+                        const expiryMonth = expiryDate ? expiryDate.toLocaleString('default', { month: 'long' }).toUpperCase() : null;
 
-                        const existingSymbol = await prisma.symbols_list.findUnique({
-                            where: { upstox_id: inst.instrumentKey }
-                        });
-
-                        if (!existingSymbol) {
-                            await prisma.symbols_list.create({
-                                data: {
+                        // Match by (instrument_id, symbol), not upstox_id: NSE_FO exchange tokens
+                        // get recycled across expiries, so a stale token would false-match an old contract.
+                        await prisma.symbols_list.upsert({
+                            where: {
+                                instrument_id_symbol: {
                                     instrument_id: instrumentId,
                                     symbol: inst.tradingSymbol,
-                                    segment: "FUT",
-                                    expiry_date: expiryDate,
-                                    upstox_id: inst.instrumentKey,
-                                    upstox_symbol: inst.tradingSymbol,
-                                    expiry_month: expiryDate ? expiryDate.toLocaleString('default', { month: 'long' }).toUpperCase() : null,
                                 }
-                            });
-                        }
+                            },
+                            update: {
+                                upstox_id: inst.instrumentKey,
+                                upstox_symbol: inst.tradingSymbol,
+                                expiry_date: expiryDate,
+                                expiry_month: expiryMonth,
+                            },
+                            create: {
+                                instrument_id: instrumentId,
+                                symbol: inst.tradingSymbol,
+                                segment: "FUT",
+                                expiry_date: expiryDate,
+                                upstox_id: inst.instrumentKey,
+                                upstox_symbol: inst.tradingSymbol,
+                                expiry_month: expiryMonth,
+                            }
+                        });
                         successCount++;
                     } catch (error: any) {
                         errorCount++;
@@ -312,27 +321,39 @@ export const upstoxInstrumentService = {
                         if (inst.expiry) {
                             expiryDate = new Date(inst.expiry);
                         }
+                        const expiryMonth = expiryDate ? expiryDate.toLocaleString('default', { month: 'long' }).toUpperCase() : null;
+                        const strike = inst.strike?.toString() || null;
 
-                        const existingSymbol = await prisma.symbols_list.findUnique({
-                            where: { upstox_id: inst.instrumentKey }
-                        });
-
-                        if (!existingSymbol) {
-                            await prisma.symbols_list.create({
-                                data: {
+                        // Match by (instrument_id, symbol), not upstox_id: NSE_FO exchange tokens
+                        // get recycled across expiries, so a stale token would false-match an old contract.
+                        await prisma.symbols_list.upsert({
+                            where: {
+                                instrument_id_symbol: {
                                     instrument_id: instrumentId,
                                     symbol: inst.tradingSymbol,
-                                    segment: "OPT",
-                                    expiry_date: expiryDate,
-                                    upstox_id: inst.instrumentKey,
-                                    upstox_symbol: inst.tradingSymbol,
-                                    strike: inst.strike?.toString() || null,
-                                    option_type: inst.optionType,
-                                    expiry_month: expiryDate ? expiryDate.toLocaleString('default', { month: 'long' }).toUpperCase() : null,
                                 }
-                            });
-                        }
-                        
+                            },
+                            update: {
+                                upstox_id: inst.instrumentKey,
+                                upstox_symbol: inst.tradingSymbol,
+                                expiry_date: expiryDate,
+                                expiry_month: expiryMonth,
+                                strike,
+                                option_type: inst.optionType,
+                            },
+                            create: {
+                                instrument_id: instrumentId,
+                                symbol: inst.tradingSymbol,
+                                segment: "OPT",
+                                expiry_date: expiryDate,
+                                upstox_id: inst.instrumentKey,
+                                upstox_symbol: inst.tradingSymbol,
+                                strike,
+                                option_type: inst.optionType,
+                                expiry_month: expiryMonth,
+                            }
+                        });
+
                         successCount++;
                     } catch (error: any) {
                         errorCount++;

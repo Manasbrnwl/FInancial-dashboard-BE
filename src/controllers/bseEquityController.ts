@@ -2,10 +2,12 @@ import { Request, Response } from "express";
 import prisma from "../config/prisma";
 
 import { devError, prodError } from "../utils/errorLogger";
+import { parseLimitOffset } from "../utils/validation";
 
 export const getBseEquityData = async (req: Request, res: Response) => {
   try {
-    const { symbol, startDate, endDate, limit = 100, offset = 0 } = req.query;
+    const { symbol, startDate, endDate } = req.query;
+    const { limit, offset } = parseLimitOffset(req.query, 100);
 
     const where: any = {};
 
@@ -27,8 +29,8 @@ export const getBseEquityData = async (req: Request, res: Response) => {
       prisma.bse_equity.findMany({
         where,
         orderBy: { date: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
+        take: limit,
+        skip: offset,
       }),
       prisma.bse_equity.count({ where }),
     ]);
@@ -38,9 +40,9 @@ export const getBseEquityData = async (req: Request, res: Response) => {
       data,
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {

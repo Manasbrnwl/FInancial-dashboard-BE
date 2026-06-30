@@ -8,6 +8,7 @@ import {
   ProductType,
 } from "../services/marginCalculatorService";
 import { devError, prodError } from "../utils/errorLogger";
+import { parseInteger } from "../utils/validation";
 
 /**
  * Calculate margin for a single order
@@ -183,10 +184,12 @@ export const getStoredMargins = async (req: Request, res: Response) => {
   try {
     const { securityId, exchangeSegment, limit } = req.query;
 
+    const parsedLimit = limit ? parseInteger(limit, 100) : 100;
+
     const filters = {
       ...(securityId && { securityId: securityId as string }),
       ...(exchangeSegment && { exchangeSegment: exchangeSegment as string }),
-      ...(limit && { limit: parseInt(limit as string) }),
+      limit: parsedLimit,
     };
 
     const margins = await marginCalculatorService.getStoredMargins(filters);
@@ -254,7 +257,7 @@ export const getLatestMargin = async (req: Request, res: Response) => {
 export const cleanupOldMargins = async (req: Request, res: Response) => {
   try {
     const { daysToKeep } = req.query;
-    const days = daysToKeep ? parseInt(daysToKeep as string) : 30;
+    const days = parseInteger(daysToKeep, 30);
 
     const deletedCount = await marginCalculatorService.cleanupOldMargins(days);
 

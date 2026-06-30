@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
+import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
 import { devError, prodError } from "../utils/errorLogger";
-
 
 const ENV = process.env.NODE_ENV;
 
@@ -22,8 +22,24 @@ export const getArbitrageDetails = async (req: Request, res: Response) => {
       });
     }
 
+    const numericId = Number(instrumentId);
+    if (Number.isNaN(numericId)) {
+      return res.status(400).json({
+        success: false,
+        message: "instrumentId must be a valid number",
+      });
+    }
+
+    const latestTickFutWhere = date
+      ? Prisma.sql`WHERE DATE("time") = ${new Date(date as string)}`
+      : Prisma.empty;
+
+    const tickDateExpr = date
+      ? Prisma.sql`DATE(tf.time)`
+      : Prisma.sql`tf.time`;
+
     // Query to get the latest arbitrage data for the instrument
-    const query = `
+    const query = Prisma.sql`
       WITH latest_tick_fut AS (
           SELECT *,
               ROW_NUMBER() OVER (
@@ -31,13 +47,13 @@ export const getArbitrageDetails = async (req: Request, res: Response) => {
                   ORDER BY id DESC
               ) rn
           FROM periodic_market_data."ticksDataNSEFUT"
-          ${date ? `WHERE DATE("time") = '${date}'` : ""}
+          ${latestTickFutWhere}
       ),
       filtered AS (
           SELECT
               il.id AS instrumentid,
               il.instrument_type AS name,
-              ${date ? `DATE(tf.time)` : "tf.time"} AS tick_date,
+              ${tickDateExpr} AS tick_date,
               substring(sl.symbol from '[0-9]{2}([A-Z]{3})FUT') AS expiry_month,
               sl.symbol,
               sl.upstox_id,
@@ -48,7 +64,7 @@ export const getArbitrageDetails = async (req: Request, res: Response) => {
               ON sl.instrument_id = il.id
           INNER JOIN latest_tick_fut tf
               ON sl.id = tf."instrumentId" AND tf.rn = 1
-          WHERE sl.segment = 'FUT' AND il.id = ${instrumentId} and sl.upstox_id is not null
+          WHERE sl.segment = 'FUT' AND il.id = ${numericId} and sl.upstox_id is not null
       ),
       ranked_symbols AS (
           SELECT *,
@@ -78,12 +94,12 @@ export const getArbitrageDetails = async (req: Request, res: Response) => {
           LIMIT 1
       )
       SELECT *,
-          COALESCE(price_1 - price_2, 0) AS gap_1,
-          COALESCE(price_2 - price_3, 0) AS gap_2
+          COALESCE(price_1::numeric - price_2::numeric, 0) AS gap_1,
+          COALESCE(price_2::numeric - price_3::numeric, 0) AS gap_2
       FROM arbitrage_data;
     `;
 
-    const result = await prisma.$queryRawUnsafe(query);
+    const result = await prisma.$queryRaw<any[]>(query);
 
     return res.status(200).json({
       success: true,
@@ -119,7 +135,7 @@ export const getLiveDataForSymbols = async (req: Request, res: Response) => {
     const symbolList = symbols.split(",").map((s) => s.trim());
 
     // Get the latest tick data for each symbol
-    const query = `
+    const query = Prisma.sql`
       WITH latest_ticks AS (
           SELECT *,
               ROW_NUMBER() OVER (
@@ -129,7 +145,7 @@ export const getLiveDataForSymbols = async (req: Request, res: Response) => {
           FROM periodic_market_data."ticksDataNSEFUT"
           WHERE "instrumentId" IN (
               SELECT id FROM market_data.symbols_list
-              WHERE symbol = ANY($1)
+              WHERE symbol = ANY(${symbolList})
           )
       )
       SELECT
@@ -152,10 +168,10 @@ export const getLiveDataForSymbols = async (req: Request, res: Response) => {
       INNER JOIN market_data.symbols_list sl
           ON lt."instrumentId" = sl.id
       WHERE lt.rn = 1 and sl.upstox_id is not null
-      ORDER BY ARRAY_POSITION($1, sl.symbol);
+      ORDER BY ARRAY_POSITION(${symbolList}, sl.symbol);
     `;
 
-    const result = await prisma.$queryRawUnsafe(query, symbolList);
+    const result = await prisma.$queryRaw<any[]>(query);
 
     return res.status(200).json({
       success: true,
@@ -190,12 +206,21 @@ export const getFilteredArbitrageData = async (req: Request, res: Response) => {
       endDate,
     } = req.query;
 
-    const pageNum = parseInt(page as string);
-    const limitNum = parseInt(limit as string);
+    const numericId = Number(instrumentId);
+    if (Number.isNaN(numericId)) {
+      return res.status(400).json({
+        success: false,
+        message: "instrumentId must be a valid number",
+      });
+    }
+
+    const pageNum = Math.max(1, parseInt(page as string) || 1);
+    const limitNum = Math.max(1, Math.min(500, parseInt(limit as string) || 180));
     const offset = (pageNum - 1) * limitNum;
 
-    // Build the query based on timeRange
-    const baseQuerydaily = `WITH latest_tick_fut AS (
+    // Build base queries using Prisma.sql
+    const baseQuerydaily = Prisma.sql`
+      WITH latest_tick_fut AS (
           SELECT *,
               ROW_NUMBER() OVER (
                   PARTITION BY underlying, symbol, date
@@ -219,33 +244,33 @@ export const getFilteredArbitrageData = async (req: Request, res: Response) => {
               ON sl.instrument_id = il.id
           INNER JOIN latest_tick_fut tf
               ON sl.id = tf.symbol::numeric AND tf.rn = 1
-          WHERE sl.segment = 'FUT' AND il.id = ${instrumentId} and sl.upstox_id is not null
+          WHERE sl.segment = 'FUT' AND il.id = ${numericId} and sl.upstox_id is not null
       ),
-ranked_symbols AS (
-    SELECT *,
-        ROW_NUMBER() OVER (
-            PARTITION BY instrumentid, tick_date 
-            ORDER BY expiry_order
-        ) as symbol_rank
-    FROM filtered
-),
-arbitrage_data AS (
-SELECT
-    instrumentid,
-    name,
-    TO_CHAR(tick_date, 'yyyy-mm-dd HH12:MI AM') AS date,
-    MAX(CASE WHEN symbol_rank = 1 THEN symbol END) as symbol_1,
-    MAX(CASE WHEN symbol_rank = 1 THEN upstox_id END) as upstox_id_1,
-    MAX(CASE WHEN symbol_rank = 1 THEN ltp END) as price_1,
-    MAX(CASE WHEN symbol_rank = 2 THEN symbol END) as symbol_2,
-    MAX(CASE WHEN symbol_rank = 2 THEN upstox_id END) as upstox_id_2,
-    MAX(CASE WHEN symbol_rank = 2 THEN ltp END) as price_2,
-    MAX(CASE WHEN symbol_rank = 3 THEN symbol END) as symbol_3,
-    MAX(CASE WHEN symbol_rank = 3 THEN upstox_id END) as upstox_id_3,
-    MAX(CASE WHEN symbol_rank = 3 THEN ltp END) as price_3
-FROM ranked_symbols
-GROUP BY instrumentid, name, tick_date
-  ),
+      ranked_symbols AS (
+          SELECT *,
+              ROW_NUMBER() OVER (
+                  PARTITION BY instrumentid, tick_date 
+                  ORDER BY expiry_order
+              ) as symbol_rank
+          FROM filtered
+      ),
+      arbitrage_data AS (
+          SELECT
+              instrumentid,
+              name,
+              TO_CHAR(tick_date, 'yyyy-mm-dd HH12:MI AM') AS date,
+              MAX(CASE WHEN symbol_rank = 1 THEN symbol END) as symbol_1,
+              MAX(CASE WHEN symbol_rank = 1 THEN upstox_id END) as upstox_id_1,
+              MAX(CASE WHEN symbol_rank = 1 THEN ltp END) as price_1,
+              MAX(CASE WHEN symbol_rank = 2 THEN symbol END) as symbol_2,
+              MAX(CASE WHEN symbol_rank = 2 THEN upstox_id END) as upstox_id_2,
+              MAX(CASE WHEN symbol_rank = 2 THEN ltp END) as price_2,
+              MAX(CASE WHEN symbol_rank = 3 THEN symbol END) as symbol_3,
+              MAX(CASE WHEN symbol_rank = 3 THEN upstox_id END) as upstox_id_3,
+              MAX(CASE WHEN symbol_rank = 3 THEN ltp END) as price_3
+          FROM ranked_symbols
+          GROUP BY instrumentid, name, tick_date
+      ),
       with_gaps AS (
           SELECT *,
               COUNT(*) OVER() AS full_count,
@@ -253,9 +278,9 @@ GROUP BY instrumentid, name, tick_date
               (price_2::numeric - price_3::numeric) AS gap_2
           FROM arbitrage_data
       )
-      SELECT * FROM with_gaps
-      WHERE 1=1`;
-    const baseQueryhourly = `
+    `;
+
+    const baseQueryhourly = Prisma.sql`
       WITH latest_tick_fut AS (
           SELECT *,
               ROW_NUMBER() OVER (
@@ -281,35 +306,35 @@ GROUP BY instrumentid, name, tick_date
               ON sl.instrument_id = il.id
           INNER JOIN latest_tick_fut tf
               ON sl.id = tf."instrumentId" AND tf.rn = 1
-          WHERE sl.segment = 'FUT' AND il.id = ${instrumentId} and sl.upstox_id is not null
+          WHERE sl.segment = 'FUT' AND il.id = ${numericId} and sl.upstox_id is not null
       ),
       prepared AS (
-    SELECT *,
-        CASE UPPER(expiry_month)
-            WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3
-            WHEN 'APR' THEN 4 WHEN 'MAY' THEN 5 WHEN 'JUN' THEN 6
-            WHEN 'JUL' THEN 7 WHEN 'AUG' THEN 8 WHEN 'SEP' THEN 9
-            WHEN 'OCT' THEN 10 WHEN 'NOV' THEN 11 WHEN 'DEC' THEN 12
-        END AS expiry_month_num,
-        (2000 + expiry_year::int) AS expiry_full_year,
-        ((2000 + expiry_year::int) * 12 +
-         CASE UPPER(expiry_month)
-            WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3
-            WHEN 'APR' THEN 4 WHEN 'MAY' THEN 5 WHEN 'JUN' THEN 6
-            WHEN 'JUL' THEN 7 WHEN 'AUG' THEN 8 WHEN 'SEP' THEN 9
-            WHEN 'OCT' THEN 10 WHEN 'NOV' THEN 11 WHEN 'DEC' THEN 12
-         END
-        ) AS expiry_abs,
-        (EXTRACT(YEAR FROM correct_time)::int * 12 +
-         EXTRACT(MONTH FROM correct_time)::int
-        ) AS current_abs
-    FROM filtered
-),
-ranked_symbols AS (
-    SELECT *,
-        (expiry_abs - current_abs + 1) AS symbol_rank
-    FROM prepared
-),
+          SELECT *,
+              CASE UPPER(expiry_month)
+                  WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3
+                  WHEN 'APR' THEN 4 WHEN 'MAY' THEN 5 WHEN 'JUN' THEN 6
+                  WHEN 'JUL' THEN 7 WHEN 'AUG' THEN 8 WHEN 'SEP' THEN 9
+                  WHEN 'OCT' THEN 10 WHEN 'NOV' THEN 11 WHEN 'DEC' THEN 12
+              END AS expiry_month_num,
+              (2000 + expiry_year::int) AS expiry_full_year,
+              ((2000 + expiry_year::int) * 12 +
+               CASE UPPER(expiry_month)
+                  WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3
+                  WHEN 'APR' THEN 4 WHEN 'MAY' THEN 5 WHEN 'JUN' THEN 6
+                  WHEN 'JUL' THEN 7 WHEN 'AUG' THEN 8 WHEN 'SEP' THEN 9
+                  WHEN 'OCT' THEN 10 WHEN 'NOV' THEN 11 WHEN 'DEC' THEN 12
+               END
+              ) AS expiry_abs,
+              (EXTRACT(YEAR FROM correct_time)::int * 12 +
+               EXTRACT(MONTH FROM correct_time)::int
+              ) AS current_abs
+          FROM filtered
+      ),
+      ranked_symbols AS (
+          SELECT *,
+              (expiry_abs - current_abs + 1) AS symbol_rank
+          FROM prepared
+      ),
       arbitrage_data AS (
           SELECT
               instrumentid,
@@ -342,62 +367,65 @@ ranked_symbols AS (
               ABS(EXTRACT(EPOCH FROM (rtime_2::timestamp - rtime_3::timestamp))) AS diff_23
           FROM arbitrage_data
       )
-      SELECT * FROM with_gaps
-      WHERE 1=1 AND (diff_12 >= 0 AND diff_12 <= 15) OR (diff_23 >= 0 AND diff_23 <= 15)
     `;
 
-    // Add gap filtering
-    let filterConditions = "";
+    const filters: Prisma.Sql[] = [];
+
+    if (timeRange === "hour") {
+      filters.push(Prisma.sql`((diff_12 >= 0 AND diff_12 <= 15) OR (diff_23 >= 0 AND diff_23 <= 15))`);
+    }
+
     if (gapFilter === "positive") {
-      filterConditions += " AND (gap_1 > 0 OR gap_2 > 0)";
+      filters.push(Prisma.sql`(gap_1 > 0 OR gap_2 > 0)`);
     } else if (gapFilter === "negative") {
-      filterConditions += " AND (gap_1 < 0 OR gap_2 < 0)";
+      filters.push(Prisma.sql`(gap_1 < 0 OR gap_2 < 0)`);
     }
 
     // Add gap range filtering
     if (minGap && maxGap) {
-      filterConditions += ` AND ((gap_1 >= ${minGap} AND gap_1 <= ${maxGap}) OR (gap_2 >= ${minGap} AND gap_2 <= ${maxGap}) OR gap_1 IS NULL OR gap_2 IS NULL)`;
+      filters.push(Prisma.sql`((gap_1 >= ${Number(minGap)} AND gap_1 <= ${Number(maxGap)}) OR (gap_2 >= ${Number(minGap)} AND gap_2 <= ${Number(maxGap)}) OR gap_1 IS NULL OR gap_2 IS NULL)`);
     } else if (minGap) {
-      filterConditions += ` AND ((gap_1 >= ${minGap}) OR (gap_2 >= ${minGap}) OR gap_1 IS NULL OR gap_2 IS NULL)`;
+      filters.push(Prisma.sql`((gap_1 >= ${Number(minGap)}) OR (gap_2 >= ${Number(minGap)}) OR gap_1 IS NULL OR gap_2 IS NULL)`);
     } else if (maxGap) {
-      filterConditions += ` AND ((gap_1 <= ${maxGap}) OR (gap_2 <= ${maxGap}) OR gap_1 IS NULL OR gap_2 IS NULL)`;
+      filters.push(Prisma.sql`((gap_1 <= ${Number(maxGap)}) OR (gap_2 <= ${Number(maxGap)}) OR gap_1 IS NULL OR gap_2 IS NULL)`);
     } else {
       // Default to a permissive range so initial load is not over-filtered
-      filterConditions += ` AND ((gap_1 >= -1000 AND gap_1 <= 1000) OR (gap_2 >= -1000 AND gap_2 <= 1000) OR gap_1 IS NULL OR gap_2 IS NULL)`;
+      filters.push(Prisma.sql`((gap_1 >= -1000 AND gap_1 <= 1000) OR (gap_2 >= -1000 AND gap_2 <= 1000) OR gap_1 IS NULL OR gap_2 IS NULL)`);
     }
 
     // Add date range filtering
     if (startDate) {
-      if (timeRange === "hour") {
-        filterConditions += ` AND date::date >= '${startDate}'::date`;
-      } else {
-        filterConditions += ` AND date::date >= '${startDate}'::date`;
-      }
+      filters.push(Prisma.sql`date::date >= ${new Date(startDate as string)}`);
     }
     if (endDate) {
       if (timeRange === "hour") {
-        filterConditions += ` AND date::date <= '${endDate}'::date + interval '1 day'`;
+        filters.push(Prisma.sql`date::date <= ${new Date(endDate as string)}::date + interval '1 day'`);
       } else {
-        filterConditions += ` AND date::date <= '${endDate}'::date`;
+        filters.push(Prisma.sql`date::date <= ${new Date(endDate as string)}`);
       }
     }
 
-    const dataQuery =
-      (timeRange == "hour" ? baseQueryhourly : baseQuerydaily) +
-      filterConditions +
-      `
+    const cteSql = timeRange === "hour" ? baseQueryhourly : baseQuerydaily;
+    const filterSql = filters.length > 0
+      ? Prisma.sql`WHERE ${Prisma.join(filters, " AND ")}`
+      : Prisma.empty;
+
+    const dataQuery = Prisma.sql`
+      ${cteSql}
+      SELECT * FROM with_gaps
+      ${filterSql}
       ORDER BY date DESC
       LIMIT ${limitNum}
       OFFSET ${offset}
     `;
 
-    // Execute only one query for both data and count
-    const data: any = await prisma.$queryRawUnsafe(dataQuery);
+    // Execute query securely
+    const data: any[] = await prisma.$queryRaw<any[]>(dataQuery);
 
     const totalCount = data.length > 0 ? Number(data[0].full_count) : 0;
     const totalPages = Math.ceil(totalCount / limitNum);
 
-    const positiveGapCount = 0; // Simplified as calculating this on large result sets is expensive
+    const positiveGapCount = 0;
     const negativeGapCount = 0;
 
     return res.status(200).json({

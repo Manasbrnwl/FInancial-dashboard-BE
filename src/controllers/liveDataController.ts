@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
 import { devError, prodError } from "../utils/errorLogger";
@@ -69,14 +70,31 @@ export const getSymbolsForEquity = async (req: Request, res: Response) => {
   }
 
   try {
-    const symbols = await prisma.$queryRaw<SymbolRow[]>`
+    const { segment, expiryMonth } = req.query;
+
+    const filters: Prisma.Sql[] = [];
+    filters.push(Prisma.sql`instrument_id = ${instrumentId}`);
+
+    if (segment) {
+      filters.push(Prisma.sql`segment = ${segment as string}`);
+    } else {
+      filters.push(Prisma.sql`segment IN ('FUT','OPT')`);
+    }
+
+    if (expiryMonth) {
+      filters.push(Prisma.sql`expiry_month = ${expiryMonth as string}`);
+    }
+
+    filters.push(Prisma.sql`expiry_date > CURRENT_DATE`);
+
+    const query = Prisma.sql`
       SELECT id, symbol, segment, expiry_date, strike, option_type, expiry_month, upstox_id
       FROM market_data.symbols_list
-      WHERE instrument_id = ${instrumentId}
-        AND segment IN ('FUT','OPT')
-        AND expiry_date > CURRENT_DATE
+      WHERE ${Prisma.join(filters, " AND ")}
       ORDER BY segment ASC, expiry_date DESC NULLS LAST, symbol ASC
     `;
+
+    const symbols = await prisma.$queryRaw<SymbolRow[]>(query);
 
     res.json({
       success: true,

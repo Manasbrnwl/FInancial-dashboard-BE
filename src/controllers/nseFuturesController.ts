@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
+import { parseLimitOffset } from "../utils/validation";
 
 import { devError, prodError } from "../utils/errorLogger";
 
@@ -20,9 +21,9 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
       expiryDate,
       startDate,
       endDate,
-      limit = 360,
-      offset = 0,
     } = req.query;
+
+    const { limit, offset } = parseLimitOffset(req.query, 360);
 
     const where: any = {};
 
@@ -84,9 +85,6 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
       filters.push(Prisma.sql`1=1`);
     }
 
-    const limitNumber = Number.isFinite(Number(limit)) ? Number(limit) : 360;
-    const offsetNumber = Number.isFinite(Number(offset)) ? Number(offset) : 0;
-
     const joinedQuery = Prisma.sql`
       SELECT
         nf.symbol,
@@ -107,8 +105,8 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
         AND nf.date = ne.date
       WHERE ${Prisma.join(filters, " AND ")}
       ORDER BY nf.date DESC
-      LIMIT ${limitNumber}
-      OFFSET ${offsetNumber}
+      LIMIT ${limit}
+      OFFSET ${offset}
     `;
 
     const [data, total] = await Promise.all([
@@ -121,9 +119,9 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
       data: data.map(normalizeBigInt),
       pagination: {
         total,
-        limit: limitNumber,
-        offset: offsetNumber,
-        hasMore: offsetNumber + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
@@ -166,7 +164,12 @@ export const getNseFuturesExpiries = async (req: Request, res: Response) => {
 
     const where: any = {};
     if (underlying) {
-      where.underlying = underlying as string;
+      const parsedUnderlying = parseInt(underlying as string, 10);
+      if (!isNaN(parsedUnderlying)) {
+        where.underlying = parsedUnderlying;
+      } else {
+        where.underlying = -1; // impossible match to return empty list
+      }
     }
 
     const expiries = await prisma.nse_futures.findMany({

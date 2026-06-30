@@ -2,17 +2,21 @@ import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
 import { devError, prodError } from "../utils/errorLogger";
+import { parseLimitOffset } from "../utils/validation";
 
 // OHLC Data NSE
 export const getOhlcDataNSE = async (req: Request, res: Response) => {
   try {
-    const { instrumentId, startTime, endTime, limit = 100, offset = 0 } =
-      req.query;
+    const { instrumentId, startTime, endTime } = req.query;
+    const { limit, offset } = parseLimitOffset(req.query, 100);
 
     const where: any = {};
 
     if (instrumentId) {
-      where.instrumentId = Number(instrumentId);
+      const parsedId = Number(instrumentId);
+      if (!Number.isNaN(parsedId)) {
+        where.instrumentId = parsedId;
+      }
     }
 
     if (startTime || endTime) {
@@ -29,8 +33,8 @@ export const getOhlcDataNSE = async (req: Request, res: Response) => {
       prisma.ohlcDataNSE.findMany({
         where,
         orderBy: { time: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
+        take: limit,
+        skip: offset,
       }),
       prisma.ohlcDataNSE.count({ where }),
     ]);
@@ -40,9 +44,9 @@ export const getOhlcDataNSE = async (req: Request, res: Response) => {
       data,
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
@@ -59,13 +63,16 @@ export const getOhlcDataNSE = async (req: Request, res: Response) => {
 // Ticks Data NSE EQ
 export const getTicksDataNSEEQ = async (req: Request, res: Response) => {
   try {
-    const { instrumentId, startTime, endTime, limit = 100, offset = 0 } =
-      req.query;
+    const { instrumentId, startTime, endTime } = req.query;
+    const { limit, offset } = parseLimitOffset(req.query, 100);
 
     const where: any = {};
 
     if (instrumentId) {
-      where.instrumentId = Number(instrumentId);
+      const parsedId = Number(instrumentId);
+      if (!Number.isNaN(parsedId)) {
+        where.instrumentId = parsedId;
+      }
     }
 
     if (startTime || endTime) {
@@ -82,8 +89,8 @@ export const getTicksDataNSEEQ = async (req: Request, res: Response) => {
       prisma.ticksDataNSEEQ.findMany({
         where,
         orderBy: { time: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
+        take: limit,
+        skip: offset,
       }),
       prisma.ticksDataNSEEQ.count({ where }),
     ]);
@@ -93,9 +100,9 @@ export const getTicksDataNSEEQ = async (req: Request, res: Response) => {
       data,
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
@@ -112,13 +119,16 @@ export const getTicksDataNSEEQ = async (req: Request, res: Response) => {
 // Ticks Data NSE FUT
 export const getTicksDataNSEFUT = async (req: Request, res: Response) => {
   try {
-    const { instrumentId, startTime, endTime, limit = 100, offset = 0 } =
-      req.query;
+    const { instrumentId, startTime, endTime } = req.query;
+    const { limit, offset } = parseLimitOffset(req.query, 100);
 
     const where: any = {};
 
     if (instrumentId) {
-      where.instrumentId = Number(instrumentId);
+      const parsedId = Number(instrumentId);
+      if (!Number.isNaN(parsedId)) {
+        where.instrumentId = parsedId;
+      }
     }
 
     if (startTime || endTime) {
@@ -135,8 +145,8 @@ export const getTicksDataNSEFUT = async (req: Request, res: Response) => {
       prisma.ticksDataNSEFUT.findMany({
         where,
         orderBy: { time: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
+        take: limit,
+        skip: offset,
       }),
       prisma.ticksDataNSEFUT.count({ where }),
     ]);
@@ -146,9 +156,9 @@ export const getTicksDataNSEFUT = async (req: Request, res: Response) => {
       data,
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
@@ -165,13 +175,16 @@ export const getTicksDataNSEFUT = async (req: Request, res: Response) => {
 // Ticks Data NSE OPT
 export const getTicksDataNSEOPT = async (req: Request, res: Response) => {
   try {
-    const { instrumentId, startTime, endTime, limit = 100, offset = 0 } =
-      req.query;
+    const { instrumentId, startTime, endTime } = req.query;
+    const { limit, offset } = parseLimitOffset(req.query, 100);
 
     const where: any = {};
 
     if (instrumentId) {
-      where.instrumentId = Number(instrumentId);
+      const parsedId = Number(instrumentId);
+      if (!Number.isNaN(parsedId)) {
+        where.instrumentId = parsedId;
+      }
     }
 
     if (startTime || endTime) {
@@ -188,8 +201,8 @@ export const getTicksDataNSEOPT = async (req: Request, res: Response) => {
       prisma.ticksDataNSEOPT.findMany({
         where,
         orderBy: { time: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
+        take: limit,
+        skip: offset,
       }),
       prisma.ticksDataNSEOPT.count({ where }),
     ]);
@@ -199,9 +212,9 @@ export const getTicksDataNSEOPT = async (req: Request, res: Response) => {
       data,
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
@@ -218,13 +231,18 @@ export const getTicksDataNSEOPT = async (req: Request, res: Response) => {
 // OHLC Data BSE
 export const getOhlcDataBSE = async (req: Request, res: Response) => {
   try {
-    const { instrumentId, startTime, endTime, limit = 100, offset = 0 } =
-      req.query;
+    const { instrumentId, startTime, endTime } = req.query;
+    const { limit, offset } = parseLimitOffset(req.query, 100);
 
     const where: any = {};
 
     if (instrumentId) {
-      where.instrumentId = BigInt(instrumentId as string);
+      const parsedInt = parseInt(instrumentId as string, 10);
+      if (!Number.isNaN(parsedInt)) {
+        where.instrumentId = BigInt(instrumentId as string);
+      } else {
+        where.instrumentId = BigInt(-1);
+      }
     }
 
     if (startTime || endTime) {
@@ -241,8 +259,8 @@ export const getOhlcDataBSE = async (req: Request, res: Response) => {
       prisma.ohlcEQDataBSE.findMany({
         where,
         orderBy: { time: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
+        take: limit,
+        skip: offset,
       }),
       prisma.ohlcEQDataBSE.count({ where }),
     ]);
@@ -259,9 +277,9 @@ export const getOhlcDataBSE = async (req: Request, res: Response) => {
       data: serializedData,
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {

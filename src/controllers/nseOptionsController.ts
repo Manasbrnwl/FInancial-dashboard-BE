@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
 import { devError, prodError } from "../utils/errorLogger";
+import { parseLimitOffset } from "../utils/validation";
 
 const normalizeBigInt = (row: Record<string, any>) =>
   Object.fromEntries(
@@ -22,9 +23,9 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
       optionType,
       startDate,
       endDate,
-      limit = 360,
-      offset = 0,
     } = req.query;
+
+    const { limit, offset } = parseLimitOffset(req.query, 360);
 
     const where: any = {};
 
@@ -129,9 +130,6 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
       filters.push(Prisma.sql`1=1`);
     }
 
-    const limitNumber = Number.isFinite(Number(limit)) ? Number(limit) : 360;
-    const offsetNumber = Number.isFinite(Number(offset)) ? Number(offset) : 0;
-
     const joinedQuery = Prisma.sql`
       SELECT
         no.symbol,
@@ -154,8 +152,8 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
         AND no.date = ne.date
       WHERE ${Prisma.join(filters, " AND ")}
       ORDER BY no.date DESC
-      LIMIT ${limitNumber}
-      OFFSET ${offsetNumber}
+      LIMIT ${limit}
+      OFFSET ${offset}
     `;
 
     const [data, total] = await Promise.all([
@@ -168,9 +166,9 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
       data: data.map(normalizeBigInt),
       pagination: {
         total,
-        limit: limitNumber,
-        offset: offsetNumber,
-        hasMore: offsetNumber + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
@@ -213,7 +211,12 @@ export const getNseOptionsStrikes = async (req: Request, res: Response) => {
 
     const where: any = {};
     if (underlying) {
-      where.underlying = underlying as string;
+      const parsedUnderlying = parseInt(underlying as string, 10);
+      if (!isNaN(parsedUnderlying)) {
+        where.underlying = parsedUnderlying;
+      } else {
+        where.underlying = -1;
+      }
     }
     if (expiryDate) {
       where.expiry_date = new Date(expiryDate as string);
@@ -247,7 +250,12 @@ export const getNseOptionsExpiries = async (req: Request, res: Response) => {
 
     const where: any = {};
     if (underlying) {
-      where.underlying = underlying as string;
+      const parsedUnderlying = parseInt(underlying as string, 10);
+      if (!isNaN(parsedUnderlying)) {
+        where.underlying = parsedUnderlying;
+      } else {
+        where.underlying = -1;
+      }
     }
 
     const expiries = await prisma.nse_options.findMany({

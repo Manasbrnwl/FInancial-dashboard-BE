@@ -26,6 +26,11 @@ import { upstoxInstrumentService } from "./services/upstoxInstrumentService";
 import { initializeLoginReminderJob } from "./jobs/dailyLoginEmailJob";
 import { preloadInstrumentCache } from "./cache/instrumentCache";
 
+// Polyfill for BigInt JSON serialization
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 dotenv.config();
 loadEnv();
 
@@ -45,6 +50,7 @@ app.use(
       "anfy.in",
       "www.anfy.in",
       "http://localhost:5173",
+      "http://localhost:5174",
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],

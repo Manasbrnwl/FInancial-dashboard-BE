@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
 import { devError, prodError } from "../utils/errorLogger";
+import { parseLimitOffset } from "../utils/validation";
 
 const normalizeBigInt = (row: Record<string, any>) =>
   Object.fromEntries(
@@ -13,7 +14,8 @@ const normalizeBigInt = (row: Record<string, any>) =>
 
 export const getNseEquityData = async (req: Request, res: Response) => {
   try {
-    const { symbol, startDate, endDate, limit = 360, offset = 0 } = req.query;
+    const { symbol, startDate, endDate } = req.query;
+    const { limit, offset } = parseLimitOffset(req.query, 360);
 
     const where: any = {};
 
@@ -35,8 +37,8 @@ export const getNseEquityData = async (req: Request, res: Response) => {
       prisma.nse_equity.findMany({
         where,
         orderBy: { date: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
+        take: limit,
+        skip: offset,
       }),
       prisma.nse_equity.count({ where }),
     ]);
@@ -46,9 +48,9 @@ export const getNseEquityData = async (req: Request, res: Response) => {
       data: data.map(normalizeBigInt),
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {

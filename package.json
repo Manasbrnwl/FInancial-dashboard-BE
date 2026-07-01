@@ -14,7 +14,7 @@
     "sync:all": "ts-node src/scripts/historicalDataSync.ts --all",
     "test:fyers": "ts-node scripts/test-fyers-history.ts",
     "auth:fyers": "ts-node scripts/fyers-auth.ts",
-    "sync:futopt": "ts-node scripts/historicalDataSync.ts --segment futures_options"
+    "sync:futopt": "ts-node src/scripts/historicalDataSync.ts --segments futures,options"
   },
   "keywords": [],
   "author": "",

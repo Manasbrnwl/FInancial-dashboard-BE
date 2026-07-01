@@ -59,7 +59,8 @@ function monthsBetween(from: string, to: string): string[] {
 function monthWindow(ym: string): { from: string; to: string } {
     const [y, m] = ym.split("-").map(Number);
     const first = `${ym}-01`;
-    const last = new Date(y, m, 0).toISOString().split("T")[0]; // last day of month
+    const lastDay = new Date(y, m, 0).getDate(); // last day of month, local components only
+    const last = `${ym}-${String(lastDay).padStart(2, "0")}`;
     return {
         from: first < START_DATE ? START_DATE : first,
         to: last > TODAY ? TODAY : last,

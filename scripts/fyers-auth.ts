@@ -56,7 +56,7 @@ function updateEnvFile(key: string, value: string): void {
 
   const pattern = new RegExp(`^${key}=.*$`, "m");
   if (pattern.test(content)) {
-    content = content.replace(pattern, `${key}=${value}`);
+    content = content.replace(pattern, () => `${key}=${value}`);
   } else {
     content += `\n${key}=${value}`;
   }

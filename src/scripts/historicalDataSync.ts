@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 import axios from "axios";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { upstoxAuthService } from "../services/upstoxAuthService";
@@ -145,14 +145,6 @@ async function getEquityLastDates(): Promise<Map<string, Date>> {
         map.set(r.symbol, new Date(r.last_date));
     }
     return map;
-}
-
-async function getGlobalMaxDate(table: "nse_futures" | "nse_options"): Promise<Date | null> {
-    const rows = await prisma.$queryRaw<
-        Array<{ last_date: Date | null }>
-    >(Prisma.sql`SELECT MAX(date) AS last_date FROM ${Prisma.raw("market_data." + table)}`);
-
-    return rows[0]?.last_date ? new Date(rows[0].last_date) : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -365,26 +357,28 @@ async function syncFutures(
     result.totalInstruments = symbols.length;
     devLog(`📊 [Futures] Loaded ${symbols.length} symbols`);
 
-    const globalLastDate = await getGlobalMaxDate("nse_futures");
-    const globalFromDate = globalLastDate ? addDays(globalLastDate, 1) : new Date(defaultStart);
-    devLog(`📊 [Futures] Global last date: ${globalLastDate ? formatDate(globalLastDate) : "none"} → fetching from ${formatDate(globalFromDate)}`);
-
     const yesterday = getYesterday();
     const toDate = formatDate(yesterday);
-
-    if (globalFromDate > yesterday) {
-        devLog(`✅ [Futures] Already up to date. Skipping all.`);
-        result.instrumentsSkipped = symbols.length;
-        result.duration = (Date.now() - startTime) / 1000;
-        return result;
-    }
-
-    const fromDate = formatDate(globalFromDate);
 
     for (let i = 0; i < symbols.length; i++) {
         const sym = symbols[i];
 
         try {
+            // symbols_list.symbol (Int) is the FK stored on nse_futures.symbol — see backfill inserts.
+            const lastRecord = await prisma.nse_futures.findFirst({
+                where: { symbol: sym.id },
+                orderBy: { date: "desc" },
+                select: { date: true }
+            });
+            const lastDate = lastRecord?.date;
+            const fromDateObj = lastDate ? addDays(lastDate, 1) : new Date(defaultStart);
+            const fromDate = formatDate(fromDateObj);
+
+            if (fromDateObj > yesterday) {
+                result.instrumentsSkipped++;
+                continue;
+            }
+
             const candles = await fetchHistoricalCandles(sym.upstox_id, token, fromDate, toDate);
 
             if (candles.length > 0) {
@@ -461,26 +455,28 @@ async function syncOptions(
     result.totalInstruments = symbols.length;
     devLog(`📊 [Options] Loaded ${symbols.length} symbols`);
 
-    const globalLastDate = await getGlobalMaxDate("nse_options");
-    const globalFromDate = globalLastDate ? addDays(globalLastDate, 1) : new Date(defaultStart);
-    devLog(`📊 [Options] Global last date: ${globalLastDate ? formatDate(globalLastDate) : "none"} → fetching from ${formatDate(globalFromDate)}`);
-
     const yesterday = getYesterday();
     const toDate = formatDate(yesterday);
-
-    if (globalFromDate > yesterday) {
-        devLog(`✅ [Options] Already up to date. Skipping all.`);
-        result.instrumentsSkipped = symbols.length;
-        result.duration = (Date.now() - startTime) / 1000;
-        return result;
-    }
-
-    const fromDate = formatDate(globalFromDate);
 
     for (let i = 0; i < symbols.length; i++) {
         const sym = symbols[i];
 
         try {
+            // symbols_list.symbol (Int) is the FK stored on nse_options.symbol — see backfill inserts.
+            const lastRecord = await prisma.nse_options.findFirst({
+                where: { symbol: sym.id },
+                orderBy: { date: "desc" },
+                select: { date: true }
+            });
+            const lastDate = lastRecord?.date;
+            const fromDateObj = lastDate ? addDays(lastDate, 1) : new Date(defaultStart);
+            const fromDate = formatDate(fromDateObj);
+
+            if (fromDateObj > yesterday) {
+                result.instrumentsSkipped++;
+                continue;
+            }
+
             const candles = await fetchHistoricalCandles(sym.upstox_id, token, fromDate, toDate);
 
             if (candles.length > 0) {

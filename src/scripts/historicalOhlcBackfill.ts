@@ -167,13 +167,13 @@ async function getFuturesSymbols(): Promise<SymbolData[]> {
 /**
  * Get all NSE Options symbols with Upstox IDs
  */
-async function getOptionsSymbols(): Promise<SymbolData[]> {
+async function getOptionsSymbols(fromDate: string): Promise<SymbolData[]> {
     const symbols = await prisma.symbols_list.findMany({
         where: {
             segment: "OPT",
             upstox_id: { not: null },
             expiry_date: {
-                gte: new Date("2026-01-08")
+                gte: new Date(fromDate)
             },
         },
         select: {
@@ -448,7 +448,7 @@ export async function backfillHistoricalOhlc(
 
         // 4. Backfill Options
         if (segments.includes("options")) {
-            const symbols = await getOptionsSymbols();
+            const symbols = await getOptionsSymbols(fromDate);
             optionsCount = await backfillOptionsOhlc(symbols, token, fromDate, toDate);
         }
 

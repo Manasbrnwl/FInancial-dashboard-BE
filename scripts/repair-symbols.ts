@@ -55,9 +55,31 @@ async function downloadFile(url: string, destPath: string): Promise<boolean> {
             writer.on("finish", () => resolve());
             writer.on("error", (err) => reject(err));
         });
+
+        // NSE sometimes serves a "file not available yet" HTML page with
+        // HTTP 200 instead of the archive — verify the ZIP magic bytes.
+        if (!isZipFile(destPath)) {
+            fs.unlinkSync(destPath);
+            return false;
+        }
+
         return true;
     } catch {
         return false;
+    }
+}
+
+/**
+ * Checks whether a file starts with the ZIP local-file-header magic number.
+ */
+function isZipFile(filePath: string): boolean {
+    const fd = fs.openSync(filePath, "r");
+    try {
+        const magic = Buffer.alloc(4);
+        const bytesRead = fs.readSync(fd, magic, 0, 4, 0);
+        return bytesRead === 4 && magic[0] === 0x50 && magic[1] === 0x4b && magic[2] === 0x03 && magic[3] === 0x04;
+    } finally {
+        fs.closeSync(fd);
     }
 }
 
@@ -104,7 +126,7 @@ async function parseCsv(csvPath: string, onRow: (row: Record<string, string>) =>
 function formatStrike(strikeStr: string): string {
     const num = parseFloat(strikeStr);
     if (isNaN(num)) return strikeStr;
-    return String(Math.round(num));
+    return num.toString(); // Keep decimal if floating (e.g. 257.5) — must match fetch-historical-symbols.ts
 }
 
 function getOptionOrFutureSymbol(row: Record<string, string>): string {

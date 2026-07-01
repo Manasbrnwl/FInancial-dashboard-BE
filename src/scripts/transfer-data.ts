@@ -76,6 +76,7 @@ async function main() {
         const records = await sourceModel.findMany({
           skip: skip,
           take: BATCH_SIZE,
+          orderBy: { id: 'asc' },
         });
 
         if (records.length === 0) break;

@@ -38,3 +38,31 @@ export function isValidDateString(value: any): boolean {
   const timestamp = Date.parse(value);
   return !Number.isNaN(timestamp);
 }
+
+const DEFAULT_DATE_RANGE_DAYS = 90;
+
+/**
+ * Builds a Prisma date-range filter from startDate/endDate query params.
+ * nse_equity/nse_futures/nse_options/bse_equity are TimescaleDB hypertables
+ * with hundreds of (mostly compressed) chunks. A query with no date bound
+ * forces Postgres to lock every chunk, which exhausts max_locks_per_transaction
+ * ("out of shared memory"). When the caller gives no date bound at all,
+ * default to a trailing window instead of leaving the query unbounded.
+ */
+export function parseDateRange(
+  query: { startDate?: any; endDate?: any },
+  defaultRangeDays = DEFAULT_DATE_RANGE_DAYS
+): { gte?: Date; lte?: Date } {
+  const { startDate, endDate } = query;
+
+  if (!startDate && !endDate) {
+    const gte = new Date();
+    gte.setDate(gte.getDate() - defaultRangeDays);
+    return { gte };
+  }
+
+  const range: { gte?: Date; lte?: Date } = {};
+  if (startDate) range.gte = new Date(startDate as string);
+  if (endDate) range.lte = new Date(endDate as string);
+  return range;
+}

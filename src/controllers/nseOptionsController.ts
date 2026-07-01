@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
 import { devError, prodError } from "../utils/errorLogger";
-import { parseLimitOffset } from "../utils/validation";
+import { parseLimitOffset, parseDateRange } from "../utils/validation";
 
 const normalizeBigInt = (row: Record<string, any>) =>
   Object.fromEntries(
@@ -67,15 +67,7 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
       where.option_type = optionType as string;
     }
 
-    if (startDate || endDate) {
-      where.date = {};
-      if (startDate) {
-        where.date.gte = new Date(startDate as string);
-      }
-      if (endDate) {
-        where.date.lte = new Date(endDate as string);
-      }
-    }
+    where.date = parseDateRange({ startDate, endDate });
 
     const filters: Prisma.Sql[] = [];
     const otmExpr = Prisma.sql`

@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
-import { parseLimitOffset } from "../utils/validation";
+import { parseLimitOffset, parseDateRange } from "../utils/validation";
 
 import { devError, prodError } from "../utils/errorLogger";
 
@@ -53,15 +53,7 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
       where.expiry_date = new Date(expiryDate as string);
     }
 
-    if (startDate || endDate) {
-      where.date = {};
-      if (startDate) {
-        where.date.gte = new Date(startDate as string);
-      }
-      if (endDate) {
-        where.date.lte = new Date(endDate as string);
-      }
-    }
+    where.date = parseDateRange({ startDate, endDate });
 
     const filters: Prisma.Sql[] = [];
 

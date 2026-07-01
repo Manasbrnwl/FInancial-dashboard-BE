@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
 import { devError, prodError } from "../utils/errorLogger";
-import { parseLimitOffset } from "../utils/validation";
+import { parseLimitOffset, parseDateRange } from "../utils/validation";
 
 const normalizeBigInt = (row: Record<string, any>) =>
   Object.fromEntries(
@@ -23,15 +23,7 @@ export const getNseEquityData = async (req: Request, res: Response) => {
       where.symbol = symbol as string;
     }
 
-    if (startDate || endDate) {
-      where.date = {};
-      if (startDate) {
-        where.date.gte = new Date(startDate as string);
-      }
-      if (endDate) {
-        where.date.lte = new Date(endDate as string);
-      }
-    }
+    where.date = parseDateRange({ startDate, endDate });
 
     const [data, total] = await Promise.all([
       prisma.nse_equity.findMany({

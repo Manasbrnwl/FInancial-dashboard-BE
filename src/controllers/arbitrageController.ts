@@ -144,7 +144,7 @@ export const getNSEOptionsData = async (req: Request, res: Response) => {
         opt.expiry_date,
         opt.option_type
       FROM market_data.nse_options opt
-      INNER JOIN market_data.symbols_list li ON opt.symbol = li.symbol
+      INNER JOIN market_data.symbols_list li ON opt.symbol = li.id
       WHERE opt.expiry_date >= CURRENT_DATE
         AND li.instrument_id = ${instrumentIdNum}
       ORDER BY opt.expiry_date ASC
@@ -208,7 +208,7 @@ export const getNSEFuturesData = async (req: Request, res: Response) => {
         fut.oi,
         fut.expiry_date
       FROM market_data.nse_futures fut
-      INNER JOIN market_data.symbols_list li ON fut.symbol = li.symbol
+      INNER JOIN market_data.symbols_list li ON fut.symbol = li.id
       WHERE fut.expiry_date >= CURRENT_DATE
         AND li.instrument_id = ${instrumentIdNum}
       ORDER BY fut.expiry_date ASC

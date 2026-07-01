@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { logger } from "../utils/logger";
 import { devError, prodError } from "../utils/errorLogger";
-import { parseLimitOffset } from "../utils/validation";
+import { parseLimitOffset, parseDateRange } from "../utils/validation";
 
 // OHLC Data NSE
 export const getOhlcDataNSE = async (req: Request, res: Response) => {
@@ -19,15 +19,7 @@ export const getOhlcDataNSE = async (req: Request, res: Response) => {
       }
     }
 
-    if (startTime || endTime) {
-      where.time = {};
-      if (startTime) {
-        where.time.gte = new Date(startTime as string);
-      }
-      if (endTime) {
-        where.time.lte = new Date(endTime as string);
-      }
-    }
+    where.time = parseDateRange({ startDate: startTime, endDate: endTime });
 
     const [data, total] = await Promise.all([
       prisma.ohlcDataNSE.findMany({
@@ -75,15 +67,7 @@ export const getTicksDataNSEEQ = async (req: Request, res: Response) => {
       }
     }
 
-    if (startTime || endTime) {
-      where.time = {};
-      if (startTime) {
-        where.time.gte = new Date(startTime as string);
-      }
-      if (endTime) {
-        where.time.lte = new Date(endTime as string);
-      }
-    }
+    where.time = parseDateRange({ startDate: startTime, endDate: endTime });
 
     const [data, total] = await Promise.all([
       prisma.ticksDataNSEEQ.findMany({
@@ -131,15 +115,7 @@ export const getTicksDataNSEFUT = async (req: Request, res: Response) => {
       }
     }
 
-    if (startTime || endTime) {
-      where.time = {};
-      if (startTime) {
-        where.time.gte = new Date(startTime as string);
-      }
-      if (endTime) {
-        where.time.lte = new Date(endTime as string);
-      }
-    }
+    where.time = parseDateRange({ startDate: startTime, endDate: endTime });
 
     const [data, total] = await Promise.all([
       prisma.ticksDataNSEFUT.findMany({
@@ -187,15 +163,7 @@ export const getTicksDataNSEOPT = async (req: Request, res: Response) => {
       }
     }
 
-    if (startTime || endTime) {
-      where.time = {};
-      if (startTime) {
-        where.time.gte = new Date(startTime as string);
-      }
-      if (endTime) {
-        where.time.lte = new Date(endTime as string);
-      }
-    }
+    where.time = parseDateRange({ startDate: startTime, endDate: endTime });
 
     const [data, total] = await Promise.all([
       prisma.ticksDataNSEOPT.findMany({
@@ -245,15 +213,7 @@ export const getOhlcDataBSE = async (req: Request, res: Response) => {
       }
     }
 
-    if (startTime || endTime) {
-      where.time = {};
-      if (startTime) {
-        where.time.gte = new Date(startTime as string);
-      }
-      if (endTime) {
-        where.time.lte = new Date(endTime as string);
-      }
-    }
+    where.time = parseDateRange({ startDate: startTime, endDate: endTime });
 
     const [data, total] = await Promise.all([
       prisma.ohlcEQDataBSE.findMany({

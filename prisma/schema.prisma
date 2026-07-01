@@ -24,7 +24,6 @@ model bse_equity {
   updated_at DateTime? @updatedAt @db.Timestamp(6)
 
   @@unique([symbol, date], map: "bse_equity_symbol_date_unique")
-  @@index([symbol, date], map: "idx_bse_eq_symbol_date")
   @@index([date(sort: Desc)])
   @@schema("market_data")
 }
@@ -45,9 +44,7 @@ model nse_equity {
   updated_at DateTime? @updatedAt @db.Timestamp(6)
 
   @@unique([symbol, date], map: "nse_equity_symbol_date_unique")
-  @@index([symbol, date], map: "idx_nse_eq_symbol_date")
   @@index([symbol_id, date], map: "idx_nse_equity_symbol_id_date")
-  @@index([symbol, date], map: "idx_nse_equity_symbol_date")
   @@index([date(sort: Desc)])
   @@schema("market_data")
 }
@@ -72,6 +69,7 @@ model nse_futures {
   @@id([id, date])
   @@unique([symbol, date, underlying, expiry_date], map: "nse_futures_symbol_date_underlying_expir_unique")
   @@index([symbol, date], map: "idx_nse_fut_symbol_date")
+  @@index([underlying, date(sort: Desc)], map: "idx_nse_futures_underlying_date")
   @@index([date(sort: Desc)])
   @@schema("market_data")
 }
@@ -103,7 +101,7 @@ model nse_options {
   @@index([expiry_date], map: "idx_nse_options_expiry_date")
   @@index([expiry_month], map: "idx_options_expirymonth")
   @@index([date(sort: Desc)], map: "idx_nse_options_date_desc")
-  @@index([underlying], map: "idx_nse_options_underlying")
+  @@index([underlying, date(sort: Desc)], map: "idx_nse_options_underlying_date")
   @@schema("market_data")
 }
 
@@ -197,8 +195,6 @@ model symbols_list {
   upstox_symbol String?   @db.VarChar(100)
 
   @@unique([instrument_id, symbol], map: "instrument_symbol_unique")
-  @@index([instrument_id, symbol], map: "idx_instrument_symbol")
-  @@index([instrument_id], map: "idx_symbols_list_instrument_id")
   @@index([segment], map: "idx_symbols_list_segment")
   @@index([instrument_id, expiry_date(sort: Desc)], map: "idx_symbols_expiry")
   @@index([expiry_month], map: "idx_symbols_expirymonth")
@@ -207,7 +203,6 @@ model symbols_list {
   @@index([segment, expiry_date], map: "idx_symbols_opt_expiry")
   @@index([option_type], map: "idx_symbols_option_type")
   @@index([upstox_id], map: "idx_symbols_list_upstox_id")
-  @@index([instrument_id])
   @@schema("market_data")
 }
 
@@ -266,13 +261,10 @@ model ticksDataNSEEQ {
   time_bucket  DateTime? @db.Timestamp(6)
 
   @@unique([instrumentId, time], map: "uniq_data_nse_eq")
-  @@index([instrumentId], map: "idx_instrumentId_nse_eq")
   @@index([time], map: "idx_time_nse_eq")
   @@index([instrumentId, id(sort: Desc), ltp], map: "idx_cover_ticks_nseeq")
-  @@index([instrumentId, id(sort: Desc)], map: "idx_ticks_nseeq_instrument_id_desc")
   @@index([instrumentId, time(sort: Desc)], map: "idx_eq_time")
   @@index([instrumentId, time_bucket, time(sort: Desc)], map: "idx_eq_inst_tb")
-  @@index([instrumentId], map: "idx_ticksdatanseeq_instrumentid")
   @@schema("periodic_market_data")
 }
 
@@ -311,13 +303,8 @@ model ticksDataNSEOPT {
   updatedAt    DateTime
 
   @@unique([instrumentId, time], map: "uniq_data_nse_opt")
-  @@index([instrumentId], map: "idx_instrumentId_nse_opt")
   @@index([time], map: "idx_time_nse_opt")
   @@index([instrumentId, id(sort: Desc), ltp, volume], map: "idx_cover_ticks_nseopt")
-  @@index([instrumentId, id(sort: Desc)], map: "idx_ticks_nseopt_instrument_id_desc")
-  @@index([instrumentId, id(sort: Desc)], map: "idx_opt_instrumentid_id_desc")
-  @@index([instrumentId, id(sort: Desc)], map: "idx_opt_latest")
-  @@index([instrumentId], map: "idx_ticksdatanseopt_instrumentid")
   @@schema("periodic_market_data")
 }
 

@@ -558,77 +558,54 @@ export const getFilteredCoveredCallsDetails = async (
       )
     `;
 
+    // Single pass: window functions compute totals/summary over every matching
+    // row (pre-LIMIT), so we don't need a second unpaginated query just to count.
     const dataQuery = Prisma.sql`
-      ${baseQuery}
+      ${baseQuery},
+      filtered AS (
+        SELECT
+            id,
+            underlying,
+            underlying_upstox_id,
+            option_symbol,
+            time,
+            underlying_price,
+            premium,
+            volume,
+            strike,
+            option_type,
+            otm,
+            premium_percentage,
+            monthly_premium,
+            expiry_date
+        FROM with_calcs
+        WHERE 1=1 ${filterSql}
+      )
       SELECT
-          id,
-          underlying,
-          underlying_upstox_id,
-          option_symbol,
-          time,
-          underlying_price,
-          premium,
-          volume,
-          strike,
-          option_type,
-          otm,
-          premium_percentage,
-          monthly_premium,
-          expiry_date
-      FROM with_calcs
-      WHERE 1=1 ${filterSql}
+          *,
+          COUNT(*) OVER() AS full_count,
+          COUNT(*) FILTER (WHERE option_type = 'CE') OVER() AS ce_count,
+          COUNT(*) FILTER (WHERE option_type = 'PE') OVER() AS pe_count,
+          (SUM(COALESCE(premium_percentage, 0)) OVER() / NULLIF(COUNT(*) OVER(), 0)) AS avg_premium_percentage
+      FROM filtered
       ORDER BY underlying, time DESC, strike
       LIMIT ${limitNum}
       OFFSET ${offset}
     `;
 
-    const countQuery = Prisma.sql`
-      ${baseQuery}
-      SELECT
-          id,
-          underlying,
-          underlying_upstox_id,
-          option_symbol,
-          time,
-          underlying_price,
-          premium,
-          volume,
-          strike,
-          option_type,
-          otm,
-          premium_percentage,
-          monthly_premium,
-          expiry_date
-      FROM with_calcs
-      WHERE 1=1 ${filterSql}
-    `;
+    const rawData = await prisma.$queryRaw<any[]>(dataQuery);
 
-    // Execute both queries securely
-    const [data, countResult] = await Promise.all([
-      prisma.$queryRaw<any[]>(dataQuery),
-      prisma.$queryRaw<any[]>(countQuery),
-    ]);
-
-    const totalCount = Array.isArray(countResult) ? countResult.length : 0;
+    const totalCount = rawData.length > 0 ? Number(rawData[0].full_count) : 0;
     const totalPages = Math.ceil(totalCount / limitNum);
 
-    // Calculate summary statistics
-    const ceCount = Array.isArray(countResult)
-      ? countResult.filter((row: any) => row.option_type === "CE").length
-      : 0;
+    const ceCount = rawData.length > 0 ? Number(rawData[0].ce_count) : 0;
+    const peCount = rawData.length > 0 ? Number(rawData[0].pe_count) : 0;
+    const avgPremiumPercentage = rawData.length > 0 ? Number(rawData[0].avg_premium_percentage) || 0 : 0;
 
-    const peCount = Array.isArray(countResult)
-      ? countResult.filter((row: any) => row.option_type === "PE").length
-      : 0;
-
-    const avgPremiumPercentage =
-      Array.isArray(countResult) && countResult.length > 0
-        ? countResult.reduce(
-          (sum: number, row: any) =>
-            sum + (parseFloat(row.premium_percentage) || 0),
-          0
-        ) / countResult.length
-        : 0;
+    // Strip the per-row window-function columns (full_count/ce_count/pe_count/
+    // avg_premium_percentage) — they're the same on every row, already surfaced
+    // in `summary` below, and weren't part of the original response shape.
+    const data = rawData.map(({ full_count, ce_count, pe_count, avg_premium_percentage, ...row }) => row);
 
     return res.status(200).json({
       success: true,
@@ -1064,6 +1041,8 @@ export const getCoveredCallsTrendHourly = async (
       )
     `;
 
+    // Single pass: COUNT(*) OVER() computes the full match count alongside the
+    // paginated rows, so we don't need a second unpaginated query just to count.
     const dataQuery = Prisma.sql`
       ${baseQuery}
       SELECT
@@ -1079,20 +1058,12 @@ export const getCoveredCallsTrendHourly = async (
           otm,
           premium_percentage,
           monthly_premium,
-          expiry_date
+          expiry_date,
+          COUNT(*) OVER() AS full_count
       FROM with_calcs
       ${filterSql}
       ORDER BY time DESC
       LIMIT ${limitNum} OFFSET ${offset}
-    `;
-
-    const countQuery = Prisma.sql`
-      ${baseQuery}
-      SELECT
-          *,
-          COUNT(*) OVER() AS full_count
-      FROM with_calcs
-      ${filterSql}
     `;
 
     const metaQuery = Prisma.sql`
@@ -1101,13 +1072,12 @@ export const getCoveredCallsTrendHourly = async (
       WHERE underlying = ${numericId}
     `;
 
-    const [rowsRaw, countResult, metaResult] = await Promise.all([
+    const [rowsRaw, metaResult] = await Promise.all([
       prisma.$queryRaw<any[]>(dataQuery),
-      prisma.$queryRaw<any[]>(countQuery),
       prisma.$queryRaw<any[]>(metaQuery),
     ]);
 
-    const totalCount = countResult.length > 0 ? Number(countResult[0].full_count) : 0;
+    const totalCount = rowsRaw.length > 0 ? Number(rowsRaw[0].full_count) : 0;
     const totalPages = Math.ceil(totalCount / limitNum) || 1;
     const expiry_month = metaResult?.[0]?.expiry_month || [];
 

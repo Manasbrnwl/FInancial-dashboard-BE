@@ -1,9 +1,7 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 
 import { devError, prodError } from "../utils/errorLogger";
-
-const prisma = new PrismaClient();
 
 /**
  * Get recent covered call alerts (for dashboard)

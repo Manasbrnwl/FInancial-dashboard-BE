@@ -59,7 +59,7 @@ async function fetchHistoricalCandles(
         const encodedKey = encodeURIComponent(instrumentKey);
         // V2 Historical Candle API: /historical-candle/{instrument_key}/{interval}/{to_date}/{from_date}
         // interval: 1minute, 30minute, day, week, month
-        const url = `${UPSTOX_CONFIG.BASE_URL}/historical-candle/${encodedKey}/day/${toDate}/${fromDate}`;
+        const url = `${UPSTOX_CONFIG.BASE_URL_V3}/historical-candle/${encodedKey}/days/1/${toDate}/${fromDate}`;
 
         const response = await axios.get(url, {
             headers: {

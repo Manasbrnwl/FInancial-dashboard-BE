@@ -22,7 +22,7 @@ import { initializeHourlyTicksNseEqUpstoxJob } from "./jobs/hourlyTicksNseEqUpst
 import { initializeHourlyTicksNseFutUpstoxJob } from "./jobs/hourlyTicksNseFutUpstoxJob";
 import { initializeDailyOhlcUpstoxJob } from "./jobs/dailyOhlcUpstoxJob";
 import { initializeCoveredCallAlertJob } from "./jobs/coveredCallAlertJob";
-import { upstoxInstrumentService } from "./services/upstoxInstrumentService";
+import { syncHistoricalSymbols } from "./scripts/fetchHistoricalSymbols";
 import { initializeLoginReminderJob } from "./jobs/dailyLoginEmailJob";
 import { preloadInstrumentCache } from "./cache/instrumentCache";
 
@@ -84,29 +84,31 @@ app.get("/callback", async (req, res) => {
   }
 });
 
-// Weekly Upstox Instrument Sync - Runs every Tuesday at 6 AM IST
-async function syncUpstoxInstruments() {
-  // devLog("📊 Starting weekly Upstox instrument sync...");
+// Weekly Instrument Sync (NSE Bhavcopy) - Runs every Tuesday at 6 AM IST
+async function syncNewSymbolsFromBhavcopy() {
+  // devLog("📊 Starting weekly Bhavcopy instrument sync...");
   try {
-    await upstoxInstrumentService.loadNseEqInstruments();
-    await upstoxInstrumentService.loadNseFutInstruments();
-    await upstoxInstrumentService.loadNseOptInstruments();
-    // devLog("✅ Weekly Upstox instrument sync completed");
+    const eightDaysAgo = new Date();
+    eightDaysAgo.setDate(eightDaysAgo.getDate() - 8);
+    const from = eightDaysAgo.toISOString().split("T")[0];
+    const to = new Date().toISOString().split("T")[0];
+    await syncHistoricalSymbols(from, to);
+    // devLog("✅ Weekly Bhavcopy instrument sync completed");
   } catch (error: any) {
-    devError("❌ Failed to sync Upstox instruments:", error.message);
-    prodError("Failed to sync Upstox instruments");
+    devError("❌ Failed to sync instruments from Bhavcopy:", error.message);
+    prodError("Failed to sync instruments from Bhavcopy");
   }
 }
 
 // Schedule to run every Tuesday at 6 AM (cron: 0 6 * * 2)
-cron.schedule("0 6 * * 2", syncUpstoxInstruments, {
+cron.schedule("0 6 * * 2", syncNewSymbolsFromBhavcopy, {
   timezone: "Asia/Kolkata",
 });
-devLog("📅 Weekly Upstox Instrument Sync scheduled (Every Tuesday 6 AM IST)");
+devLog("📅 Weekly Bhavcopy Instrument Sync scheduled (Every Tuesday 6 AM IST)");
 
 // Run immediately on startup in development mode
 if (process.env.NODE_ENV === "development") {
-  syncUpstoxInstruments();
+  syncNewSymbolsFromBhavcopy();
 }
 
 // Preload instrument metadata cache for faster lookups

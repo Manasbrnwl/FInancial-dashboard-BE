@@ -14,7 +14,8 @@
     "sync:all": "ts-node src/scripts/historicalDataSync.ts --all",
     "test:fyers": "ts-node scripts/test-fyers-history.ts",
     "auth:fyers": "ts-node scripts/fyers-auth.ts",
-    "sync:futopt": "ts-node src/scripts/historicalDataSync.ts --segments futures,options"
+    "sync:futopt": "ts-node src/scripts/historicalDataSync.ts --segments futures,options",
+    "backfill:missing": "ts-node src/scripts/backfillMissingData.ts"
   },
   "keywords": [],
   "author": "",

@@ -12,3 +12,6 @@ history.json
 
 # Scratch dirs used by scripts (auto-recreated, e.g. fetch-historical-symbols.ts)
 scratch/
+
+# MCP OAuth token store (holds live access/refresh tokens)
+.mcp-token-store.json

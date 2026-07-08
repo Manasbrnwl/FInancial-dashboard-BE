@@ -17,6 +17,11 @@ import apiRouter from "./routes/api";
 import { socketIOService } from "./services/socketioService";
 import authRouter from "./routes/auth";
 import { authenticateRequest } from "./middleware/authMiddleware";
+import { mcpAuthRouter } from "./mcp/sdk";
+import { oauthProvider, loginHandler, loginRateLimiter } from "./mcp/oauthProvider";
+import mcpRouter from "./mcp/mcpRouter";
+import { renderAuthPage, renderTokenResult } from "./mcp/authPages";
+import { findUserByEmail, verifyPassword } from "./services/authService";
 
 import { initializeHourlyTicksNseEqUpstoxJob } from "./jobs/hourlyTicksNseEqUpstoxJob";
 import { initializeHourlyTicksNseFutUpstoxJob } from "./jobs/hourlyTicksNseFutUpstoxJob";
@@ -64,6 +69,61 @@ app.use(morgan(process.env.NODE_ENV === "production" ? "dev" : "combined"));
 app.use("/api/auth", authRouter);
 app.use("/api/websocket", authenticateRequest, websocketRouter);
 app.use("/api", apiRouter);
+
+// ---------------------------------------------------------------------------
+// MCP server — same port as the main API. Exposes read-only market data
+// tools to AI clients (Claude, Cursor, etc.) via OAuth 2.1 (PKCE) or a
+// manually-generated Bearer token from GET /auth.
+// ---------------------------------------------------------------------------
+const mcpBaseUrl = new URL(process.env.MCP_BASE_URL ?? `http://localhost:${PORT}`);
+
+app.use(
+  mcpAuthRouter({
+    provider: oauthProvider,
+    issuerUrl: mcpBaseUrl,
+    baseUrl: mcpBaseUrl,
+    resourceServerUrl: new URL("/mcp", mcpBaseUrl),
+    resourceName: "Finance Dashboard MCP",
+    scopesSupported: ["read"],
+  })
+);
+app.post("/oauth/login", loginRateLimiter, loginHandler);
+app.use("/mcp", mcpRouter);
+
+const MCP_AUTH_CSP = "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'";
+
+app.get("/auth", (_req, res) => {
+  res.setHeader("Content-Security-Policy", MCP_AUTH_CSP);
+  res.setHeader("X-Frame-Options", "DENY");
+  res.send(renderAuthPage());
+});
+
+app.post("/auth", loginRateLimiter, async (req, res) => {
+  res.setHeader("Content-Security-Policy", MCP_AUTH_CSP);
+  res.setHeader("X-Frame-Options", "DENY");
+
+  const { email, password } = req.body as Record<string, string>;
+  if (!email || !password) {
+    return res.status(400).send(renderAuthPage("Email and password are required."));
+  }
+
+  const user = await findUserByEmail(email).catch(() => null);
+  if (!user || !user.password || !user.isActive) {
+    return res.status(401).send(renderAuthPage("Invalid email or password."));
+  }
+
+  const isValid = await verifyPassword(password, user.password).catch(() => false);
+  if (!isValid) {
+    return res.status(401).send(renderAuthPage("Invalid email or password."));
+  }
+
+  const { accessToken, expiresAt } = oauthProvider.mintAccessToken(String(user.id), user.email);
+  const expiryDate = new Date(expiresAt * 1000).toLocaleDateString("en-IN", {
+    day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+
+  return res.send(renderTokenResult(accessToken, user.email, expiryDate, new URL("/mcp", mcpBaseUrl).toString()));
+});
 
 // Temporary Upstox Callback Route
 import { upstoxAuthService } from "./services/upstoxAuthService";

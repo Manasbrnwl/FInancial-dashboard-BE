@@ -34,6 +34,7 @@
   },
   "dependencies": {
     "@getbrevo/brevo": "^5.0.4",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@prisma/client": "^6.15.0",
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
@@ -46,6 +47,7 @@
     "cron-parser": "^5.4.0",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
+    "express-rate-limit": "^7.5.1",
     "fyers-api-v3": "^1.9.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.1",
@@ -55,6 +57,7 @@
     "socket.io": "^4.8.1",
     "upstox-js-sdk": "^2.21.0",
     "winston": "^3.19.0",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "zod": "^3.25.76"
   }
 }

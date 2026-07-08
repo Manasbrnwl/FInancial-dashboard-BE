@@ -41,7 +41,7 @@ export function createMcpServer(): McpServer {
   // -------------------------------------------------------------------------
   // 1. get_nse_equity
   // -------------------------------------------------------------------------
-  server.registerTool(
+  server.registerTool<any, any>(
     'get_nse_equity',
     {
       description:
@@ -54,7 +54,7 @@ export function createMcpServer(): McpServer {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ symbol, from, to, limit }) => {
+    async ({ symbol, from, to, limit }: { symbol: string; from: string; to: string; limit: number }) => {
       try {
         const rows = await prisma.nse_equity.findMany({
           where: {
@@ -75,7 +75,7 @@ export function createMcpServer(): McpServer {
   // -------------------------------------------------------------------------
   // 2. get_bse_equity
   // -------------------------------------------------------------------------
-  server.registerTool(
+  server.registerTool<any, any>(
     'get_bse_equity',
     {
       description: 'Fetch daily OHLCV data for a BSE equity symbol.',
@@ -87,7 +87,7 @@ export function createMcpServer(): McpServer {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ symbol, from, to, limit }) => {
+    async ({ symbol, from, to, limit }: { symbol: string; from: string; to: string; limit: number }) => {
       try {
         const rows = await prisma.bse_equity.findMany({
           where: {
@@ -108,7 +108,7 @@ export function createMcpServer(): McpServer {
   // -------------------------------------------------------------------------
   // 3. get_nse_futures
   // -------------------------------------------------------------------------
-  server.registerTool(
+  server.registerTool<any, any>(
     'get_nse_futures',
     {
       description:
@@ -122,7 +122,7 @@ export function createMcpServer(): McpServer {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ underlying, from, to, expiry_date, limit }) => {
+    async ({ underlying, from, to, expiry_date, limit }: { underlying: number; from: string; to: string; expiry_date?: string; limit: number }) => {
       try {
         const rows = await prisma.nse_futures.findMany({
           where: {
@@ -144,7 +144,7 @@ export function createMcpServer(): McpServer {
   // -------------------------------------------------------------------------
   // 4. get_nse_options
   // -------------------------------------------------------------------------
-  server.registerTool(
+  server.registerTool<any, any>(
     'get_nse_options',
     {
       description:
@@ -160,7 +160,7 @@ export function createMcpServer(): McpServer {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ underlying, from, to, expiry_date, strike, option_type, limit }) => {
+    async ({ underlying, from, to, expiry_date, strike, option_type, limit }: { underlying: number; from: string; to: string; expiry_date?: string; strike?: string; option_type?: 'CE' | 'PE'; limit: number }) => {
       try {
         const rows = await prisma.nse_options.findMany({
           where: {
@@ -184,7 +184,7 @@ export function createMcpServer(): McpServer {
   // -------------------------------------------------------------------------
   // 5. get_instruments
   // -------------------------------------------------------------------------
-  server.registerTool(
+  server.registerTool<any, any>(
     'get_instruments',
     {
       description:
@@ -196,7 +196,7 @@ export function createMcpServer(): McpServer {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ exchange, instrument_type, limit }) => {
+    async ({ exchange, instrument_type, limit }: { exchange?: string; instrument_type?: string; limit: number }) => {
       try {
         const rows = await prisma.instrument_lists.findMany({
           where: {
@@ -217,7 +217,7 @@ export function createMcpServer(): McpServer {
   // -------------------------------------------------------------------------
   // 6. get_symbols
   // -------------------------------------------------------------------------
-  server.registerTool(
+  server.registerTool<any, any>(
     'get_symbols',
     {
       description:
@@ -230,7 +230,7 @@ export function createMcpServer(): McpServer {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ instrument_id, segment, expiry_month, limit }) => {
+    async ({ instrument_id, segment, expiry_month, limit }: { instrument_id: number; segment?: string; expiry_month?: string; limit: number }) => {
       try {
         const rows = await prisma.symbols_list.findMany({
           where: {
@@ -252,7 +252,7 @@ export function createMcpServer(): McpServer {
   // -------------------------------------------------------------------------
   // 7. get_covered_call_alerts
   // -------------------------------------------------------------------------
-  server.registerTool(
+  server.registerTool<any, any>(
     'get_covered_call_alerts',
     {
       description:
@@ -264,7 +264,7 @@ export function createMcpServer(): McpServer {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ instrument_id, from, limit }) => {
+    async ({ instrument_id, from, limit }: { instrument_id?: number; from?: string; limit: number }) => {
       try {
         const rows = await prisma.covered_call_alerts.findMany({
           where: {
@@ -285,7 +285,7 @@ export function createMcpServer(): McpServer {
   // -------------------------------------------------------------------------
   // 8. get_gap_alerts
   // -------------------------------------------------------------------------
-  server.registerTool(
+  server.registerTool<any, any>(
     'get_gap_alerts',
     {
       description:
@@ -297,7 +297,7 @@ export function createMcpServer(): McpServer {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ instrument_id, from, limit }) => {
+    async ({ instrument_id, from, limit }: { instrument_id?: number; from?: string; limit: number }) => {
       try {
         const rows = await prisma.gap_alerts.findMany({
           where: {
@@ -318,7 +318,7 @@ export function createMcpServer(): McpServer {
   // -------------------------------------------------------------------------
   // 9. get_margin_calculations
   // -------------------------------------------------------------------------
-  server.registerTool(
+  server.registerTool<any, any>(
     'get_margin_calculations',
     {
       description:
@@ -330,7 +330,7 @@ export function createMcpServer(): McpServer {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ security_id, from, limit }) => {
+    async ({ security_id, from, limit }: { security_id?: string; from?: string; limit: number }) => {
       try {
         const rows = await prisma.margin_calculations.findMany({
           where: {
@@ -351,7 +351,7 @@ export function createMcpServer(): McpServer {
   // -------------------------------------------------------------------------
   // 10. get_periodic_ohlc
   // -------------------------------------------------------------------------
-  server.registerTool(
+  server.registerTool<any, any>(
     'get_periodic_ohlc',
     {
       description:
@@ -364,7 +364,7 @@ export function createMcpServer(): McpServer {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ instrument_id: instrumentId, from, to, limit }) => {
+    async ({ instrument_id: instrumentId, from, to, limit }: { instrument_id: number; from: string; to: string; limit: number }) => {
       try {
         const rows = await prisma.ohlcDataNSE.findMany({
           where: {
@@ -385,7 +385,7 @@ export function createMcpServer(): McpServer {
   // -------------------------------------------------------------------------
   // 11. get_ticks
   // -------------------------------------------------------------------------
-  server.registerTool(
+  server.registerTool<any, any>(
     'get_ticks',
     {
       description:
@@ -399,7 +399,7 @@ export function createMcpServer(): McpServer {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ instrument_id: instrumentId, segment, from, to, limit }) => {
+    async ({ instrument_id: instrumentId, segment, from, to, limit }: { instrument_id: number; segment: 'EQ' | 'FUT' | 'OPT'; from: string; to: string; limit: number }) => {
       try {
         const timeFilter = { gte: new Date(from), lte: new Date(to) };
         const take = safeLimit(limit);

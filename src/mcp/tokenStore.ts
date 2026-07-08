@@ -29,6 +29,7 @@ export interface RefreshEntry extends TokenEntry {
 interface PersistedStore {
   accessTokens: [string, TokenEntry][];
   refreshTokens: [string, RefreshEntry][];
+  clients?: [string, Record<string, unknown>][];
 }
 
 export class FileTokenStore {
@@ -38,6 +39,8 @@ export class FileTokenStore {
 
   readonly accessTokens = new Map<string, TokenEntry>();
   readonly refreshTokens = new Map<string, RefreshEntry>();
+  /** Dynamically-registered OAuth clients (RFC 7591) — survives process restarts. */
+  readonly clients = new Map<string, Record<string, unknown>>();
 
   constructor(filePath: string) {
     this.filePath = path.resolve(filePath);
@@ -60,6 +63,9 @@ export class FileTokenStore {
       }
       for (const [token, entry] of data.refreshTokens ?? []) {
         if (entry.expiresAt > now) this.refreshTokens.set(token, entry);
+      }
+      for (const [clientId, client] of data.clients ?? []) {
+        this.clients.set(clientId, client);
       }
     } catch {
       // Corrupt file — start fresh
@@ -85,6 +91,7 @@ export class FileTokenStore {
     const data: PersistedStore = {
       accessTokens: [...this.accessTokens.entries()],
       refreshTokens: [...this.refreshTokens.entries()],
+      clients: [...this.clients.entries()],
     };
 
     const tmp = this.filePath + '.tmp.' + crypto.randomBytes(4).toString('hex');

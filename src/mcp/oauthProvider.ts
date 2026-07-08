@@ -23,18 +23,21 @@ interface OAuthClient extends OAuthClientInformationFull {
 }
 
 class ClientRegistry {
-  private readonly clients = new Map<string, OAuthClient>();
+  constructor(private readonly store: FileTokenStore) {}
 
   async getClient(clientId: string): Promise<OAuthClient | undefined> {
-    return this.clients.get(clientId);
+    this.store.ensureHydrated();
+    return this.store.clients.get(clientId) as OAuthClient | undefined;
   }
 
   async registerClient(metadata: Omit<OAuthClient, 'client_id'>): Promise<OAuthClient> {
+    this.store.ensureHydrated();
     const client: OAuthClient = {
       ...metadata,
       client_id: crypto.randomBytes(16).toString('base64url'),
     };
-    this.clients.set(client.client_id, client);
+    this.store.clients.set(client.client_id, client as unknown as Record<string, unknown>);
+    this.store.persistSoon();
     return client;
   }
 }
@@ -51,7 +54,7 @@ class FinanceOAuthProvider implements OAuthServerProvider {
     this.store = new FileTokenStore(
       process.env.MCP_TOKEN_STORE_PATH ?? '.mcp-token-store.json'
     );
-    this.clientsStore = new ClientRegistry();
+    this.clientsStore = new ClientRegistry(this.store);
 
     // Periodic cleanup every 30 minutes
     setInterval(() => this.store.flush(), 30 * 60 * 1000).unref();

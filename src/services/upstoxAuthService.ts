@@ -1,5 +1,5 @@
 import axios from "axios";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
 
@@ -47,13 +47,11 @@ export const upstoxAuthService = {
             const { access_token } = response.data;
 
             // Save to Database
-            const prisma = new PrismaClient(); // Instantiate or import singleton
             await prisma.app_config.upsert({
                 where: { key: 'UPSTOX_ACCESS_TOKEN' },
                 update: { value: access_token },
                 create: { key: 'UPSTOX_ACCESS_TOKEN', value: access_token }
             });
-            await prisma.$disconnect();
 
             cachedAccessToken = access_token;
             devLog("? Upstox Access Token generated and saved to DB");
@@ -70,11 +68,9 @@ export const upstoxAuthService = {
      */
     getAccessToken: async (): Promise<string | null> => {
         try {
-            const prisma = new PrismaClient();
             const config = await prisma.app_config.findUnique({
                 where: { key: 'UPSTOX_ACCESS_TOKEN' }
             });
-            await prisma.$disconnect();
 
             if (!config?.value) return null;
 
@@ -101,13 +97,11 @@ export const upstoxAuthService = {
      */
     setAccessToken: async (token: string) => {
         cachedAccessToken = token;
-        const prisma = new PrismaClient();
         await prisma.app_config.upsert({
             where: { key: 'UPSTOX_ACCESS_TOKEN' },
             update: { value: token },
             create: { key: 'UPSTOX_ACCESS_TOKEN', value: token }
         });
-        await prisma.$disconnect();
     }
 };
 

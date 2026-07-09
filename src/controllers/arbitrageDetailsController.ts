@@ -31,7 +31,7 @@ export const getArbitrageDetails = async (req: Request, res: Response) => {
     }
 
     const latestTickFutWhere = date
-      ? Prisma.sql`WHERE DATE("time") = ${new Date(date as string)}`
+      ? Prisma.sql`AND DATE("time") = ${new Date(date as string)}`
       : Prisma.empty;
 
     const tickDateExpr = date
@@ -40,13 +40,18 @@ export const getArbitrageDetails = async (req: Request, res: Response) => {
 
     // Query to get the latest arbitrage data for the instrument
     const query = Prisma.sql`
-      WITH latest_tick_fut AS (
+      WITH relevant_symbols AS (
+          SELECT id FROM market_data.symbols_list
+          WHERE instrument_id = ${numericId} AND segment = 'FUT' AND upstox_id IS NOT NULL
+      ),
+      latest_tick_fut AS (
           SELECT *,
               ROW_NUMBER() OVER (
                   PARTITION BY "instrumentId", DATE("time")
                   ORDER BY id DESC
               ) rn
           FROM periodic_market_data."ticksDataNSEFUT"
+          WHERE "instrumentId" IN (SELECT id FROM relevant_symbols)
           ${latestTickFutWhere}
       ),
       filtered AS (
@@ -220,13 +225,18 @@ export const getFilteredArbitrageData = async (req: Request, res: Response) => {
 
     // Build base queries using Prisma.sql
     const baseQuerydaily = Prisma.sql`
-      WITH latest_tick_fut AS (
+      WITH relevant_symbols AS (
+          SELECT id FROM market_data.symbols_list
+          WHERE instrument_id = ${numericId} AND segment = 'FUT' AND upstox_id IS NOT NULL
+      ),
+      latest_tick_fut AS (
           SELECT *,
               ROW_NUMBER() OVER (
                   PARTITION BY underlying, symbol, date
                   ORDER BY id DESC
               ) rn
           FROM market_data.nse_futures
+          WHERE symbol::numeric IN (SELECT id FROM relevant_symbols)
       ),
       filtered AS (
           SELECT
@@ -281,13 +291,18 @@ export const getFilteredArbitrageData = async (req: Request, res: Response) => {
     `;
 
     const baseQueryhourly = Prisma.sql`
-      WITH latest_tick_fut AS (
+      WITH relevant_symbols AS (
+          SELECT id FROM market_data.symbols_list
+          WHERE instrument_id = ${numericId} AND segment = 'FUT' AND upstox_id IS NOT NULL
+      ),
+      latest_tick_fut AS (
           SELECT *,
               ROW_NUMBER() OVER (
                   PARTITION BY "instrumentId", DATE_TRUNC('minute', time)
                   ORDER BY id DESC
               ) rn
           FROM periodic_market_data."ticksDataNSEFUT"
+          WHERE "instrumentId" IN (SELECT id FROM relevant_symbols)
       ),
       filtered AS (
           SELECT

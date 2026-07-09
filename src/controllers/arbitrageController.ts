@@ -278,6 +278,7 @@ export const getNSEFuturesTicksData = async (req: Request, res: Response) => {
       WHERE li.expiry_date >= CURRENT_DATE
         AND li.instrument_id = ${instrumentIdNum}
         AND li.segment = 'FUT'
+        AND fut.time >= CURRENT_DATE - INTERVAL '3 days'
       ORDER BY li.expiry_date ASC
     `;
 
@@ -345,6 +346,7 @@ export const getNSEOptionsTicksData = async (req: Request, res: Response) => {
       WHERE li.expiry_date >= CURRENT_DATE
         AND li.instrument_id = ${instrumentIdNum}
         AND li.segment = 'OPT'
+        AND opt.time >= CURRENT_DATE - INTERVAL '3 days'
       ORDER BY li.expiry_date ASC
     `;
 

@@ -1,13 +1,13 @@
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import cron from "node-cron";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { upstoxOhlcService, OhlcQuote } from "../services/upstoxOhlcService";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { loadEnv } from "../config/env";
 import { devLog, devError } from "../utils/errorLogger";
+import { withJobTracking } from "../utils/cronMonitor";
 
 loadEnv();
-const prisma = new PrismaClient();
 
 // Batch size for Upstox Quote API
 const BATCH_SIZE = 500;
@@ -515,7 +515,7 @@ export function initializeDailyOhlcUpstoxJob(): void {
     }
 
     // Schedule to run every day 7 PM, Monday to Friday
-    cron.schedule("0 19 * * 1-5", executeDailyOhlcUpstoxJob, {
+    cron.schedule("0 19 * * 1-5", withJobTracking("dailyOhlcUpstoxJob", "0 19 * * 1-5", executeDailyOhlcUpstoxJob), {
         timezone: "Asia/Kolkata",
     });
 

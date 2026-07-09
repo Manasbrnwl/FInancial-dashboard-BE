@@ -8,6 +8,7 @@ import { loadEnv } from "../config/env";
 import { devLog, devError, prodError } from "../utils/errorLogger";
 import { upstoxQuoteService } from "../services/upstoxQuoteService";
 import { getCachedName } from "../cache/instrumentCache";
+import { withJobTracking } from "../utils/cronMonitor";
 
 loadEnv();
 
@@ -261,7 +262,7 @@ export function initializeCoveredCallAlertJob(): void {
     // Run every 5 minutes from 9:15 AM to 3:30 PM (Mon-Fri)
     const schedule = "*/5 9-15 * * 1-5";
 
-    cron.schedule(schedule, executeCoveredCallAlertJob, {
+    cron.schedule(schedule, withJobTracking("coveredCallAlertJob", schedule, executeCoveredCallAlertJob), {
         timezone: "Asia/Kolkata",
     });
 

@@ -7,6 +7,7 @@ import { sendEmailNotification } from "../utils/sendEmail";
 import { loadEnv } from "../config/env";
 import { devLog, devError, prodError } from "../utils/errorLogger";
 import { upstoxQuoteService } from "../services/upstoxQuoteService";
+import { withJobTracking } from "../utils/cronMonitor";
 
 loadEnv();
 
@@ -161,7 +162,7 @@ export function initializeHourlyTicksNseOptJob(): void {
 
   const schedule = "*/5 9-15 * * 1-5";
 
-  cron.schedule(schedule, executeFiveMinuteJob, {
+  cron.schedule(schedule, withJobTracking("hourlyTicksNseOptJob", schedule, executeFiveMinuteJob), {
     timezone: "Asia/Kolkata",
   });
 

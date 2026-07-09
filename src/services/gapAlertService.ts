@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import { socketIOService } from "./socketioService";
 import { getGapBaseline } from "../cache/gapAverageCache";
 import { loadEnv } from "../config/env";
@@ -7,8 +7,6 @@ import { sendSmsNotification } from "../utils/sendSms";
 import { devLog, devWarn, devError } from "../utils/errorLogger";
 
 loadEnv();
-
-const prisma = new PrismaClient();
 
 interface GapData {
   instrumentId: number;

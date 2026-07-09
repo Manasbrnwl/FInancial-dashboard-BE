@@ -1,12 +1,10 @@
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import { socketIOService } from "./socketioService";
 import { loadEnv } from "../config/env";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { devLog, devWarn, devError } from "../utils/errorLogger";
 
 loadEnv();
-
-const prisma = new PrismaClient();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types

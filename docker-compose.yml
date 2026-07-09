@@ -1,17 +1,41 @@
 version: '3.8'
 
 services:
-  backend:
+  # REST API only. Public via reverse proxy at https://api.anfy.in/* (except
+  # /socket.io and /api/websocket, which route to `realtime` — see nginx snippet
+  # in docs/backend-split-deploy.md).
+  api:
     build: .
-    container_name: financial-dashboard-be
+    container_name: financial-dashboard-api
+    command: ["npm", "run", "start:api"]
     ports:
-      - "${PORT:-3000}:3000"
+      - "${API_PORT:-3000}:3000"
     env_file:
       - .env
     restart: always
-    # Uncomment and adjust if you need a local database
-    # depends_on:
-    #   - db
+
+  # Socket.io server + Upstox WebSocket ingestion. Public via reverse proxy at
+  # https://api.anfy.in/socket.io/* and /api/websocket/* only.
+  realtime:
+    build: .
+    container_name: financial-dashboard-realtime
+    command: ["npm", "run", "start:realtime"]
+    ports:
+      - "${REALTIME_PORT:-3001}:3001"
+    env_file:
+      - .env
+    restart: always
+
+  # All cron jobs (tick ingestion, daily OHLC, alerts, gap baselines/cleanup,
+  # weekly instrument sync). Not exposed publicly — health endpoint is
+  # container-internal only.
+  worker:
+    build: .
+    container_name: financial-dashboard-worker
+    command: ["npm", "run", "start:worker"]
+    env_file:
+      - .env
+    restart: always
 
 # networks:
 #   default:

@@ -1,11 +1,11 @@
 import cron from "node-cron";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import { loadEnv } from "../config/env";
 import { devLog, devError, prodError } from "../utils/errorLogger";
+import { withJobTracking } from "../utils/cronMonitor";
 
 loadEnv();
 
-const prisma = new PrismaClient();
 const CRON_EXPRESSION = process.env.GAP_HISTORY_CLEANUP_CRON || "0 0 * * *"; // Midnight
 
 function getRetentionDays(): number {
@@ -16,7 +16,7 @@ function getRetentionDays(): number {
 export function initializeGapHistoryCleanupJob(): void {
   cron.schedule(
     CRON_EXPRESSION,
-    async () => {
+    withJobTracking("gapHistoryCleanup", CRON_EXPRESSION, async () => {
       const retentionDays = getRetentionDays();
       try {
         await prisma.$executeRaw`
@@ -28,7 +28,7 @@ export function initializeGapHistoryCleanupJob(): void {
         devError("? Failed to cleanup gap_time_series:", error?.message || error);
         prodError("Failed to cleanup gap_time_series");
       }
-    },
+    }),
     { timezone: "Asia/Kolkata" }
   );
 

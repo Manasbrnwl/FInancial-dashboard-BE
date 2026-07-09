@@ -222,6 +222,7 @@ model ohlcDataNSE {
   @@unique([instrumentId, time], map: "uniq_data_nse")
   @@index([instrumentId], map: "idx_instrumentId_nse")
   @@index([time], map: "idx_time_nse")
+  @@index([instrumentId, time(sort: Desc)], map: "idx_ohlc_nse_inst_time")
   @@schema("periodic_market_data")
 }
 
@@ -241,6 +242,7 @@ model ohlcEQDataBSE {
   @@unique([instrumentId, time], map: "uniq_data_bse")
   @@index([instrumentId], map: "idx_instrumentId_bse")
   @@index([time], map: "idx_time_bse")
+  @@index([instrumentId, time(sort: Desc)], map: "idx_ohlc_bse_inst_time")
   @@schema("periodic_market_data")
 }
 
@@ -285,6 +287,7 @@ model ticksDataNSEFUT {
   @@unique([instrumentId, time], map: "uniq_data_nse_fut")
   @@index([instrumentId], map: "idx_instrumentId_nse_fut")
   @@index([time], map: "idx_time_nse_fut")
+  @@index([instrumentId, id(sort: Desc), ltp, volume], map: "idx_cover_ticks_nsefut")
   @@schema("periodic_market_data")
 }
 
@@ -402,6 +405,20 @@ model app_config {
   key        String   @unique @db.VarChar(100)
   value      String
   updated_at DateTime @default(now()) @updatedAt
+
+  @@schema("market_data")
+}
+
+/// DB-backed replacement for the old local history.json file — lets the
+/// api process read job status written by the separate sync-worker process.
+model cron_job_status {
+  job_name         String    @id @db.VarChar(100)
+  last_run         DateTime?
+  next_run         DateTime?
+  status           String    @default("idle") @db.VarChar(20)
+  last_duration_ms Int?
+  error_message    String?
+  updated_at       DateTime  @default(now()) @updatedAt
 
   @@schema("market_data")
 }

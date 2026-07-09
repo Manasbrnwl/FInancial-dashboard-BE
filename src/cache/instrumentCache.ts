@@ -1,7 +1,6 @@
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import { devLog } from "../utils/errorLogger";
 
-const prisma = new PrismaClient();
 const nameCache = new Map<number, string>();
 const upstoxIdCache = new Map<number, string>();
 

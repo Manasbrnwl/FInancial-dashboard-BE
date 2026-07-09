@@ -8,6 +8,7 @@ import { loadEnv } from "../config/env";
 import { processGapData } from "../services/gapAlertService";
 import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
 import { upstoxQuoteService } from "../services/upstoxQuoteService";
+import { withJobTracking } from "../utils/cronMonitor";
 
 loadEnv();
 
@@ -461,7 +462,7 @@ export function initializeHourlyTicksNseFutUpstoxJob(): void {
     // Cron: */5 9-15 * * 1-5
     const schedule = "*/5 9-15 * * 1-5";
 
-    cron.schedule(schedule, executeHourlyFutJob, {
+    cron.schedule(schedule, withJobTracking("hourlyTicksNseFutUpstoxJob", schedule, executeHourlyFutJob), {
         timezone: "Asia/Kolkata",
     });
 

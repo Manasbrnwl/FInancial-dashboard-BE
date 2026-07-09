@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { devLog, devError, prodError } from "../utils/errorLogger";
+import { withJobTracking } from "../utils/cronMonitor";
 
 const TARGET_EMAIL = process.env.GAP_ALERT_EMAILS;
 
@@ -48,7 +49,7 @@ export function initializeLoginReminderJob(): void {
     // if (process.env.NODE_ENV === "development") {
     // sendLoginReminder();
     // }
-    cron.schedule(schedule, sendLoginReminder, {
+    cron.schedule(schedule, withJobTracking("dailyLoginEmailJob", schedule, sendLoginReminder), {
         timezone: "Asia/Kolkata",
     });
     devLog(`? Login Reminder Job Scheduled (${schedule})`);

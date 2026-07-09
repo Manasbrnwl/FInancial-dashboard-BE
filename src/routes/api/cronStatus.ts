@@ -9,9 +9,9 @@ const router = Router();
  * GET /api/cron-status
  * Get status of all cron jobs including last run, next run, and duration
  */
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
-    const statuses = getAllJobStatuses();
+    const statuses = await getAllJobStatuses();
 
     res.json({
       success: true,

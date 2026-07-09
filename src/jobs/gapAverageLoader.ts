@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { loadGapBaselines } from "../cache/gapAverageCache";
 import { loadEnv } from "../config/env";
 import { devLog, devError, prodError } from "../utils/errorLogger";
+import { withJobTracking } from "../utils/cronMonitor";
 
 loadEnv();
 
@@ -16,14 +17,14 @@ export function initializeGapAverageLoader(): void {
 
   cron.schedule(
     CRON_EXPRESSION,
-    async () => {
+    withJobTracking("gapAverageLoader", CRON_EXPRESSION, async () => {
       try {
         await loadGapBaselines();
       } catch (error: any) {
         devError("? Failed to refresh gap baselines:", error?.message || error);
         prodError("Failed to refresh gap baselines");
       }
-    },
+    }),
     { timezone: "Asia/Kolkata" }
   );
 

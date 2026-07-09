@@ -14,6 +14,7 @@ import mcpRouter from "../mcp/mcpRouter";
 import { renderAuthPage, renderTokenResult } from "../mcp/authPages";
 import { findUserByEmail, verifyPassword } from "../services/authService";
 import { upstoxAuthService } from "../services/upstoxAuthService";
+import { fyersAuthService } from "../services/fyersAuthService";
 
 // Polyfill for BigInt JSON serialization
 (BigInt.prototype as any).toJSON = function () {
@@ -126,6 +127,23 @@ export function startApiServer(): void {
       }
     } else {
       res.status(400).send("No code");
+    }
+  });
+
+  // Fyers OAuth callback — registered as the redirect URI on the Fyers app,
+  // same pattern as the Upstox /callback above.
+  app.get("/fyers", async (req, res) => {
+    const code = (req.query.auth_code as string) || (req.query.code as string);
+    if (code) {
+      try {
+        const token = await fyersAuthService.generateAccessToken(code);
+        devLog("Fyers Token Generated:", token.substring(0, 10) + "...");
+        res.send(`<h1>Login Successful</h1><p>Token generated. check console.</p>`);
+      } catch (err: any) {
+        res.status(500).send("Error: " + err.message);
+      }
+    } else {
+      res.status(400).send("No auth_code");
     }
   });
 

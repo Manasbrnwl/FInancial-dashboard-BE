@@ -122,6 +122,21 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
       filters.push(Prisma.sql`1=1`);
     }
 
+    let underlyingSymbol: string | null = null;
+    if (where.underlying !== undefined && where.underlying !== null) {
+      const inst = await prisma.instrument_lists.findUnique({
+        where: { id: where.underlying },
+        select: { instrument_type: true },
+      });
+      if (inst) {
+        underlyingSymbol = inst.instrument_type;
+      }
+    }
+
+    const equityJoinCondition = underlyingSymbol
+      ? Prisma.sql`ne.symbol = ${underlyingSymbol} AND no.date = ne.date`
+      : Prisma.sql`il.instrument_type = ne.symbol AND no.date = ne.date`;
+
     const joinedQuery = Prisma.sql`
       SELECT
         no.symbol,
@@ -140,8 +155,9 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
       FROM market_data.nse_options no
       LEFT JOIN market_data.instrument_lists il ON no.underlying = il.id
       LEFT JOIN market_data.nse_equity ne
-        ON il.instrument_type = ne.symbol
-        AND no.date = ne.date
+        ON ${equityJoinCondition}
+        ${where.date?.gte ? Prisma.sql`AND ne.date >= ${where.date.gte}` : Prisma.empty}
+        ${where.date?.lte ? Prisma.sql`AND ne.date <= ${where.date.lte}` : Prisma.empty}
       WHERE ${Prisma.join(filters, " AND ")}
       ORDER BY no.date DESC
       LIMIT ${limit}

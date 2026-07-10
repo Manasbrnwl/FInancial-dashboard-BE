@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { StreamableHTTPServerTransport, requireBearerAuth } from './sdk';
 import { oauthProvider } from './oauthProvider';
 import { createMcpServer } from './financeTools';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -31,7 +32,8 @@ router.all('/', async (req, res) => {
   try {
     await server.connect(transport);
     await transport.handleRequest(req as any, res as any, req.body);
-  } catch {
+  } catch (error) {
+    logger.error('MCP handler error:', error);
     if (!res.headersSent) res.status(500).json({ error: 'MCP handler error' });
   }
 });

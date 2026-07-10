@@ -16,10 +16,9 @@ function err(message: string) {
   };
 }
 
-/** Clamp query limits to prevent runaway queries. */
-const MAX_LIMIT = 500;
+/** Guard against non-positive limits. */
 function safeLimit(limit: number): number {
-  return Math.min(Math.max(1, limit), MAX_LIMIT);
+  return Math.max(1, limit);
 }
 
 // ---------------------------------------------------------------------------
@@ -50,7 +49,7 @@ export function createMcpServer(): McpServer {
         symbol:  z.string().describe('NSE equity symbol e.g. RELIANCE, INFY, NIFTY50'),
         from:    z.string().describe('Start date YYYY-MM-DD (inclusive)'),
         to:      z.string().describe('End date YYYY-MM-DD (inclusive)'),
-        limit:   z.number().int().min(1).max(MAX_LIMIT).default(100).describe('Max rows to return (1–500)'),
+        limit:   z.number().int().min(1).default(100).describe('Max rows to return'),
       },
       annotations: { readOnlyHint: true },
     },
@@ -83,7 +82,7 @@ export function createMcpServer(): McpServer {
         symbol: z.string().describe('BSE equity symbol e.g. RELIANCE, TCS'),
         from:   z.string().describe('Start date YYYY-MM-DD'),
         to:     z.string().describe('End date YYYY-MM-DD'),
-        limit:  z.number().int().min(1).max(MAX_LIMIT).default(100).describe('Max rows (1–500)'),
+        limit:  z.number().int().min(1).default(100).describe('Max rows'),
       },
       annotations: { readOnlyHint: true },
     },
@@ -118,7 +117,7 @@ export function createMcpServer(): McpServer {
         from:        z.string().describe('Start date YYYY-MM-DD'),
         to:          z.string().describe('End date YYYY-MM-DD'),
         expiry_date: z.string().optional().describe('Expiry date YYYY-MM-DD (optional filter)'),
-        limit:       z.number().int().min(1).max(MAX_LIMIT).default(100).describe('Max rows (1–500)'),
+        limit:       z.number().int().min(1).default(100).describe('Max rows'),
       },
       annotations: { readOnlyHint: true },
     },
@@ -156,7 +155,7 @@ export function createMcpServer(): McpServer {
         expiry_date:  z.string().optional().describe('Expiry date YYYY-MM-DD'),
         strike:       z.string().optional().describe('Strike price as string e.g. "18000"'),
         option_type:  z.enum(['CE', 'PE']).optional().describe('Option type: CE or PE'),
-        limit:        z.number().int().min(1).max(MAX_LIMIT).default(100).describe('Max rows (1–500)'),
+        limit:        z.number().int().min(1).default(100).describe('Max rows'),
       },
       annotations: { readOnlyHint: true },
     },
@@ -192,7 +191,7 @@ export function createMcpServer(): McpServer {
       inputSchema: {
         exchange:        z.string().optional().describe('Exchange: NSE or BSE'),
         instrument_type: z.string().optional().describe('Instrument type string e.g. NIFTY, BANKNIFTY, FINNIFTY'),
-        limit:           z.number().int().min(1).max(MAX_LIMIT).default(50).describe('Max rows (1–500)'),
+        limit:           z.number().int().min(1).default(50).describe('Max rows'),
       },
       annotations: { readOnlyHint: true },
     },
@@ -226,7 +225,7 @@ export function createMcpServer(): McpServer {
         instrument_id: z.number().int().describe('Instrument ID from instrument_lists'),
         segment:       z.string().optional().describe('Segment: EQ, FUT, OPT'),
         expiry_month:  z.string().optional().describe('Expiry month string e.g. "2025-01"'),
-        limit:         z.number().int().min(1).max(MAX_LIMIT).default(100).describe('Max rows (1–500)'),
+        limit:         z.number().int().min(1).default(100).describe('Max rows'),
       },
       annotations: { readOnlyHint: true },
     },
@@ -260,7 +259,7 @@ export function createMcpServer(): McpServer {
       inputSchema: {
         instrument_id: z.number().int().optional().describe('Filter by instrument ID (optional)'),
         from:          z.string().optional().describe('Start datetime YYYY-MM-DD (optional)'),
-        limit:         z.number().int().min(1).max(MAX_LIMIT).default(50).describe('Max rows (1–500)'),
+        limit:         z.number().int().min(1).default(50).describe('Max rows'),
       },
       annotations: { readOnlyHint: true },
     },
@@ -293,7 +292,7 @@ export function createMcpServer(): McpServer {
       inputSchema: {
         instrument_id: z.number().int().optional().describe('Filter by instrument ID (optional)'),
         from:          z.string().optional().describe('Start datetime YYYY-MM-DD (optional)'),
-        limit:         z.number().int().min(1).max(MAX_LIMIT).default(50).describe('Max rows (1–500)'),
+        limit:         z.number().int().min(1).default(50).describe('Max rows'),
       },
       annotations: { readOnlyHint: true },
     },
@@ -326,7 +325,7 @@ export function createMcpServer(): McpServer {
       inputSchema: {
         security_id: z.string().optional().describe('Filter by security_id (optional)'),
         from:        z.string().optional().describe('Start date YYYY-MM-DD (optional)'),
-        limit:       z.number().int().min(1).max(MAX_LIMIT).default(50).describe('Max rows (1–500)'),
+        limit:       z.number().int().min(1).default(50).describe('Max rows'),
       },
       annotations: { readOnlyHint: true },
     },
@@ -360,7 +359,7 @@ export function createMcpServer(): McpServer {
         instrument_id: z.number().int().describe('Instrument ID from instrument_lists'),
         from:          z.string().describe('Start datetime ISO-8601 e.g. 2025-01-15T09:15:00'),
         to:            z.string().describe('End datetime ISO-8601 e.g. 2025-01-15T15:30:00'),
-        limit:         z.number().int().min(1).max(MAX_LIMIT).default(100).describe('Max rows (1–500)'),
+        limit:         z.number().int().min(1).default(100).describe('Max rows'),
       },
       annotations: { readOnlyHint: true },
     },
@@ -395,7 +394,7 @@ export function createMcpServer(): McpServer {
         segment:       z.enum(['EQ', 'FUT', 'OPT']).describe('Market segment: EQ (equity), FUT (futures), OPT (options)'),
         from:          z.string().describe('Start datetime ISO-8601'),
         to:            z.string().describe('End datetime ISO-8601'),
-        limit:         z.number().int().min(1).max(MAX_LIMIT).default(200).describe('Max rows (1–500)'),
+        limit:         z.number().int().min(1).default(200).describe('Max rows'),
       },
       annotations: { readOnlyHint: true },
     },

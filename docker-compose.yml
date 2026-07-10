@@ -12,6 +12,10 @@ services:
       - "${API_PORT:-3000}:3000"
     env_file:
       - .env
+    environment:
+      - MCP_TOKEN_STORE_PATH=/app/mcp-data/token-store.json
+    volumes:
+      - mcp_token_store:/app/mcp-data
     restart: always
 
   # Socket.io server + Upstox WebSocket ingestion. Public via reverse proxy at
@@ -36,6 +40,12 @@ services:
     env_file:
       - .env
     restart: always
+
+volumes:
+  # Persists src/mcp/tokenStore.ts's file (OAuth clients + access/refresh
+  # tokens) across container rebuilds/recreates. Without this, every deploy
+  # of the api service wipes all issued MCP bearer tokens.
+  mcp_token_store:
 
 # networks:
 #   default:

@@ -17,8 +17,8 @@ const DRY_RUN = args.includes("--dry-run");
 const FORCE = args.includes("--force");
 
 // Date range configuration
-const START_DATE = "2025-12-15";
-const END_DATE = "2025-12-31";
+const START_DATE = "2025-07-08";
+const END_DATE = "2026-01-06";
 
 // Temp working path
 const scratchDir = path.resolve(__dirname, "../scratch/temp_bhavcopy_ohlc");
@@ -191,6 +191,27 @@ function getOptionOrFutureSymbol(row: Record<string, string>): string {
 }
 
 /**
+ * Alternate symbol key using numeric YYMMDD expiry instead of the 3-letter
+ * month NSE uses in FinInstrmNm. Contracts created via the Upstox instrument
+ * sync after its tradingSymbol format switched are stored in this form
+ * (e.g. "M&M2601273700PE" vs NSE's own "M&M26JAN3700PE"), so a name-only
+ * lookup against older Bhavcopy files misses them entirely without this.
+ */
+function getOptionOrFutureSymbolNumeric(row: Record<string, string>): string {
+    const expiryDate = new Date(`${row.XpryDt}T00:00:00Z`);
+    const yy = expiryDate.getUTCFullYear().toString().slice(-2);
+    const mm = String(expiryDate.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(expiryDate.getUTCDate()).padStart(2, "0");
+
+    if (!row.OptnTp || row.OptnTp === "XX" || row.OptnTp === "") {
+        return `${row.TckrSymb}${yy}${mm}${dd}FUT`;
+    } else {
+        const strikeStr = formatStrike(row.StrkPric);
+        return `${row.TckrSymb}${yy}${mm}${dd}${strikeStr}${row.OptnTp}`;
+    }
+}
+
+/**
  * Helper to split an array into chunks of a given size.
  */
 function chunkArray<T>(array: T[], size: number): T[][] {
@@ -269,8 +290,13 @@ async function run() {
     let processedDaysCount = 0;
     let skippedDaysCount = 0;
     let missingDaysCount = 0;
+    let strikeTypeMismatchCount = 0;
 
-    for (const dateStr of dates) {
+    for (let dateIdx = 0; dateIdx < dates.length; dateIdx++) {
+      const dateStr = dates[dateIdx];
+      let attempt = 0;
+      while (true) {
+        try {
         const yyyy = dateStr.substring(0, 4);
         const mm = dateStr.substring(4, 6);
         const dd = dateStr.substring(6, 8);
@@ -291,7 +317,7 @@ async function run() {
         if (!FORCE && eqCount > 1500 && futCount > 400 && optCount > 8000) {
             console.log(`ℹ️ Date ${dateFormatted} already fully backfilled (EQ: ${eqCount}, FUT: ${futCount}, OPT: ${optCount}). Skipping.`);
             skippedDaysCount++;
-            continue;
+            break;
         } else if (eqCount > 0 || futCount > 0 || optCount > 0) {
             console.log(`⚠️ Date ${dateFormatted} is partially backfilled (EQ: ${eqCount}, FUT: ${futCount}, OPT: ${optCount}). Will backfill missing records.`);
         }
@@ -315,7 +341,7 @@ async function run() {
         if (!hasCm && !hasFo) {
             console.log(`ℹ️ No Bhavcopy files found for ${dateFormatted} (weekend/holiday). Skipping.`);
             missingDaysCount++;
-            continue;
+            break;
         }
 
         const equityRecords: any[] = [];
@@ -382,7 +408,7 @@ async function run() {
                     const csvPath = path.join(foExtractDir, csvFile);
                     await parseCsv(csvPath, (row) => {
                         const symbolKey = getOptionOrFutureSymbol(row);
-                        const sym = symbolByContractName.get(symbolKey);
+                        const sym = symbolByContractName.get(symbolKey) ?? symbolByContractName.get(getOptionOrFutureSymbolNumeric(row));
 
                         if (sym) {
                             const open = parseFloat(row.OpnPric);
@@ -410,6 +436,17 @@ async function run() {
                                 });
                             } else if (sym.segment === "OPT") {
                                 if (!sym.expiry_date) return;
+
+                                // Bhavcopy's own strike/option_type are ground truth from NSE.
+                                // symbols_list.strike/option_type have been found stale/mismatched
+                                // on a subset of rows (weekly sync upsert bug, tracked separately) —
+                                // trust the row we just downloaded over the cached copy.
+                                const bhavStrike = formatStrike(row.StrkPric);
+                                const bhavOptionType = row.OptnTp;
+                                if (sym.strike !== bhavStrike || sym.option_type !== bhavOptionType) {
+                                    strikeTypeMismatchCount++;
+                                }
+
                                 optionsRecords.push({
                                     symbol_id: sym.id.toString(),
                                     symbol: sym.id,
@@ -422,8 +459,8 @@ async function run() {
                                     oi: row.OpnIntrst || "0",
                                     underlying: sym.instrument_id,
                                     expiry_date: sym.expiry_date,
-                                    strike: sym.strike || "",
-                                    option_type: sym.option_type || "",
+                                    strike: bhavStrike,
+                                    option_type: bhavOptionType,
                                     expiry_month: sym.expiry_month || "",
                                 });
                             }
@@ -508,6 +545,19 @@ async function run() {
 
         // Pause briefly to be polite to the NSE archive server
         await new Promise(resolve => setTimeout(resolve, 500));
+        break; // date succeeded, move to next date
+        } catch (err: any) {
+          const transient = err?.code === "P1001" || err?.code === "P1017" || /Server has closed the connection|Can't reach database server/.test(err?.message || "");
+          attempt++;
+          if (!transient || attempt > 3) {
+            throw err;
+          }
+          console.error(`  ⚠️ Transient DB error on ${dateStr} (attempt ${attempt}/3): ${err.message}. Reconnecting and retrying...`);
+          await prisma.$disconnect().catch(() => {});
+          await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+          await prisma.$connect().catch(() => {});
+        }
+      }
     }
 
     console.log(`\n========================================`);
@@ -516,6 +566,7 @@ async function run() {
     console.log(`✅ Processed Trading Days: ${processedDaysCount}`);
     console.log(`ℹ️ Skipped Days (Already in DB): ${skippedDaysCount}`);
     console.log(`ℹ️ Missing Days (Weekend/Holiday): ${missingDaysCount}`);
+    console.log(`⚠️ symbols_list strike/option_type mismatches found (corrected using Bhavcopy, not fixed at source): ${strikeTypeMismatchCount}`);
     console.log(`========================================\n`);
 
     await prisma.$disconnect();

@@ -1,6 +1,8 @@
 import cron from "node-cron";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { sendEmailNotification } from "../utils/sendEmail";
+import { devLog, devError, prodError } from "../utils/errorLogger";
+import { withJobTracking } from "../utils/cronMonitor";
 
 const TARGET_EMAIL = process.env.GAP_ALERT_EMAILS;
 
@@ -26,13 +28,15 @@ async function sendLoginReminder() {
 
         if (TARGET_EMAIL) {
             await sendEmailNotification(TARGET_EMAIL, subject, text, html);
-            console.log(`? Login reminder email sent to ${TARGET_EMAIL}`);
+            devLog(`? Login reminder email sent to ${TARGET_EMAIL}`);
         } else {
-            console.error("? No email recipient configured for login reminder.");
+            devError("? No email recipient configured for login reminder.");
+            prodError("No email recipient configured for login reminder");
         }
 
     } catch (error: any) {
-        console.error("? Failed to send login reminder:", error.message);
+        devError("? Failed to send login reminder:", error.message);
+        prodError("Failed to send login reminder");
     }
 }
 
@@ -43,10 +47,10 @@ export function initializeLoginReminderJob(): void {
     // Run at 8:00 AM on Weekdays (Mon-Fri)
     const schedule = "0 8 * * 1-5";
     // if (process.env.NODE_ENV === "development") {
-        // sendLoginReminder();
+    // sendLoginReminder();
     // }
-    cron.schedule(schedule, sendLoginReminder, {
+    cron.schedule(schedule, withJobTracking("dailyLoginEmailJob", schedule, sendLoginReminder), {
         timezone: "Asia/Kolkata",
     });
-    console.log(`? Login Reminder Job Scheduled (${schedule})`);
+    devLog(`? Login Reminder Job Scheduled (${schedule})`);
 }

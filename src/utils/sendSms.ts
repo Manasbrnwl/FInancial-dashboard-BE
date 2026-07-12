@@ -1,5 +1,6 @@
 import axios from "axios";
 import { loadEnv } from "../config/env";
+import { devError, devWarn, prodError } from "./errorLogger";
 
 loadEnv();
 
@@ -16,7 +17,7 @@ export async function sendSmsNotification(
   message: string
 ): Promise<boolean> {
   if (!SMS_API_URL || !SMS_API_KEY) {
-    console.warn("? SMS API URL or key not configured; skipping SMS send");
+    devWarn("? SMS API URL or key not configured; skipping SMS send");
     return false;
   }
 
@@ -38,7 +39,8 @@ export async function sendSmsNotification(
     );
     return true;
   } catch (error: any) {
-    console.error("? Failed to send SMS:", error?.message || error);
+    devError("? Failed to send SMS:", error?.message || error);
+    prodError("Failed to send SMS");
     return false;
   }
 }

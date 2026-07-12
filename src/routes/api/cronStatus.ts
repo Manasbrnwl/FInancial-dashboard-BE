@@ -1,5 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getAllJobStatuses } from '../../utils/cronMonitor';
+import { logger } from "../../utils/logger";
+import { devError, prodError } from '../../utils/errorLogger';
 
 const router = Router();
 
@@ -7,9 +9,9 @@ const router = Router();
  * GET /api/cron-status
  * Get status of all cron jobs including last run, next run, and duration
  */
-router.get('/', (req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
-    const statuses = getAllJobStatuses();
+    const statuses = await getAllJobStatuses();
 
     res.json({
       success: true,
@@ -17,7 +19,8 @@ router.get('/', (req: Request, res: Response) => {
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {
-    console.error('Error fetching cron status:', error);
+    devError('Error fetching cron status:', error);
+    prodError('Error fetching cron status');
     res.status(500).json({
       success: false,
       error: 'Failed to fetch cron status',

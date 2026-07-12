@@ -1,6 +1,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { upstoxWebSocketService } from './upstoxWebsocketService';
+import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
 
 interface MarketData {
   symbol?: string;
@@ -25,6 +26,7 @@ export class SocketIOService {
       "https://www.anfy.in",
       "https://api.anfy.in",
       "http://localhost:5173",
+      "http://localhost:5174",
       "http://localhost:3000",
       "http://15.207.43.160:8080",
       ...envOrigins,
@@ -45,13 +47,14 @@ export class SocketIOService {
     });
 
     this.io.engine.on('connection_error', (error: any) => {
-      console.error(`❌ Socket.io handshake failed (${error?.code}): ${error?.message}`, {
+      devError(`❌ Socket.io handshake failed (${error?.code}): ${error?.message}`, {
         origin: error?.req?.headers?.origin
       });
+      prodError('Socket.io handshake failed');
     });
 
     this.setupEventHandlers();
-    // console.log('🔌 Socket.io server initialized');
+    // devLog('🔌 Socket.io server initialized');
   }
 
   /**
@@ -61,7 +64,7 @@ export class SocketIOService {
     if (!this.io) return;
 
     this.io.on('connection', (socket) => {
-      console.log(`✅ Client connected: ${socket.id}`);
+      devLog(`✅ Client connected: ${socket.id}`);
       this.connectedClients.add(socket.id);
 
       // Send welcome message
@@ -74,7 +77,7 @@ export class SocketIOService {
       // Handle client subscription to specific symbols
       socket.on('subscribe-symbols', (symbols: string[]) => {
         if (process.env.NODE_ENV === "development") {
-          console.log(`📡 Client ${socket.id} subscribing to:`, symbols);
+          devLog(`📡 Client ${socket.id} subscribing to:`, symbols);
         }
 
         // Join rooms for each symbol
@@ -94,7 +97,7 @@ export class SocketIOService {
       // Handle client unsubscription
       socket.on('unsubscribe-symbols', (symbols: string[]) => {
         if (process.env.NODE_ENV === "development") {
-          console.log(`📡 Client ${socket.id} unsubscribing from:`, symbols);
+          devLog(`📡 Client ${socket.id} unsubscribing from:`, symbols);
         }
 
         symbols.forEach(symbol => {
@@ -125,7 +128,7 @@ export class SocketIOService {
       // Handle disconnection
       socket.on('disconnect', () => {
         if (process.env.NODE_ENV === "development") {
-          console.log(`❌ Client disconnected: ${socket.id}`);
+          devLog(`❌ Client disconnected: ${socket.id}`);
         }
         this.connectedClients.delete(socket.id);
       });
@@ -133,7 +136,8 @@ export class SocketIOService {
       // Handle errors
       socket.on('error', (error) => {
         if (process.env.NODE_ENV === "development") {
-          console.error(`❌ Socket error for client ${socket.id}:`, error);
+          devError(`❌ Socket error for client ${socket.id}:`, error);
+          prodError('Socket error occurred');
         }
       });
     });
@@ -144,7 +148,7 @@ export class SocketIOService {
    */
   public broadcastMarketData(data: MarketData): void {
     if (!this.io) {
-      console.warn('⚠️ Socket.io not initialized');
+      devWarn('⚠️ Socket.io not initialized');
       return;
     }
 
@@ -168,7 +172,7 @@ export class SocketIOService {
    */
   public broadcastToSymbol(symbol: string, data: MarketData): void {
     if (!this.io) {
-      console.warn('⚠️ Socket.io not initialized');
+      devWarn('⚠️ Socket.io not initialized');
       return;
     }
 
@@ -184,7 +188,7 @@ export class SocketIOService {
    */
   public broadcastBulkMarketData(dataArray: MarketData[]): void {
     if (!this.io) {
-      console.warn('⚠️ Socket.io not initialized');
+      devWarn('⚠️ Socket.io not initialized');
       return;
     }
 

@@ -1,9 +1,13 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
 
+import { devError, prodError } from "../utils/errorLogger";
+import { parseLimitOffset, parseDateRange } from "../utils/validation";
+
 export const getBseEquityData = async (req: Request, res: Response) => {
   try {
-    const { symbol, startDate, endDate, limit = 100, offset = 0 } = req.query;
+    const { symbol, startDate, endDate } = req.query;
+    const { limit, offset } = parseLimitOffset(req.query, 100);
 
     const where: any = {};
 
@@ -11,22 +15,14 @@ export const getBseEquityData = async (req: Request, res: Response) => {
       where.symbol = symbol as string;
     }
 
-    if (startDate || endDate) {
-      where.date = {};
-      if (startDate) {
-        where.date.gte = new Date(startDate as string);
-      }
-      if (endDate) {
-        where.date.lte = new Date(endDate as string);
-      }
-    }
+    where.date = parseDateRange({ startDate, endDate });
 
     const [data, total] = await Promise.all([
       prisma.bse_equity.findMany({
         where,
         orderBy: { date: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
+        take: limit,
+        skip: offset,
       }),
       prisma.bse_equity.count({ where }),
     ]);
@@ -36,17 +32,18 @@ export const getBseEquityData = async (req: Request, res: Response) => {
       data,
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
-    console.error("Error fetching BSE equity data:", error);
+    devError("Error fetching BSE equity data:", error);
+    prodError("Error fetching BSE equity data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch BSE equity data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -64,11 +61,12 @@ export const getBseEquitySymbols = async (req: Request, res: Response) => {
       data: symbols.map((s) => s.symbol),
     });
   } catch (error: any) {
-    console.error("Error fetching BSE equity symbols:", error);
+    devError("Error fetching BSE equity symbols:", error);
+    prodError("Error fetching BSE equity symbols");
     res.status(500).json({
       success: false,
       error: "Failed to fetch BSE equity symbols",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -94,11 +92,12 @@ export const getBseEquityLatest = async (req: Request, res: Response) => {
       data: latest,
     });
   } catch (error: any) {
-    console.error("Error fetching latest BSE equity data:", error);
+    devError("Error fetching latest BSE equity data:", error);
+    prodError("Error fetching latest BSE equity data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch latest BSE equity data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };

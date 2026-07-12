@@ -2,6 +2,7 @@ import axios from "axios";
 import zlib from "zlib";
 import { promisify } from "util";
 import prisma from "../config/prisma";
+import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
 
 const gunzip = promisify(zlib.gunzip);
 
@@ -75,7 +76,8 @@ export const upstoxInstrumentService = {
 
             return instruments.filter((inst) => ['NSE_EQ', 'BSE_EQ', 'NSE_FO'].includes(inst.exchange) && [null, '', 'CE', 'PE', 'FF'].includes(inst.isin) && ['EQUITY', 'OPTSTK', 'FUTSTK'].includes(inst.instrumentType));
         } catch (error: any) {
-            console.error(`❌ Failed to load ${exchange} instruments:`, error.message);
+            devError(`❌ Failed to load ${exchange} instruments:`, error.message);
+            prodError(`Failed to load ${exchange} instruments`);
             return [];
         }
     },
@@ -96,45 +98,62 @@ export const upstoxInstrumentService = {
             }
             symbolKeyMap = tempMap;
 
-            console.log(`📈 Total instruments loaded: ${allInstruments.length} (NSE: ${nseInstruments.length}, BSE: ${bseInstruments.length})`);
+            devLog(`📈 Total instruments loaded: ${allInstruments.length} (NSE: ${nseInstruments.length}, BSE: ${bseInstruments.length})`);
         } catch (error: any) {
-            console.error("❌ Failed to load Upstox instruments:", error.message);
+            devError("❌ Failed to load Upstox instruments:", error.message);
+            prodError("Failed to load Upstox instruments");
         }
     },
 
     loadNseEqInstruments: async (): Promise<void> => {
-        const nseData = await upstoxInstrumentService.loadExchangeInstruments("NSE");
-        const data = nseData.filter((inst) => inst.instrumentType === "EQUITY");
+        try {
+            const nseData = await upstoxInstrumentService.loadExchangeInstruments("NSE");
+            const data = nseData.filter((inst) => inst.instrumentType === "EQUITY");
 
-        let successCount = 0;
-        let errorCount = 0;
+            let successCount = 0;
+            let errorCount = 0;
 
-        for (const inst of data) {
-            try {
-                await prisma.instrument_lists.upsert({
-                    where: {
-                        exchange_instrument_type: {
-                            instrument_type: inst.tradingSymbol,
-                            exchange: "NSE",
-                        },
-                    },
-                    update: {
-                        upstox_id: inst.instrumentKey,
-                        upstox_symbol: inst.tradingSymbol,
-                    },
-                    create: {
-                        instrument_type: inst.tradingSymbol,
-                        exchange: "NSE",
-                        upstox_id: inst.instrumentKey,
-                        upstox_symbol: inst.tradingSymbol,
-                    },
-                });
-                successCount++;
-            } catch (error: any) {
-                errorCount++;
+            const chunkSize = 20;
+            for (let i = 0; i < data.length; i += chunkSize) {
+                const chunk = data.slice(i, i + chunkSize);
+                await Promise.all(chunk.map(async (inst) => {
+                    try {
+                        const existingByUpstoxId = await prisma.instrument_lists.findUnique({
+                            where: { upstox_id: inst.instrumentKey }
+                        });
+
+                        if (!existingByUpstoxId) {
+                            const existingBySymbol = await prisma.instrument_lists.findUnique({
+                                where: {
+                                    exchange_instrument_type: {
+                                        exchange: "NSE",
+                                        instrument_type: inst.tradingSymbol,
+                                    }
+                                }
+                            });
+
+                            if (!existingBySymbol) {
+                                await prisma.instrument_lists.create({
+                                    data: {
+                                        exchange: "NSE",
+                                        instrument_type: inst.tradingSymbol,
+                                        upstox_id: inst.instrumentKey,
+                                        upstox_symbol: inst.tradingSymbol,
+                                    }
+                                });
+                            }
+                        }
+                        successCount++;
+                    } catch (error: any) {
+                        errorCount++;
+                        devError(`❌ Error syncing EQ ${inst.tradingSymbol}: ${error.message}`);
+                    }
+                }));
             }
+            devLog(`✅ NSE Equity sync complete: ${successCount} success, ${errorCount} errors`);
+        } catch (error: any) {
+            devError("❌ Failed to sync NSE Equity:", error.message);
         }
-        console.log(`✅ NSE Equity sync complete: ${successCount} success, ${errorCount} errors`);
     },
 
     loadNseFutInstruments: async (): Promise<void> => {
@@ -144,143 +163,214 @@ export const upstoxInstrumentService = {
             const futInstruments = nseData.filter((inst) => inst.instrumentType === "FUTSTK");
 
             if (futInstruments.length === 0) {
-                console.log("⚠️ No FUTSTK instruments found");
+                devLog("⚠️ No FUTSTK instruments found");
                 return;
             }
+
+            // Pre-fetch all instrument_lists to avoid repeated queries
+            const existingInstruments = await prisma.instrument_lists.findMany({
+                where: { exchange: "NSE" },
+                select: { id: true, instrument_type: true }
+            });
+            const instrumentMap = new Map(existingInstruments.map(i => [i.instrument_type, i.id]));
 
             let successCount = 0;
             let errorCount = 0;
 
-            for (const inst of futInstruments) {
-                try {
-                    // Find the underlying equity instrument
-                    const underlyingEquity = equityData.find((data) => data.name === inst.name);
-                    const underlying = underlyingEquity?.tradingSymbol || inst.name;
+            const chunkSize = 20;
+            for (let i = 0; i < futInstruments.length; i += chunkSize) {
+                const chunk = futInstruments.slice(i, i + chunkSize);
+                await Promise.all(chunk.map(async (inst) => {
+                    try {
+                        const underlyingEquity = equityData.find((data) => data.name === inst.name);
+                        const underlying = underlyingEquity?.tradingSymbol || inst.name;
 
-                    // Get or create the underlying instrument in instrument_lists
-                    let instrumentRecord = await prisma.instrument_lists.upsert({
-                        where: {
-                            exchange_instrument_type: {
-                                exchange: "NSE",
-                                instrument_type: underlying,
+                        let instrumentId = instrumentMap.get(underlying);
+
+                        if (!instrumentId) {
+                            const existing = await prisma.instrument_lists.findUnique({
+                                where: {
+                                    exchange_instrument_type: {
+                                        exchange: "NSE",
+                                        instrument_type: underlying,
+                                    }
+                                },
+                                select: { id: true }
+                            });
+                            
+                            if (existing) {
+                                instrumentId = existing.id;
+                            } else {
+                                const newInstrument = await prisma.instrument_lists.create({
+                                    data: {
+                                        exchange: "NSE",
+                                        instrument_type: underlying,
+                                    },
+                                    select: { id: true }
+                                });
+                                instrumentId = newInstrument.id;
+                            }
+                            instrumentMap.set(underlying, instrumentId);
+                        }
+
+                        let expiryDate: Date | null = null;
+                        if (inst.expiry) {
+                            expiryDate = new Date(inst.expiry);
+                        }
+                        const expiryMonth = expiryDate ? expiryDate.toLocaleString('default', { month: 'long' }).toUpperCase() : null;
+
+                        // Match by (instrument_id, symbol), not upstox_id: NSE_FO exchange tokens
+                        // get recycled across expiries, so a stale token would false-match an old contract.
+                        await prisma.symbols_list.upsert({
+                            where: {
+                                instrument_id_symbol: {
+                                    instrument_id: instrumentId,
+                                    symbol: inst.tradingSymbol,
+                                }
                             },
-                        },
-                        update: {},
-                        create: {
-                            exchange: "NSE",
-                            instrument_type: underlying,
-                        },
-                        select: { id: true },
-                    });
-
-                    let expiryDate: Date | null = null;
-                    if (inst.expiry) {
-                        expiryDate = new Date(inst.expiry);
+                            update: {
+                                upstox_id: inst.instrumentKey,
+                                upstox_symbol: inst.tradingSymbol,
+                                expiry_date: expiryDate,
+                                expiry_month: expiryMonth,
+                            },
+                            create: {
+                                instrument_id: instrumentId,
+                                symbol: inst.tradingSymbol,
+                                segment: "FUT",
+                                expiry_date: expiryDate,
+                                upstox_id: inst.instrumentKey,
+                                upstox_symbol: inst.tradingSymbol,
+                                expiry_month: expiryMonth,
+                            }
+                        });
+                        successCount++;
+                    } catch (error: any) {
+                        errorCount++;
                     }
-
-                    await prisma.symbols_list.upsert({
-                        where: {
-                            upstox_id: inst.instrumentKey,
-                        },
-                        update: {
-                            upstox_id: inst.instrumentKey,
-                            upstox_symbol: inst.tradingSymbol,
-                        },
-                        create: {
-                            instrument_id: instrumentRecord.id,
-                            symbol: inst.tradingSymbol,
-                            segment: "FUT",
-                            expiry_date: expiryDate,
-                            upstox_id: inst.instrumentKey,
-                            upstox_symbol: inst.tradingSymbol,
-                            expiry_month: expiryDate ? expiryDate.toLocaleString('default', { month: 'long' }).toUpperCase() : null,
-                        },
-                    });
-                    successCount++;
-                } catch (error: any) {
-                    errorCount++;
-                    if (errorCount <= 5) {
-                        console.error(`❌ Failed to upsert ${inst.tradingSymbol}:`, error.message);
-                    }
-                }
+                }));
             }
 
-            console.log(`✅ NSE Futures sync complete: ${successCount} success, ${errorCount} errors`);
+            devLog(`✅ NSE Futures sync complete: ${successCount} success, ${errorCount} errors`);
         } catch (error: any) {
-            console.error("❌ Failed to load NSE Futures instruments:", error.message);
+            devError("❌ Failed to load NSE Futures instruments:", error.message);
+            prodError("Failed to load NSE Futures instruments");
         }
     },
 
     loadNseOptInstruments: async (): Promise<void> => {
-        const nseData = await upstoxInstrumentService.loadExchangeInstruments("NSE");
-        const optInstruments = nseData.filter((inst) => inst.instrumentType === "OPTSTK");
-        const eqInstruments = nseData.filter((inst) => inst.instrumentType === "EQUITY");
+        try {
+            const nseData = await upstoxInstrumentService.loadExchangeInstruments("NSE");
+            const optInstruments = nseData.filter((inst) => inst.instrumentType === "OPTSTK");
+            const eqInstruments = nseData.filter((inst) => inst.instrumentType === "EQUITY");
 
-        let successCount = 0;
-        let errorCount = 0;
-
-        for (const inst of optInstruments) {
-            try {
-                // Find the underlying equity instrument
-                const underlyingEquity = eqInstruments.find((data) => data.name === inst.name);
-                const underlying = underlyingEquity?.tradingSymbol || inst.name;
-                
-                // Get or create the underlying instrument in instrument_lists
-                let instrumentRecord = await prisma.instrument_lists.upsert({
-                    where: {
-                        exchange_instrument_type: {
-                            exchange: "NSE",
-                            instrument_type: underlying,
-                        },
-                    },
-                    update: {},
-                    create: {
-                        exchange: "NSE",
-                        instrument_type: underlying,
-                    },
-                    select: { id: true },
-                });
-
-                let expiryDate: Date | null = null;
-                if (inst.expiry) {
-                    expiryDate = new Date(inst.expiry);
-                }
-
-                await prisma.symbols_list.upsert({
-                    where: {
-                        upstox_id: inst.instrumentKey,
-                    },
-                    update: {
-                        upstox_id: inst.instrumentKey,
-                        upstox_symbol: inst.tradingSymbol,
-                    },
-                    create: {
-                        instrument_id: instrumentRecord.id,
-                        symbol: inst.tradingSymbol,
-                        segment: "OPT",
-                        expiry_date: expiryDate,
-                        upstox_id: inst.instrumentKey,
-                        upstox_symbol: inst.tradingSymbol,
-                        strike: inst.strike?.toString() || null,
-                        option_type: inst.optionType,
-                        expiry_month: expiryDate ? expiryDate.toLocaleString('default', { month: 'long' }).toUpperCase() : null,
-                    },
-                });
-                successCount++;
-            } catch (error: any) {
-                errorCount++;
-                if (errorCount <= 5) {
-                    console.error(`❌ Failed to upsert ${inst.tradingSymbol}:`, error.message);
-                }
+            if (optInstruments.length === 0) {
+                devLog("⚠️ No OPTSTK instruments found");
+                return;
             }
-        }
 
-        console.log(`✅ NSE Options sync complete: ${successCount} success, ${errorCount} errors`);
+            // 1. Pre-fetch all instrument_lists to avoid repeated queries
+            const existingInstruments = await prisma.instrument_lists.findMany({
+                where: { exchange: "NSE" },
+                select: { id: true, instrument_type: true }
+            });
+            const instrumentMap = new Map(existingInstruments.map(i => [i.instrument_type, i.id]));
+
+            let successCount = 0;
+            let errorCount = 0;
+
+            // Process in chunks to avoid overwhelming the database
+            const chunkSize = 50;
+            for (let i = 0; i < optInstruments.length; i += chunkSize) {
+                const chunk = optInstruments.slice(i, i + chunkSize);
+                
+                await Promise.all(chunk.map(async (inst) => {
+                    try {
+                        const underlyingEquity = eqInstruments.find((data) => data.name === inst.name);
+                        const underlying = underlyingEquity?.tradingSymbol || inst.name;
+
+                        let instrumentId = instrumentMap.get(underlying);
+
+                        if (!instrumentId) {
+                            const existing = await prisma.instrument_lists.findUnique({
+                                where: {
+                                    exchange_instrument_type: {
+                                        exchange: "NSE",
+                                        instrument_type: underlying,
+                                    }
+                                },
+                                select: { id: true }
+                            });
+
+                            if (existing) {
+                                instrumentId = existing.id;
+                            } else {
+                                const newInstrument = await prisma.instrument_lists.create({
+                                    data: {
+                                        exchange: "NSE",
+                                        instrument_type: underlying,
+                                    },
+                                    select: { id: true }
+                                });
+                                instrumentId = newInstrument.id;
+                            }
+                            instrumentMap.set(underlying, instrumentId);
+                        }
+
+                        let expiryDate: Date | null = null;
+                        if (inst.expiry) {
+                            expiryDate = new Date(inst.expiry);
+                        }
+                        const expiryMonth = expiryDate ? expiryDate.toLocaleString('default', { month: 'long' }).toUpperCase() : null;
+                        const strike = inst.strike?.toString() || null;
+
+                        // Match by (instrument_id, symbol), not upstox_id: NSE_FO exchange tokens
+                        // get recycled across expiries, so a stale token would false-match an old contract.
+                        await prisma.symbols_list.upsert({
+                            where: {
+                                instrument_id_symbol: {
+                                    instrument_id: instrumentId,
+                                    symbol: inst.tradingSymbol,
+                                }
+                            },
+                            update: {
+                                upstox_id: inst.instrumentKey,
+                                upstox_symbol: inst.tradingSymbol,
+                                expiry_date: expiryDate,
+                                expiry_month: expiryMonth,
+                                strike,
+                                option_type: inst.optionType,
+                            },
+                            create: {
+                                instrument_id: instrumentId,
+                                symbol: inst.tradingSymbol,
+                                segment: "OPT",
+                                expiry_date: expiryDate,
+                                upstox_id: inst.instrumentKey,
+                                upstox_symbol: inst.tradingSymbol,
+                                strike,
+                                option_type: inst.optionType,
+                                expiry_month: expiryMonth,
+                            }
+                        });
+
+                        successCount++;
+                    } catch (error: any) {
+                        errorCount++;
+                    }
+                }));
+            }
+
+            devLog(`✅ NSE Options sync complete: ${successCount} success, ${errorCount} errors`);
+        } catch (error: any) {
+            devError("❌ Failed to load NSE Options instruments:", error.message);
+            prodError("Failed to load NSE Options instruments");
+        }
     },
 
     // loadBseEqInstruments: async (): Promise<void> => {
     //     await upstoxInstrumentService.loadExchangeInstruments("BSE");
     //     const data = bseInstruments.filter((inst) => inst.instrumentType === "EQUITY");
-    //     console.log(bseInstruments[0])
+    //     devLog(bseInstruments[0])
     // },
 }

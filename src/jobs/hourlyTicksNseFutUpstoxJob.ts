@@ -1,14 +1,16 @@
 import axios from "axios";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import cron from "node-cron";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { loadEnv } from "../config/env";
 import { processGapData } from "../services/gapAlertService";
+import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
+import { upstoxQuoteService } from "../services/upstoxQuoteService";
+import { withJobTracking } from "../utils/cronMonitor";
 
 loadEnv();
-const prisma = new PrismaClient();
 
 // Batch size for Upstox Quote API
 const BATCH_SIZE = 500;
@@ -44,7 +46,7 @@ type LegPriceData = {
 async function getActiveFuturesInstruments(): Promise<SymbolInstruments[]> {
     try {
         if (process.env.NODE_ENV === "development") {
-            console.log("📊 Fetching NSE Futures instruments from database...");
+            devLog("📊 Fetching NSE Futures instruments from database...");
         }
 
         const instruments = await prisma.$queryRaw<
@@ -106,7 +108,7 @@ async function getActiveFuturesInstruments(): Promise<SymbolInstruments[]> {
                 symbolInstruments.push({ symbolId, instruments: sorted });
             } else {
                 if (process.env.NODE_ENV === "development") {
-                    console.warn(
+                    devWarn(
                         `⚠️ Skipping symbolId ${symbolId}: expected 2-3 futures (near/next/far), found ${sorted.length}`
                     );
                 }
@@ -114,46 +116,16 @@ async function getActiveFuturesInstruments(): Promise<SymbolInstruments[]> {
         });
 
         if (process.env.NODE_ENV === "development") {
-            console.log(
+            devLog(
                 `📈 Prepared ${symbolInstruments.length} symbols with near/next/far futures`
             );
         }
 
         return symbolInstruments;
     } catch (error: any) {
-        console.error("❌ Failed to fetch active futures instruments from DB:", error.message);
+        devError("❌ Failed to fetch active futures instruments from DB:", error.message);
+        prodError("Failed to fetch active futures instruments from DB");
         return [];
-    }
-}
-
-/**
- * Fetch Market Quotes from Upstox for a batch of keys.
- */
-async function fetchQuotes(keys: string[], accessToken: string) {
-    try {
-        const url = `${UPSTOX_CONFIG.BASE_URL}/market-quote/quotes`;
-        const params = new URLSearchParams({
-            instrument_key: keys.join(","),
-        });
-
-        const response = await axios.get(url, {
-            params,
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-                Accept: "application/json",
-            },
-        });
-
-        if (response.data.status === "success") {
-            return response.data.data;
-        }
-        return null;
-    } catch (error: any) {
-        console.error(
-            "❌ Failed to fetch quotes batch:",
-            error.response?.data?.errors || error.message
-        );
-        return null;
     }
 }
 
@@ -237,10 +209,11 @@ async function sendHourlyJobEmail(
         );
 
         if (process.env.NODE_ENV === "development") {
-            console.log(`📧 Email notification sent: ${status}`);
+            devLog(`📧 Email notification sent: ${status}`);
         }
     } catch (error: any) {
-        console.error(`❌ Failed to send email notification:`, error.message);
+        devError(`❌ Failed to send email notification:`, error.message);
+        prodError("Failed to send email notification");
     }
 }
 
@@ -249,24 +222,26 @@ async function sendHourlyJobEmail(
  */
 export async function executeHourlyFutJob() {
     const startTime = Date.now();
-    console.log(`⏰ Starting 5-minute NSE Futures Job (Upstox) at ${new Date().toISOString()}`);
+    devLog(`⏰ Starting 5-minute NSE Futures Job (Upstox) at ${new Date().toISOString()}`);
 
     try {
         // Send start notification
-        await sendHourlyJobEmail("started", {});
+        // await sendHourlyJobEmail("started", {});
 
         // 1. Get Access Token
         const token = await upstoxAuthService.getAccessToken();
         if (!token) {
-            console.error("❓ No Upstox Access Token available. Skipping job.");
+            devError("❓ No Upstox Access Token available. Skipping job.");
+            prodError("No Upstox Access Token for futures job");
             await sendHourlyJobEmail("failed", { errorMessage: "No Upstox Access Token available" });
             return;
         }
 
         // 2. Get Active Instruments (grouped by symbol with near/next/far legs)
         const symbolGroups = await getActiveFuturesInstruments();
+        devLog(`✅ Found ${symbolGroups.length} symbol`);
         if (symbolGroups.length === 0) {
-            console.log("⚠️ No active futures instruments with Upstox IDs found.");
+            devLog("⚠️ No active futures instruments with Upstox IDs found.");
             await sendHourlyJobEmail("completed", {
                 instrumentsCount: 0,
                 totalRecordsInserted: 0,
@@ -277,7 +252,7 @@ export async function executeHourlyFutJob() {
 
         // Flatten all instruments for batch API calls
         const allInstruments = symbolGroups.flatMap(sg => sg.instruments);
-        console.log(`✅ Found ${symbolGroups.length} symbol groups with ${allInstruments.length} total instruments. Processing batches...`);
+        devLog(`✅ Found ${symbolGroups.length} symbol groups with ${allInstruments.length} total instruments. Processing batches...`);
 
         // 3. Batch Process - Fetch quotes and store data
         let totalInserted = 0;
@@ -287,7 +262,7 @@ export async function executeHourlyFutJob() {
             const batchInstruments = allInstruments.slice(i, i + BATCH_SIZE);
             const batchKeys = batchInstruments.map(inst => inst.upstoxId);
 
-            const quotes = await fetchQuotes(batchKeys, token);
+            const quotes = await upstoxQuoteService.fetchQuotesResilient(batchKeys, token);
 
             if (quotes) {
                 const dbRecords = [];
@@ -297,7 +272,6 @@ export async function executeHourlyFutJob() {
                     // Response keys use "NSE_FO:SYMBOL" format for futures
                     const lookupKey = `NSE_FO:${inst.instrumentType}`;
                     const quote = quotes[lookupKey];
-
                     if (!quote) {
                         continue;
                     }
@@ -382,11 +356,11 @@ export async function executeHourlyFutJob() {
                 } else {
                     if (process.env.NODE_ENV === "development") {
                         if (!isLiquid) {
-                            console.warn(
+                            devWarn(
                                 `⚠️ Skipping Gap 1 for ${symbol.symbolId}: Low Liquidity (Near: ${prices.near.volume}, Next: ${prices.next.volume})`
                             );
                         } else {
-                            console.warn(
+                            devWarn(
                                 `⚠️ Skipping Gap 1 for ${symbol.symbolId}: Time diff ${timeDiff / 1000}s > ${MIN_TIME_DIFF / 1000}s`
                             );
                         }
@@ -418,11 +392,11 @@ export async function executeHourlyFutJob() {
                 } else {
                     if (process.env.NODE_ENV === "development") {
                         if (!isLiquid) {
-                            console.warn(
+                            devWarn(
                                 `⚠️ Skipping Gap 2 for ${symbol.symbolId}: Low Liquidity (Next: ${prices.next.volume}, Far: ${prices.far.volume})`
                             );
                         } else {
-                            console.warn(
+                            devWarn(
                                 `⚠️ Skipping Gap 2 for ${symbol.symbolId}: Time diff ${timeDiff / 1000}s > ${MIN_TIME_DIFF / 1000}s`
                             );
                         }
@@ -443,7 +417,7 @@ export async function executeHourlyFutJob() {
                 });
             } else {
                 if (process.env.NODE_ENV === "development") {
-                    console.warn(
+                    devWarn(
                         `⚠️ No valid gaps calculated for symbolId ${symbol.symbolId} (insufficient legs or time sync issues)`
                     );
                 }
@@ -455,15 +429,16 @@ export async function executeHourlyFutJob() {
             try {
                 await processGapData(gapPayloads);
                 if (process.env.NODE_ENV === "development") {
-                    console.log(`📈 Processed ${gapPayloads.length} gap calculations`);
+                    devLog(`📈 Processed ${gapPayloads.length} gap calculations`);
                 }
             } catch (error: any) {
-                console.error("❌ Failed to process gap data:", error.message);
+                devError("❌ Failed to process gap data:", error.message);
+                prodError("Failed to process gap data");
             }
         }
 
         const duration = (Date.now() - startTime) / 1000;
-        console.log(`✅ Job Completed. Inserted ${totalInserted} records, evaluated ${gapPayloads.length} gaps in ${duration.toFixed(2)}s.`);
+        devLog(`✅ Job Completed. Inserted ${totalInserted} records, evaluated ${gapPayloads.length} gaps in ${duration.toFixed(2)}s.`);
 
         // Send completion notification
         await sendHourlyJobEmail("completed", {
@@ -473,7 +448,8 @@ export async function executeHourlyFutJob() {
         });
 
     } catch (error: any) {
-        console.error("❌ Critical Error in 5-minute Futures Job:", error.message);
+        devError("❌ Critical Error in 5-minute Futures Job:", error.message);
+        prodError("Critical error in 5-minute futures job");
         await sendHourlyJobEmail("failed", { errorMessage: error.message });
     }
 }
@@ -486,11 +462,11 @@ export function initializeHourlyTicksNseFutUpstoxJob(): void {
     // Cron: */5 9-15 * * 1-5
     const schedule = "*/5 9-15 * * 1-5";
 
-    cron.schedule(schedule, executeHourlyFutJob, {
+    cron.schedule(schedule, withJobTracking("hourlyTicksNseFutUpstoxJob", schedule, executeHourlyFutJob), {
         timezone: "Asia/Kolkata",
     });
 
-    console.log(`📈 5-Minute NSE Futures Upstox Job Scheduled (${schedule})`);
+    devLog(`📈 5-Minute NSE Futures Upstox Job Scheduled (${schedule})`);
 
     // Run immediately in development mode
     if (process.env.NODE_ENV === "development") {

@@ -1,13 +1,12 @@
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import { socketIOService } from "./socketioService";
 import { getGapBaseline } from "../cache/gapAverageCache";
 import { loadEnv } from "../config/env";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { sendSmsNotification } from "../utils/sendSms";
+import { devLog, devWarn, devError } from "../utils/errorLogger";
 
 loadEnv();
-
-const prisma = new PrismaClient();
 
 interface GapData {
   instrumentId: number;
@@ -207,7 +206,7 @@ export async function triggerAlert({
 
   const trend = direction === "positive" ? "Uptrend" : "Downtrend";
 
-  console.log(
+  devLog(
     `?? Gap alert: ${instrumentName} ${alertType} deviation ${payload.deviationPercent}% (slot ${timeSlot}) | Trend: ${trend}`
   );
 
@@ -224,7 +223,7 @@ export async function triggerAlert({
 
   // Fetch latest 10 alerts globally (within today)
   const last10Alerts = await prisma.gap_alerts.findMany({
-    where: { 
+    where: {
       triggered_at: {
         gte: todayIST
       }
@@ -299,19 +298,19 @@ export async function triggerAlert({
         sendEmailNotification(email, subject, text, html)
       )
     ).catch((err) =>
-      console.error("? Failed to send gap alert emails:", err?.message || err)
+      devError("? Failed to send gap alert emails:", err?.message || err)
     );
   }
 
   const smsMessage = `Gap alert ${instrumentName} ${alertType} ${timeSlot} (${trend}): cur ${currentValue}, base ${baselineValue ?? "n/a"
     }, dev ${payload.deviationPercent}%`;
-  if (ALERT_SMS_RECIPIENTS.length) {
+  if (process.env.ENABLE_SMS === "true" && ALERT_SMS_RECIPIENTS.length) {
     Promise.allSettled(
       ALERT_SMS_RECIPIENTS.map((phone) =>
         sendSmsNotification(phone, smsMessage)
       )
     ).catch((err) =>
-      console.error("? Failed to send gap alert SMS:", err?.message || err)
+      devError("? Failed to send gap alert SMS:", err?.message || err)
     );
   }
 }
@@ -464,7 +463,7 @@ export async function processGapData(
         });
       }
     } catch (error: any) {
-      console.error(
+      devError(
         `? Failed to process gap data for ${gap.instrumentName}:`,
         error.message
       );

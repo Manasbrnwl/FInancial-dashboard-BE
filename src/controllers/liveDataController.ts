@@ -1,10 +1,14 @@
 import { Request, Response } from "express";
+import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
+import { devError, prodError } from "../utils/errorLogger";
 
 interface EquityRow {
   id: number;
   instrument_type: string;
   exchange: string;
+  upstox_id?: string;
 }
 
 interface SymbolRow {
@@ -15,6 +19,7 @@ interface SymbolRow {
   strike: string | null;
   option_type: string | null;
   expiry_month: string | null;
+  upstox_id?: string;
 }
 
 export const getEquitiesWithDerivatives = async (
@@ -23,14 +28,14 @@ export const getEquitiesWithDerivatives = async (
 ) => {
   try {
     const equities = await prisma.$queryRaw<EquityRow[]>`
-      SELECT il.id, il.instrument_type, il.exchange
+      SELECT il.id, il.instrument_type, il.upstox_id, il.exchange
       FROM market_data.instrument_lists il
       WHERE EXISTS (
         SELECT 1
         FROM market_data.symbols_list sl
         WHERE sl.instrument_id = il.id
           AND sl.segment IN ('FUT','OPT')
-      )
+      ) and upstox_id is not null
       ORDER BY il.instrument_type ASC
     `;
 
@@ -39,15 +44,17 @@ export const getEquitiesWithDerivatives = async (
       data: equities.map((equity) => ({
         id: equity.id,
         instrumentType: equity.instrument_type,
+        upstoxId: equity.upstox_id,
         exchange: equity.exchange,
       })),
     });
   } catch (error: any) {
-    console.error("Error fetching equities with derivatives:", error);
+    devError("Error fetching equities with derivatives:", error);
+    prodError("Error fetching equities with derivatives");
     res.status(500).json({
       success: false,
       message: "Failed to fetch equities",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };
@@ -63,20 +70,38 @@ export const getSymbolsForEquity = async (req: Request, res: Response) => {
   }
 
   try {
-    const symbols = await prisma.$queryRaw<SymbolRow[]>`
-      SELECT id, symbol, segment, expiry_date, strike, option_type, expiry_month
+    const { segment, expiryMonth } = req.query;
+
+    const filters: Prisma.Sql[] = [];
+    filters.push(Prisma.sql`instrument_id = ${instrumentId}`);
+
+    if (segment) {
+      filters.push(Prisma.sql`segment = ${segment as string}`);
+    } else {
+      filters.push(Prisma.sql`segment IN ('FUT','OPT')`);
+    }
+
+    if (expiryMonth) {
+      filters.push(Prisma.sql`expiry_month = ${expiryMonth as string}`);
+    }
+
+    filters.push(Prisma.sql`expiry_date > CURRENT_DATE`);
+
+    const query = Prisma.sql`
+      SELECT id, symbol, segment, expiry_date, strike, option_type, expiry_month, upstox_id
       FROM market_data.symbols_list
-      WHERE instrument_id = ${instrumentId}
-        AND segment IN ('FUT','OPT')
-        AND expiry_date > CURRENT_DATE
+      WHERE ${Prisma.join(filters, " AND ")}
       ORDER BY segment ASC, expiry_date DESC NULLS LAST, symbol ASC
     `;
+
+    const symbols = await prisma.$queryRaw<SymbolRow[]>(query);
 
     res.json({
       success: true,
       data: symbols.map((row) => ({
         id: row.id,
         symbol: row.symbol,
+        upstoxId: row.upstox_id,
         segment: row.segment,
         expiryDate: row.expiry_date,
         strike: row.strike,
@@ -85,11 +110,12 @@ export const getSymbolsForEquity = async (req: Request, res: Response) => {
       })),
     });
   } catch (error: any) {
-    console.error("Error fetching symbols for equity:", error);
+    devError("Error fetching symbols for equity:", error);
+    prodError("Error fetching symbols for equity");
     res.status(500).json({
       success: false,
       message: "Failed to fetch symbols for equity",
-      error: error.message,
+      ...(process.env.NODE_ENV !== "production" && { error: error.message }),
     });
   }
 };

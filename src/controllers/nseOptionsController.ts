@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
+import { devError, prodError } from "../utils/errorLogger";
+import { parseLimitOffset, parseDateRange } from "../utils/validation";
 
 const normalizeBigInt = (row: Record<string, any>) =>
   Object.fromEntries(
@@ -20,9 +23,9 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
       optionType,
       startDate,
       endDate,
-      limit = 360,
-      offset = 0,
     } = req.query;
+
+    const { limit, offset } = parseLimitOffset(req.query, 360);
 
     const where: any = {};
 
@@ -64,15 +67,7 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
       where.option_type = optionType as string;
     }
 
-    if (startDate || endDate) {
-      where.date = {};
-      if (startDate) {
-        where.date.gte = new Date(startDate as string);
-      }
-      if (endDate) {
-        where.date.lte = new Date(endDate as string);
-      }
-    }
+    where.date = parseDateRange({ startDate, endDate });
 
     const filters: Prisma.Sql[] = [];
     const otmExpr = Prisma.sql`
@@ -127,8 +122,20 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
       filters.push(Prisma.sql`1=1`);
     }
 
-    const limitNumber = Number.isFinite(Number(limit)) ? Number(limit) : 360;
-    const offsetNumber = Number.isFinite(Number(offset)) ? Number(offset) : 0;
+    let underlyingSymbol: string | null = null;
+    if (where.underlying !== undefined && where.underlying !== null) {
+      const inst = await prisma.instrument_lists.findUnique({
+        where: { id: where.underlying },
+        select: { instrument_type: true },
+      });
+      if (inst) {
+        underlyingSymbol = inst.instrument_type;
+      }
+    }
+
+    const equityJoinCondition = underlyingSymbol
+      ? Prisma.sql`ne.symbol = ${underlyingSymbol} AND no.date = ne.date`
+      : Prisma.sql`il.instrument_type = ne.symbol AND no.date = ne.date`;
 
     const joinedQuery = Prisma.sql`
       SELECT
@@ -148,12 +155,13 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
       FROM market_data.nse_options no
       LEFT JOIN market_data.instrument_lists il ON no.underlying = il.id
       LEFT JOIN market_data.nse_equity ne
-        ON il.instrument_type = ne.symbol
-        AND no.date = ne.date
+        ON ${equityJoinCondition}
+        ${where.date?.gte ? Prisma.sql`AND ne.date >= ${where.date.gte}` : Prisma.empty}
+        ${where.date?.lte ? Prisma.sql`AND ne.date <= ${where.date.lte}` : Prisma.empty}
       WHERE ${Prisma.join(filters, " AND ")}
       ORDER BY no.date DESC
-      LIMIT ${limitNumber}
-      OFFSET ${offsetNumber}
+      LIMIT ${limit}
+      OFFSET ${offset}
     `;
 
     const [data, total] = await Promise.all([
@@ -166,17 +174,18 @@ export const getNseOptionsData = async (req: Request, res: Response) => {
       data: data.map(normalizeBigInt),
       pagination: {
         total,
-        limit: limitNumber,
-        offset: offsetNumber,
-        hasMore: offsetNumber + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
-    console.error("Error fetching NSE options data:", error);
+    devError("Error fetching NSE options data:", error);
+    prodError("Error fetching NSE options data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE options data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -194,11 +203,12 @@ export const getNseOptionsUnderlyings = async (req: Request, res: Response) => {
       data: underlyings.map((u) => u.underlying),
     });
   } catch (error: any) {
-    console.error("Error fetching NSE options underlyings:", error);
+    devError("Error fetching NSE options underlyings:", error);
+    prodError("Error fetching NSE options underlyings");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE options underlyings",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -209,7 +219,12 @@ export const getNseOptionsStrikes = async (req: Request, res: Response) => {
 
     const where: any = {};
     if (underlying) {
-      where.underlying = underlying as string;
+      const parsedUnderlying = parseInt(underlying as string, 10);
+      if (!isNaN(parsedUnderlying)) {
+        where.underlying = parsedUnderlying;
+      } else {
+        where.underlying = -1;
+      }
     }
     if (expiryDate) {
       where.expiry_date = new Date(expiryDate as string);
@@ -227,11 +242,12 @@ export const getNseOptionsStrikes = async (req: Request, res: Response) => {
       data: strikes.map((s) => s.strike),
     });
   } catch (error: any) {
-    console.error("Error fetching NSE options strikes:", error);
+    devError("Error fetching NSE options strikes:", error);
+    prodError("Error fetching NSE options strikes");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE options strikes",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -242,7 +258,12 @@ export const getNseOptionsExpiries = async (req: Request, res: Response) => {
 
     const where: any = {};
     if (underlying) {
-      where.underlying = underlying as string;
+      const parsedUnderlying = parseInt(underlying as string, 10);
+      if (!isNaN(parsedUnderlying)) {
+        where.underlying = parsedUnderlying;
+      } else {
+        where.underlying = -1;
+      }
     }
 
     const expiries = await prisma.nse_options.findMany({
@@ -257,11 +278,12 @@ export const getNseOptionsExpiries = async (req: Request, res: Response) => {
       data: expiries.map((e) => e.expiry_date),
     });
   } catch (error: any) {
-    console.error("Error fetching NSE options expiries:", error);
+    devError("Error fetching NSE options expiries:", error);
+    prodError("Error fetching NSE options expiries");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE options expiries",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };

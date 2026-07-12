@@ -1,34 +1,32 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
+import { devError, prodError } from "../utils/errorLogger";
+import { parseLimitOffset, parseDateRange } from "../utils/validation";
 
 // OHLC Data NSE
 export const getOhlcDataNSE = async (req: Request, res: Response) => {
   try {
-    const { instrumentId, startTime, endTime, limit = 100, offset = 0 } =
-      req.query;
+    const { instrumentId, startTime, endTime } = req.query;
+    const { limit, offset } = parseLimitOffset(req.query, 100);
 
     const where: any = {};
 
     if (instrumentId) {
-      where.instrumentId = Number(instrumentId);
+      const parsedId = Number(instrumentId);
+      if (!Number.isNaN(parsedId)) {
+        where.instrumentId = parsedId;
+      }
     }
 
-    if (startTime || endTime) {
-      where.time = {};
-      if (startTime) {
-        where.time.gte = new Date(startTime as string);
-      }
-      if (endTime) {
-        where.time.lte = new Date(endTime as string);
-      }
-    }
+    where.time = parseDateRange({ startDate: startTime, endDate: endTime });
 
     const [data, total] = await Promise.all([
       prisma.ohlcDataNSE.findMany({
         where,
         orderBy: { time: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
+        take: limit,
+        skip: offset,
       }),
       prisma.ohlcDataNSE.count({ where }),
     ]);
@@ -38,17 +36,18 @@ export const getOhlcDataNSE = async (req: Request, res: Response) => {
       data,
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
-    console.error("Error fetching OHLC NSE data:", error);
+    devError("Error fetching OHLC NSE data:", error);
+    prodError("Error fetching OHLC NSE data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch OHLC NSE data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -56,31 +55,26 @@ export const getOhlcDataNSE = async (req: Request, res: Response) => {
 // Ticks Data NSE EQ
 export const getTicksDataNSEEQ = async (req: Request, res: Response) => {
   try {
-    const { instrumentId, startTime, endTime, limit = 100, offset = 0 } =
-      req.query;
+    const { instrumentId, startTime, endTime } = req.query;
+    const { limit, offset } = parseLimitOffset(req.query, 100);
 
     const where: any = {};
 
     if (instrumentId) {
-      where.instrumentId = Number(instrumentId);
+      const parsedId = Number(instrumentId);
+      if (!Number.isNaN(parsedId)) {
+        where.instrumentId = parsedId;
+      }
     }
 
-    if (startTime || endTime) {
-      where.time = {};
-      if (startTime) {
-        where.time.gte = new Date(startTime as string);
-      }
-      if (endTime) {
-        where.time.lte = new Date(endTime as string);
-      }
-    }
+    where.time = parseDateRange({ startDate: startTime, endDate: endTime });
 
     const [data, total] = await Promise.all([
       prisma.ticksDataNSEEQ.findMany({
         where,
         orderBy: { time: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
+        take: limit,
+        skip: offset,
       }),
       prisma.ticksDataNSEEQ.count({ where }),
     ]);
@@ -90,17 +84,18 @@ export const getTicksDataNSEEQ = async (req: Request, res: Response) => {
       data,
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
-    console.error("Error fetching Ticks NSE EQ data:", error);
+    devError("Error fetching Ticks NSE EQ data:", error);
+    prodError("Error fetching Ticks NSE EQ data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch Ticks NSE EQ data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -108,31 +103,26 @@ export const getTicksDataNSEEQ = async (req: Request, res: Response) => {
 // Ticks Data NSE FUT
 export const getTicksDataNSEFUT = async (req: Request, res: Response) => {
   try {
-    const { instrumentId, startTime, endTime, limit = 100, offset = 0 } =
-      req.query;
+    const { instrumentId, startTime, endTime } = req.query;
+    const { limit, offset } = parseLimitOffset(req.query, 100);
 
     const where: any = {};
 
     if (instrumentId) {
-      where.instrumentId = Number(instrumentId);
+      const parsedId = Number(instrumentId);
+      if (!Number.isNaN(parsedId)) {
+        where.instrumentId = parsedId;
+      }
     }
 
-    if (startTime || endTime) {
-      where.time = {};
-      if (startTime) {
-        where.time.gte = new Date(startTime as string);
-      }
-      if (endTime) {
-        where.time.lte = new Date(endTime as string);
-      }
-    }
+    where.time = parseDateRange({ startDate: startTime, endDate: endTime });
 
     const [data, total] = await Promise.all([
       prisma.ticksDataNSEFUT.findMany({
         where,
         orderBy: { time: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
+        take: limit,
+        skip: offset,
       }),
       prisma.ticksDataNSEFUT.count({ where }),
     ]);
@@ -142,17 +132,18 @@ export const getTicksDataNSEFUT = async (req: Request, res: Response) => {
       data,
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
-    console.error("Error fetching Ticks NSE FUT data:", error);
+    devError("Error fetching Ticks NSE FUT data:", error);
+    prodError("Error fetching Ticks NSE FUT data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch Ticks NSE FUT data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -160,31 +151,26 @@ export const getTicksDataNSEFUT = async (req: Request, res: Response) => {
 // Ticks Data NSE OPT
 export const getTicksDataNSEOPT = async (req: Request, res: Response) => {
   try {
-    const { instrumentId, startTime, endTime, limit = 100, offset = 0 } =
-      req.query;
+    const { instrumentId, startTime, endTime } = req.query;
+    const { limit, offset } = parseLimitOffset(req.query, 100);
 
     const where: any = {};
 
     if (instrumentId) {
-      where.instrumentId = Number(instrumentId);
+      const parsedId = Number(instrumentId);
+      if (!Number.isNaN(parsedId)) {
+        where.instrumentId = parsedId;
+      }
     }
 
-    if (startTime || endTime) {
-      where.time = {};
-      if (startTime) {
-        where.time.gte = new Date(startTime as string);
-      }
-      if (endTime) {
-        where.time.lte = new Date(endTime as string);
-      }
-    }
+    where.time = parseDateRange({ startDate: startTime, endDate: endTime });
 
     const [data, total] = await Promise.all([
       prisma.ticksDataNSEOPT.findMany({
         where,
         orderBy: { time: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
+        take: limit,
+        skip: offset,
       }),
       prisma.ticksDataNSEOPT.count({ where }),
     ]);
@@ -194,17 +180,18 @@ export const getTicksDataNSEOPT = async (req: Request, res: Response) => {
       data,
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
-    console.error("Error fetching Ticks NSE OPT data:", error);
+    devError("Error fetching Ticks NSE OPT data:", error);
+    prodError("Error fetching Ticks NSE OPT data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch Ticks NSE OPT data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -212,31 +199,28 @@ export const getTicksDataNSEOPT = async (req: Request, res: Response) => {
 // OHLC Data BSE
 export const getOhlcDataBSE = async (req: Request, res: Response) => {
   try {
-    const { instrumentId, startTime, endTime, limit = 100, offset = 0 } =
-      req.query;
+    const { instrumentId, startTime, endTime } = req.query;
+    const { limit, offset } = parseLimitOffset(req.query, 100);
 
     const where: any = {};
 
     if (instrumentId) {
-      where.instrumentId = BigInt(instrumentId as string);
+      const parsedInt = parseInt(instrumentId as string, 10);
+      if (!Number.isNaN(parsedInt)) {
+        where.instrumentId = BigInt(instrumentId as string);
+      } else {
+        where.instrumentId = BigInt(-1);
+      }
     }
 
-    if (startTime || endTime) {
-      where.time = {};
-      if (startTime) {
-        where.time.gte = new Date(startTime as string);
-      }
-      if (endTime) {
-        where.time.lte = new Date(endTime as string);
-      }
-    }
+    where.time = parseDateRange({ startDate: startTime, endDate: endTime });
 
     const [data, total] = await Promise.all([
       prisma.ohlcEQDataBSE.findMany({
         where,
         orderBy: { time: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
+        take: limit,
+        skip: offset,
       }),
       prisma.ohlcEQDataBSE.count({ where }),
     ]);
@@ -253,17 +237,18 @@ export const getOhlcDataBSE = async (req: Request, res: Response) => {
       data: serializedData,
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
-    console.error("Error fetching OHLC BSE data:", error);
+    devError("Error fetching OHLC BSE data:", error);
+    prodError("Error fetching OHLC BSE data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch OHLC BSE data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };

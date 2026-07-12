@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import prisma from "../config/prisma";
+import { parseLimitOffset, parseDateRange } from "../utils/validation";
+
+import { devError, prodError } from "../utils/errorLogger";
 
 const normalizeBigInt = (row: Record<string, any>) =>
   Object.fromEntries(
@@ -18,9 +21,9 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
       expiryDate,
       startDate,
       endDate,
-      limit = 360,
-      offset = 0,
     } = req.query;
+
+    const { limit, offset } = parseLimitOffset(req.query, 360);
 
     const where: any = {};
 
@@ -50,15 +53,7 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
       where.expiry_date = new Date(expiryDate as string);
     }
 
-    if (startDate || endDate) {
-      where.date = {};
-      if (startDate) {
-        where.date.gte = new Date(startDate as string);
-      }
-      if (endDate) {
-        where.date.lte = new Date(endDate as string);
-      }
-    }
+    where.date = parseDateRange({ startDate, endDate });
 
     const filters: Prisma.Sql[] = [];
 
@@ -82,8 +77,20 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
       filters.push(Prisma.sql`1=1`);
     }
 
-    const limitNumber = Number.isFinite(Number(limit)) ? Number(limit) : 360;
-    const offsetNumber = Number.isFinite(Number(offset)) ? Number(offset) : 0;
+    let underlyingSymbol: string | null = null;
+    if (where.underlying !== undefined && where.underlying !== null) {
+      const inst = await prisma.instrument_lists.findUnique({
+        where: { id: where.underlying },
+        select: { instrument_type: true },
+      });
+      if (inst) {
+        underlyingSymbol = inst.instrument_type;
+      }
+    }
+
+    const equityJoinCondition = underlyingSymbol 
+      ? Prisma.sql`ne.symbol = ${underlyingSymbol} AND nf.date = ne.date`
+      : Prisma.sql`il.instrument_type = ne.symbol AND nf.date = ne.date`;
 
     const joinedQuery = Prisma.sql`
       SELECT
@@ -101,12 +108,13 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
       FROM market_data.nse_futures nf
       LEFT JOIN market_data.instrument_lists il ON nf.underlying = il.id
       LEFT JOIN market_data.nse_equity ne
-        ON il.instrument_type = ne.symbol
-        AND nf.date = ne.date
+        ON ${equityJoinCondition}
+        ${where.date?.gte ? Prisma.sql`AND ne.date >= ${where.date.gte}` : Prisma.empty}
+        ${where.date?.lte ? Prisma.sql`AND ne.date <= ${where.date.lte}` : Prisma.empty}
       WHERE ${Prisma.join(filters, " AND ")}
       ORDER BY nf.date DESC
-      LIMIT ${limitNumber}
-      OFFSET ${offsetNumber}
+      LIMIT ${limit}
+      OFFSET ${offset}
     `;
 
     const [data, total] = await Promise.all([
@@ -119,17 +127,18 @@ export const getNseFuturesData = async (req: Request, res: Response) => {
       data: data.map(normalizeBigInt),
       pagination: {
         total,
-        limit: limitNumber,
-        offset: offsetNumber,
-        hasMore: offsetNumber + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
-    console.error("Error fetching NSE futures data:", error);
+    devError("Error fetching NSE futures data:", error);
+    prodError("Error fetching NSE futures data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE futures data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -147,11 +156,12 @@ export const getNseFuturesUnderlyings = async (req: Request, res: Response) => {
       data: underlyings.map((u) => u.underlying),
     });
   } catch (error: any) {
-    console.error("Error fetching NSE futures underlyings:", error);
+    devError("Error fetching NSE futures underlyings:", error);
+    prodError("Error fetching NSE futures underlyings");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE futures underlyings",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -162,7 +172,12 @@ export const getNseFuturesExpiries = async (req: Request, res: Response) => {
 
     const where: any = {};
     if (underlying) {
-      where.underlying = underlying as string;
+      const parsedUnderlying = parseInt(underlying as string, 10);
+      if (!isNaN(parsedUnderlying)) {
+        where.underlying = parsedUnderlying;
+      } else {
+        where.underlying = -1; // impossible match to return empty list
+      }
     }
 
     const expiries = await prisma.nse_futures.findMany({
@@ -177,11 +192,12 @@ export const getNseFuturesExpiries = async (req: Request, res: Response) => {
       data: expiries.map((e) => e.expiry_date),
     });
   } catch (error: any) {
-    console.error("Error fetching NSE futures expiries:", error);
+    devError("Error fetching NSE futures expiries:", error);
+    prodError("Error fetching NSE futures expiries");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE futures expiries",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -195,8 +211,8 @@ export const getFuturesDateRangeController = async (
     const { instrumentId } = req.query;
     const param =
       instrumentId === undefined ||
-      instrumentId === null ||
-      instrumentId === "null"
+        instrumentId === null ||
+        instrumentId === "null"
         ? null
         : Number(instrumentId);
     if (param !== null && (isNaN(param) || !isFinite(param))) {
@@ -206,25 +222,78 @@ export const getFuturesDateRangeController = async (
       });
     }
 
-    const rows = await prisma.$queryRaw<
-      { min_date: Date | null; max_date: Date | null }[]
-    >`
-      SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
-      FROM market_data.nse_futures nf
-      WHERE  (${param}::text IS NULL OR nf.underlying = ${param})
-    `;
+    let row, hourly_row;
 
-    const hourlyrows = await prisma.$queryRaw<
-      { min_date: Date | null; max_date: Date | null }[]
-    >`
-      SELECT TO_CHAR(MIN(time), 'yyyy-mm-dd HH12:MI AM') AS min_date, TO_CHAR(MAX(time), 'yyyy-mm-dd HH12:MI AM') AS max_date 
-      FROM periodic_market_data."ticksDataNSEFUT" nf 
-      INNER JOIN market_data.symbols_list sl ON nf."instrumentId" = sl.id 
-      WHERE (${param}::text IS NULL OR sl.instrument_id = ${param})
-    `;
+    if (param === null) {
+      // Global min/max is much faster without JOINs and ORs
+      const [globalRows, globalHourlyMin, globalHourlyMax] = await Promise.all([
+        prisma.$queryRaw<{ min_date: string | null; max_date: string | null }[]>`
+          SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
+          FROM market_data.nse_futures
+        `,
+        prisma.$queryRaw<{ min_date: string | null }[]>`
+          SELECT TO_CHAR(time, 'yyyy-mm-dd HH12:MI AM') AS min_date 
+          FROM periodic_market_data."ticksDataNSEFUT"
+          ORDER BY time ASC LIMIT 1
+        `,
+        prisma.$queryRaw<{ max_date: string | null }[]>`
+          SELECT TO_CHAR(time, 'yyyy-mm-dd HH12:MI AM') AS max_date 
+          FROM periodic_market_data."ticksDataNSEFUT"
+          ORDER BY time DESC LIMIT 1
+        `
+      ]);
+      row = globalRows[0] || { min_date: null, max_date: null };
+      hourly_row = {
+        min_date: globalHourlyMin[0]?.min_date || null,
+        max_date: globalHourlyMax[0]?.max_date || null,
+      };
+    } else {
+      const derivativeIds = await prisma.symbols_list.findMany({
+        where: {
+          instrument_id: param,
+          segment: "FUT",
+        },
+        select: { id: true },
+      });
+      const ids = derivativeIds.map((d) => d.id);
 
-    const row = rows[0] || { min_date: null, max_date: null };
-    const hourly_row = hourlyrows[0] || { min_date: null, max_date: null };
+      let filteredRows: any[] = [];
+      let filteredHourlyMin: any[] = [];
+      let filteredHourlyMax: any[] = [];
+
+      if (ids.length > 0) {
+        [filteredRows, filteredHourlyMin, filteredHourlyMax] = await Promise.all([
+          prisma.$queryRaw<{ min_date: string | null; max_date: string | null }[]>`
+            SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
+            FROM market_data.nse_futures
+            WHERE underlying = ${param}
+          `,
+          prisma.$queryRaw<{ min_date: string | null }[]>`
+            SELECT TO_CHAR(time, 'yyyy-mm-dd HH12:MI AM') AS min_date 
+            FROM periodic_market_data."ticksDataNSEFUT"
+            WHERE "instrumentId" = ANY(${ids})
+            ORDER BY time ASC LIMIT 1
+          `,
+          prisma.$queryRaw<{ max_date: string | null }[]>`
+            SELECT TO_CHAR(time, 'yyyy-mm-dd HH12:MI AM') AS max_date 
+            FROM periodic_market_data."ticksDataNSEFUT"
+            WHERE "instrumentId" = ANY(${ids})
+            ORDER BY time DESC LIMIT 1
+          `
+        ]);
+      } else {
+        filteredRows = await prisma.$queryRaw<{ min_date: string | null; max_date: string | null }[]>`
+          SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
+          FROM market_data.nse_futures
+          WHERE underlying = ${param}
+        `;
+      }
+      row = filteredRows[0] || { min_date: null, max_date: null };
+      hourly_row = {
+        min_date: filteredHourlyMin[0]?.min_date || null,
+        max_date: filteredHourlyMax[0]?.max_date || null,
+      };
+    }
     res.json({
       success: true,
       min_date: row.min_date && row.min_date,
@@ -233,11 +302,12 @@ export const getFuturesDateRangeController = async (
       hourly_max_date: hourly_row.max_date && hourly_row.max_date,
     });
   } catch (error: any) {
-    console.error("Error fetching futures date range:", error);
+    devError("Error fetching futures date range:", error);
+    prodError("Error fetching futures date range");
     res.status(500).json({
       success: false,
       error: "Failed to fetch futures date range",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };

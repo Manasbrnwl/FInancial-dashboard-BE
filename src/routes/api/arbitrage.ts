@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { getArbitrageData, getNSEOptionsData, getNSEFuturesData, getNSEFuturesTicksData, getNSEOptionsTicksData } from "../../controllers/arbitrageController";
+import { cacheResponse } from "../../middleware/responseCache";
 
 const router = Router();
 
 // GET /api/arbitrage - Get arbitrage data
-router.get("/", getArbitrageData);
+router.get("/", cacheResponse(30), getArbitrageData);
 
 // GET /api/arbitrage/nse-options?instrumentId=13461 - Get NSE options historical data for specific instrument
 router.get("/nse-options", getNSEOptionsData);

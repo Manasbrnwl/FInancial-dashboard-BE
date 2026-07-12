@@ -1,13 +1,15 @@
 import axios from "axios";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import cron from "node-cron";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { loadEnv } from "../config/env";
+import { devLog, devError, prodError } from "../utils/errorLogger";
+import { upstoxQuoteService } from "../services/upstoxQuoteService";
+import { withJobTracking } from "../utils/cronMonitor";
 
 loadEnv();
-const prisma = new PrismaClient();
 
 // Batch size for Upstox Quote API
 const BATCH_SIZE = 500;
@@ -26,10 +28,11 @@ async function getActiveEquityInstruments(): Promise<InstrumentMap[]> {
         const instruments = await prisma.instrument_lists.findMany({
             where: {
                 exchange: "NSE",
-                upstox_id: {
-                    not: null, // Must have been synced
-                    startsWith: "NSE_EQ"
-                },
+                upstox_id: { not: null },
+                OR: [
+                    { upstox_id: { startsWith: "NSE_EQ" } },
+                    { upstox_id: { startsWith: "NSE_INDEX" } }
+                ]
             },
             select: {
                 id: true,
@@ -42,39 +45,15 @@ async function getActiveEquityInstruments(): Promise<InstrumentMap[]> {
         return instruments.map((s) => ({
             instrumentId: s.id,
             upstoxId: s.upstox_id!,
-            upstoxName: s.upstox_symbol!,
+            upstoxName: s.upstox_symbol || s.instrument_type,
         }));
     } catch (error: any) {
-        console.error("❌ Failed to fetch active equity instruments from DB:", error.message);
+        devError("❌ Failed to fetch active equity instruments from DB:", error.message);
+        prodError("Failed to fetch active equity instruments from DB");
         return [];
     }
 }
 
-/**
- * Fetch Market Quotes from Upstox for a batch of keys.
- */
-async function fetchQuotes(keys: string[], accessToken: string) {
-    try {
-        const url = `${UPSTOX_CONFIG.BASE_URL}/market-quote/quotes?instrument_key=${keys.join(",")}`;
-        const response = await axios.get(url, {
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-                Accept: "application/json",
-            },
-        });
-
-        if (response.data.status === "success") {
-            return response.data.data;
-        }
-        return null;
-    } catch (error: any) {
-        console.error(
-            "❌ Failed to fetch quotes batch:",
-            error.response?.data?.errors || error.message
-        );
-        return null;
-    }
-}
 
 /**
  * Function to send email notification for hourly job
@@ -153,10 +132,11 @@ async function sendHourlyJobEmail(
         );
 
         if (process.env.NODE_ENV === "development") {
-            console.log(`📧 Email notification sent: ${status}`);
+            devLog(`📧 Email notification sent: ${status}`);
         }
     } catch (error: any) {
-        console.error(`❌ Failed to send email notification:`, error.message);
+        devError(`❌ Failed to send email notification:`, error.message);
+        prodError("Failed to send email notification");
     }
 }
 
@@ -165,16 +145,17 @@ async function sendHourlyJobEmail(
  */
 export async function executeHourlyJob() {
     const startTime = Date.now();
-    console.log(`⏰ Starting 5-minute NSE Equity Job at ${new Date().toISOString()}`);
+    devLog(`⏰ Starting 5-minute NSE Equity Job at ${new Date().toISOString()}`);
 
     try {
         // Send start notification
-        await sendHourlyJobEmail("started", {});
+        // await sendHourlyJobEmail("started", {});
 
         // 1. Get Access Token
         const token = await upstoxAuthService.getAccessToken();
         if (!token) {
-            console.error("? No Upstox Access Token available. Skipping job.");
+            devError("? No Upstox Access Token available. Skipping job.");
+            prodError("No Upstox Access Token for equity job");
             await sendHourlyJobEmail("failed", { errorMessage: "No Upstox Access Token available" });
             return;
         }
@@ -182,7 +163,7 @@ export async function executeHourlyJob() {
         // 2. Get Active Instruments
         const instruments = await getActiveEquityInstruments();
         if (instruments.length === 0) {
-            console.log("⚠️ No active equity instruments with Upstox IDs found.");
+            devLog("⚠️ No active equity instruments with Upstox IDs found.");
             await sendHourlyJobEmail("completed", {
                 instrumentsCount: 0,
                 totalRecordsInserted: 0,
@@ -190,7 +171,7 @@ export async function executeHourlyJob() {
             return;
         }
 
-        console.log(`✅ Found ${instruments.length} active equity instruments. Processing batches...`);
+        devLog(`✅ Found ${instruments.length} active equity instruments. Processing batches...`);
 
         // 3. Batch Process
         let totalInserted = 0;
@@ -199,7 +180,7 @@ export async function executeHourlyJob() {
             const batchInstruments = instruments.slice(i, i + BATCH_SIZE);
             const batchKeys = batchInstruments.map(inst => `${inst.upstoxId}`);
 
-            const quotes = await fetchQuotes(batchKeys, token);
+            const quotes = await upstoxQuoteService.fetchQuotesResilient(batchKeys, token);
 
             if (quotes) {
                 const dbRecords = [];
@@ -209,7 +190,8 @@ export async function executeHourlyJob() {
                     // Use the instrument_key (upstoxId) directly as the lookup key
                     // The upstox_id field contains the correct format: NSE_EQ|INE848E01016
                     // This matches exactly what Upstox returns in the API response
-                    const quote = quotes[`NSE_EQ:${inst.upstoxName}`];
+                    const prefix = inst.upstoxId.split("|")[0];
+                    const quote = quotes[`${prefix}:${inst.upstoxName}`];
                     if (!quote) {
                         continue;
                     }
@@ -220,7 +202,7 @@ export async function executeHourlyJob() {
                     const bestAsk = quote.depth?.sell?.[0]?.price || 0;
                     const bestAskQty = quote.depth?.sell?.[0]?.quantity || 0;
 
-                    if(bestBid === 0 && bestAsk === 0 && bestBidQty === 0 && bestAskQty === 0){
+                    if (bestBid === 0 && bestAsk === 0 && bestBidQty === 0 && bestAskQty === 0) {
                         continue;
                     }
 
@@ -260,7 +242,7 @@ export async function executeHourlyJob() {
         }
 
         const duration = (Date.now() - startTime) / 1000;
-        console.log(`✅ Job Completed. Inserted ${totalInserted} records in ${duration.toFixed(2)}s.`);
+        devLog(`✅ Job Completed. Inserted ${totalInserted} records in ${duration.toFixed(2)}s.`);
 
         // Send completion notification
         await sendHourlyJobEmail("completed", {
@@ -269,7 +251,8 @@ export async function executeHourlyJob() {
         });
 
     } catch (error: any) {
-        console.error("❌ Critical Error in 5-minute Equity Job:", error.message);
+        devError("❌ Critical Error in 5-minute Equity Job:", error.message);
+        prodError("Critical error in 5-minute equity job");
         await sendHourlyJobEmail("failed", { errorMessage: error.message });
     }
 }
@@ -282,11 +265,11 @@ export function initializeHourlyTicksNseEqUpstoxJob(): void {
     // Cron: */5 9-15 * * 1-5
     const schedule = "*/5 9-15 * * 1-5";
 
-    cron.schedule(schedule, executeHourlyJob, {
+    cron.schedule(schedule, withJobTracking("hourlyTicksNseEqUpstoxJob", schedule, executeHourlyJob), {
         timezone: "Asia/Kolkata",
     });
 
-    console.log(`? 5-Minute NSE Equity Upstox Job Scheduled (${schedule})`);
+    devLog(`? 5-Minute NSE Equity Upstox Job Scheduled (${schedule})`);
 
     if (process.env.NODE_ENV === "development") {
         executeHourlyJob();

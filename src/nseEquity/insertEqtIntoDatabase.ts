@@ -3,6 +3,8 @@ import { getDatesFromPastToToday } from "../utils/dateRange";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { getNseEquityHistory } from "./nseEquityHistory";
 import { createBatchInserter } from "../utils/batchInsert";
+import { logger } from "../utils/logger";
+import { devLog } from "../utils/errorLogger";
 
 const prisma = new PrismaClient();
 
@@ -16,10 +18,10 @@ async function insertEqIntoDataBase(date: any) {
 
     for (let index = 0; index < dates.length; index++) {
       const date = dates[index];
-      console.log("EQT api called ", date);
+      devLog("EQT api called ", date);
       const response = await getNseEquityHistory(date);
       if (response == false) {
-        console.log("skipped ", date);
+        devLog("skipped ", date);
       } else {
         // Collect all instruments and equity data
         const instrumentsToUpsert: Array<{ exchange: string; instrument_type: string }> = [];
@@ -73,13 +75,13 @@ async function insertEqIntoDataBase(date: any) {
             }
           );
 
-          console.log(
+          devLog(
             `💼 Equity for ${date}: ${result.inserted} processed, ${result.errors} errors`
           );
         }
       }
     }
-    console.log("✅ Completed all EQ data upload");
+    devLog("✅ Completed all EQ data upload");
   } catch (error: any) {
     await sendEmailNotification(
       process.env.RECEIVER_EMAIL || "tech@anfy.in",

@@ -1,3 +1,5 @@
+import { devError, prodError } from "../utils/errorLogger";
+import { logger } from "../utils/logger";
 function parseContract(symbol: string) {
     // Array of regex patterns to try in order
     const regexPatterns = [
@@ -14,7 +16,7 @@ function parseContract(symbol: string) {
     ];
 
     let match = null;
-    
+
     // Try each regex pattern until one matches
     for (const regex of regexPatterns) {
         match = symbol.match(regex);
@@ -30,32 +32,33 @@ function parseContract(symbol: string) {
     const year = 2000 + parseInt(match[2], 10);
     const month = match[3];
     const day = match[4];
-    
+
     // Create date with proper month indexing (0-based)
     const date = new Date(year, parseInt(month, 10) - 1, parseInt(day, 10));
-    
+
     // Validate the date
     if (isNaN(date.getTime())) {
-        console.error(`Invalid date: ${year}-${month}-${day}`);
+        devError(`Invalid date: ${year}-${month}-${day}`);
+        prodError("Invalid date in contract parsing");
         return null;
     }
- 
+
     // Format YYYY-MM-DD (avoid timezone issues)
     const formatted = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     const monthName = date.toLocaleString("en-US", { month: "long" });
-  
+
     return {
-      symbol,
-      instrument: match[1],
-      expiry: formatted,
-      expiryMonthName: monthName,
-      strike: match[5],
-      type: match[6]
+        symbol,
+        instrument: match[1],
+        expiry: formatted,
+        expiryMonthName: monthName,
+        strike: match[5],
+        type: match[6]
     };
-  }
-  
-  // Example usage
+}
+
+// Example usage
 //   const input = "NIFTY22063014500PE"; // ABB2209293350CE   M&MFIN220929257.5CE   MRF220929100000CE
-//   console.log(parseContract(input)); // [ 'NIFTY22063014500PE', 'NIFTY', '2022-06-30', 'PE' ]
-export {parseContract};
-  
+//   devLog(parseContract(input)); // [ 'NIFTY22063014500PE', 'NIFTY', '2022-06-30', 'PE' ]
+export { parseContract };
+

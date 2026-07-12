@@ -1,5 +1,7 @@
 import axios from "axios";
 import { config } from "dotenv";
+import { logger } from "../utils/logger";
+import { devError, prodError } from "../utils/errorLogger";
 config();
 
 async function fetchInstruments() {
@@ -26,10 +28,11 @@ async function fetchInstruments() {
     });
     return result;
   } catch (err: any) {
-    console.error(
+    devError(
       "Error fetching instruments:",
       err.response?.data || err.message
     );
+    prodError("Error fetching instruments");
     return [];
   }
 }

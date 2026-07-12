@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.env
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+.prettiercache
+docker-compose.yml
+Dockerfile
+.dockerignore

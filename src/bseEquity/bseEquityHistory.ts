@@ -4,6 +4,8 @@ import { fetchInstruments } from "./instrumentsList";
 import { insertBSEEqtIntoDataBase } from "./insertBSEEQIntoDatabase";
 import { getDhanAccessToken } from "../config/store";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
+import { devError, devLog } from "../utils/errorLogger";
 config();
 
 interface instrumnets_list {
@@ -45,7 +47,7 @@ async function batchInsertRecords(records: any[]): Promise<number> {
     });
     return result.count;
   } catch (error: any) {
-    console.error(`❌ Batch insert error:`, error.message);
+    devError(`❌ Batch insert error:`, error.message);
     return 0;
   }
 }
@@ -109,12 +111,12 @@ async function getBseEquityHistory() {
   const startTime = Date.now();
   const yesterdayDate = getYesterdayDate();
 
-  console.log(`🚀 Starting BSE Equity data fetch for date: ${yesterdayDate}`);
-  console.log(`⏱️ Using 2 second delay between requests`);
-  console.log(`📦 Using batch inserts (50 instruments per batch)\n`);
+  devLog(`🚀 Starting BSE Equity data fetch for date: ${yesterdayDate}`);
+  devLog(`⏱️ Using 2 second delay between requests`);
+  devLog(`📦 Using batch inserts (50 instruments per batch)\n`);
 
   const instruments: instrumnets_list[] = await fetchInstruments();
-  console.log(`📊 Found ${instruments.length} BSE instruments to process\n`);
+  devLog(`📊 Found ${instruments.length} BSE instruments to process\n`);
 
   let successCount = 0;
   let errorCount = 0;
@@ -132,10 +134,10 @@ async function getBseEquityHistory() {
 
     if (data.status === 400) {
       errorCount++;
-      console.log(`❌ [${i + 1}/${instruments.length}] ${instr.SYMBOL_NAME} - API error 400`);
+      devLog(`❌ [${i + 1}/${instruments.length}] ${instr.SYMBOL_NAME} - API error 400`);
     } else if (!data.timestamp || data.timestamp.length === 0) {
       skippedCount++;
-      console.log(`⚠️ [${i + 1}/${instruments.length}] ${instr.SYMBOL_NAME} - No data`);
+      devLog(`⚠️ [${i + 1}/${instruments.length}] ${instr.SYMBOL_NAME} - No data`);
     } else {
       // Accumulate records for batch insert
       for (let j = 0; j < data.timestamp.length; j++) {
@@ -155,7 +157,7 @@ async function getBseEquityHistory() {
       }
 
       successCount++;
-      console.log(`✅ [${i + 1}/${instruments.length}] ${instr.SYMBOL_NAME} (${data.timestamp.length} records)`);
+      devLog(`✅ [${i + 1}/${instruments.length}] ${instr.SYMBOL_NAME} (${data.timestamp.length} records)`);
     }
 
     // Insert batch when we reach BATCH_SIZE instruments or at the end
@@ -163,14 +165,14 @@ async function getBseEquityHistory() {
       if (recordsBatch.length > 0) {
         const inserted = await batchInsertRecords(recordsBatch);
         totalRecordsInserted += inserted;
-        console.log(`\n💾 Batch insert completed: ${inserted} records inserted from ${recordsBatch.length} total\n`);
+        devLog(`\n💾 Batch insert completed: ${inserted} records inserted from ${recordsBatch.length} total\n`);
         recordsBatch = []; // Clear batch
       }
 
       // Progress update
-      console.log(`📊 Progress: ${i + 1}/${instruments.length} (${Math.round((i + 1) / instruments.length * 100)}%)`);
-      console.log(`✅ Success: ${successCount} | ⚠️ Skipped: ${skippedCount} | ❌ Errors: ${errorCount}`);
-      console.log(`💾 Total records inserted: ${totalRecordsInserted}\n`);
+      devLog(`📊 Progress: ${i + 1}/${instruments.length} (${Math.round((i + 1) / instruments.length * 100)}%)`);
+      devLog(`✅ Success: ${successCount} | ⚠️ Skipped: ${skippedCount} | ❌ Errors: ${errorCount}`);
+      devLog(`💾 Total records inserted: ${totalRecordsInserted}\n`);
     }
 
     await delay(1000);
@@ -179,15 +181,15 @@ async function getBseEquityHistory() {
   const duration = Date.now() - startTime;
   const durationMinutes = Math.floor(duration / 60000);
 
-  console.log("\n" + "=".repeat(50));
-  console.log("✅ BSE Equity data fetch completed");
-  console.log(`📊 Total instruments: ${instruments.length}`);
-  console.log(`✅ Successfully processed: ${successCount}`);
-  console.log(`⚠️ Skipped (no data): ${skippedCount}`);
-  console.log(`❌ Errors: ${errorCount}`);
-  console.log(`💾 Total records inserted: ${totalRecordsInserted}`);
-  console.log(`⏱️ Duration: ${durationMinutes} minutes`);
-  console.log("=".repeat(50));
+  devLog("\n" + "=".repeat(50));
+  devLog("✅ BSE Equity data fetch completed");
+  devLog(`📊 Total instruments: ${instruments.length}`);
+  devLog(`✅ Successfully processed: ${successCount}`);
+  devLog(`⚠️ Skipped (no data): ${skippedCount}`);
+  devLog(`❌ Errors: ${errorCount}`);
+  devLog(`💾 Total records inserted: ${totalRecordsInserted}`);
+  devLog(`⏱️ Duration: ${durationMinutes} minutes`);
+  devLog("=".repeat(50));
 }
 
 export { getBseEquityHistory };

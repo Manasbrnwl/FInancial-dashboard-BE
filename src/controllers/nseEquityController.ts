@@ -1,5 +1,8 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
+import { devError, prodError } from "../utils/errorLogger";
+import { parseLimitOffset, parseDateRange } from "../utils/validation";
 
 const normalizeBigInt = (row: Record<string, any>) =>
   Object.fromEntries(
@@ -11,7 +14,8 @@ const normalizeBigInt = (row: Record<string, any>) =>
 
 export const getNseEquityData = async (req: Request, res: Response) => {
   try {
-    const { symbol, startDate, endDate, limit = 360, offset = 0 } = req.query;
+    const { symbol, startDate, endDate } = req.query;
+    const { limit, offset } = parseLimitOffset(req.query, 360);
 
     const where: any = {};
 
@@ -19,22 +23,14 @@ export const getNseEquityData = async (req: Request, res: Response) => {
       where.symbol = symbol as string;
     }
 
-    if (startDate || endDate) {
-      where.date = {};
-      if (startDate) {
-        where.date.gte = new Date(startDate as string);
-      }
-      if (endDate) {
-        where.date.lte = new Date(endDate as string);
-      }
-    }
+    where.date = parseDateRange({ startDate, endDate });
 
     const [data, total] = await Promise.all([
       prisma.nse_equity.findMany({
         where,
         orderBy: { date: "desc" },
-        take: Number(limit),
-        skip: Number(offset),
+        take: limit,
+        skip: offset,
       }),
       prisma.nse_equity.count({ where }),
     ]);
@@ -44,17 +40,18 @@ export const getNseEquityData = async (req: Request, res: Response) => {
       data: data.map(normalizeBigInt),
       pagination: {
         total,
-        limit: Number(limit),
-        offset: Number(offset),
-        hasMore: Number(offset) + data.length < total,
+        limit,
+        offset,
+        hasMore: offset + data.length < total,
       },
     });
   } catch (error: any) {
-    console.error("Error fetching NSE equity data:", error);
+    devError("Error fetching NSE equity data:", error);
+    prodError("Error fetching NSE equity data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE equity data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -72,11 +69,12 @@ export const getNseEquitySymbols = async (req: Request, res: Response) => {
       data: symbols.map((s) => s.symbol),
     });
   } catch (error: any) {
-    console.error("Error fetching NSE equity symbols:", error);
+    devError("Error fetching NSE equity symbols:", error);
+    prodError("Error fetching NSE equity symbols");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE equity symbols",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -102,11 +100,12 @@ export const getNseEquityLatest = async (req: Request, res: Response) => {
       data: latest,
     });
   } catch (error: any) {
-    console.error("Error fetching latest NSE equity data:", error);
+    devError("Error fetching latest NSE equity data:", error);
+    prodError("Error fetching latest NSE equity data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch latest NSE equity data",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -123,24 +122,72 @@ export const getEquityDateRangeController = async (
         ? null
         : String(symbol);
 
-    const rows = await prisma.$queryRaw<
-      { min_date: Date | null; max_date: Date | null }[]
-    >`
-      SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
-      FROM market_data.nse_equity ne
-      WHERE (${param}::text IS NULL OR ne.symbol = ${param})
-    `;
+    let row, hourly_row;
 
-    const hourly_rows = await prisma.$queryRaw<
-      { min_date: Date | null; max_date: Date | null }[]
-    >`
-      SELECT TO_CHAR(MIN(time), 'yyyy-mm-dd HH12:MI AM') AS min_date, TO_CHAR(MAX(time), 'yyyy-mm-dd HH12:MI AM') AS max_date 
-      FROM periodic_market_data."ticksDataNSEEQ" ne 
-      INNER JOIN market_data.instrument_lists il ON ne."instrumentId" = il.id 
-      WHERE (${param}::text IS NULL OR il.instrument_type = ${param})`;
+    if (param === null) {
+      const [globalRows, globalHourlyMin, globalHourlyMax] = await Promise.all([
+        prisma.$queryRaw<{ min_date: string | null; max_date: string | null }[]>`
+          SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
+          FROM market_data.nse_equity
+        `,
+        prisma.$queryRaw<{ min_date: string | null }[]>`
+          SELECT TO_CHAR(time, 'yyyy-mm-dd HH12:MI AM') AS min_date 
+          FROM periodic_market_data."ticksDataNSEEQ"
+          ORDER BY time ASC LIMIT 1
+        `,
+        prisma.$queryRaw<{ max_date: string | null }[]>`
+          SELECT TO_CHAR(time, 'yyyy-mm-dd HH12:MI AM') AS max_date 
+          FROM periodic_market_data."ticksDataNSEEQ"
+          ORDER BY time DESC LIMIT 1
+        `
+      ]);
+      row = globalRows[0] || { min_date: null, max_date: null };
+      hourly_row = {
+        min_date: globalHourlyMin[0]?.min_date || null,
+        max_date: globalHourlyMax[0]?.max_date || null,
+      };
+    } else {
+      const inst = await prisma.instrument_lists.findFirst({
+        where: {
+          exchange: "NSE",
+          instrument_type: param,
+        },
+        select: { id: true },
+      });
+      const instrumentId = inst?.id || null;
 
-    const row = rows[0] || { min_date: null, max_date: null };
-    const hourly_row = hourly_rows[0] || { min_date: null, max_date: null };
+      let filteredRows: any[] = [];
+      let filteredHourlyMin: any[] = [];
+      let filteredHourlyMax: any[] = [];
+
+      if (instrumentId !== null) {
+        [filteredRows, filteredHourlyMin, filteredHourlyMax] = await Promise.all([
+          prisma.$queryRaw<{ min_date: string | null; max_date: string | null }[]>`
+            SELECT TO_CHAR(MIN(date), 'yyyy-mm-dd') AS min_date, TO_CHAR(MAX(date), 'yyyy-mm-dd') AS max_date 
+            FROM market_data.nse_equity
+            WHERE symbol = ${param}
+          `,
+          prisma.$queryRaw<{ min_date: string | null }[]>`
+            SELECT TO_CHAR(time, 'yyyy-mm-dd HH12:MI AM') AS min_date 
+            FROM periodic_market_data."ticksDataNSEEQ"
+            WHERE "instrumentId" = ${instrumentId}
+            ORDER BY time ASC LIMIT 1
+          `,
+          prisma.$queryRaw<{ max_date: string | null }[]>`
+            SELECT TO_CHAR(time, 'yyyy-mm-dd HH12:MI AM') AS max_date 
+            FROM periodic_market_data."ticksDataNSEEQ"
+            WHERE "instrumentId" = ${instrumentId}
+            ORDER BY time DESC LIMIT 1
+          `
+        ]);
+      }
+
+      row = filteredRows[0] || { min_date: null, max_date: null };
+      hourly_row = {
+        min_date: filteredHourlyMin[0]?.min_date || null,
+        max_date: filteredHourlyMax[0]?.max_date || null,
+      };
+    }
     res.json({
       success: true,
       min_date: row.min_date && row.min_date,
@@ -149,11 +196,12 @@ export const getEquityDateRangeController = async (
       hourly_max_date: hourly_row.max_date && hourly_row.max_date,
     });
   } catch (error: any) {
-    console.error("Error fetching equity date range:", error);
+    devError("Error fetching equity date range:", error);
+    prodError("Error fetching equity date range");
     res.status(500).json({
       success: false,
       error: "Failed to fetch equity date range",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };

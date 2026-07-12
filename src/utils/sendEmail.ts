@@ -1,27 +1,20 @@
-import nodemailer from "nodemailer";
-import dotenv from "dotenv";
+import { BrevoClient } from "@getbrevo/brevo";
+import { devError, devLog, prodError } from "./errorLogger";
+import { sendNtfyNotification } from "./ntfyService";
 
-dotenv.config();
+const apiKey = process.env.BREVO_API_KEY || "";
+const client = new BrevoClient({ apiKey });
 
-// Define the transporter object with the Gmail SMTP settings
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "no-reply@finance-dashboard.com";
+const SENDER_NAME = process.env.BREVO_SENDER_NAME || "Finance Dashboard Alerts";
 
 /**
- * Send email notification
+ * Send notification via Brevo Email Service
  * @param {string} email - Recipient email
  * @param {string} subject - Email subject
  * @param {string} text - Email text content
  * @param {string} html - Email html content
- * @returns {Promise<boolean>} - true when mail is accepted
+ * @returns {Promise<boolean>} - true when email is sent
  */
 const sendEmailNotification = async (
   email: string,
@@ -29,22 +22,35 @@ const sendEmailNotification = async (
   text: string,
   html: string
 ): Promise<boolean> => {
-  try {
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject,
-      text,
-      html,
-    };
+  // Note: This utility is used for non-auth emails (alerts, snapshots, logs).
+  // Auth emails (OTP, Forgot Password) use a separate emailService.ts and are not affected.
+  if (!apiKey || process.env.DISABLE_ALERT_EMAILS === "true") {
+    if (process.env.DISABLE_ALERT_EMAILS === "true") {
+      devLog(`[SKIP] Alert emails are disabled. Redirecting to ntfy: ${subject}`);
+      // Send to ntfy instead
+      await sendNtfyNotification(text, subject);
+    } else {
+      devLog(`[DEV] No BREVO_API_KEY. Email to ${email} would be: ${subject}`);
+    }
+    return true;
+  }
 
-    const info = await transporter.sendMail(mailOptions);
+  try {
+    await client.transactionalEmails.sendTransacEmail({
+      subject: subject,
+      htmlContent: html || `<p>${text}</p>`,
+      textContent: text,
+      sender: { email: SENDER_EMAIL, name: SENDER_NAME },
+      to: [{ email }],
+    });
+    
     if (process.env.NODE_ENV === "development") {
-      console.log(`OTP email queued: ${info.messageId}`);
+      devLog(`Email sent to ${email}: ${subject}`);
     }
     return true;
   } catch (error: any) {
-    console.error("Failed to send OTP email:", error?.message || error);
+    devError("Failed to send Brevo email:", error?.response?.body || error.message);
+    prodError("Failed to send email notification");
     throw error;
   }
 };

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getCoveredCallsData,
+  getCoveredCallsStats,
   getCoveredCallsByUnderlying,
   getCoveredCallsSymbolsExpiry,
   getFilteredCoveredCallsDetails,
@@ -8,14 +9,49 @@ import {
   getCoveredCallsTrendDaily,
   getCoveredCallsTrendHourly,
 } from "../../controllers/coveredCallsController";
+import {
+  getRecentCoveredCallAlerts,
+  getCoveredCallAlertHistory,
+  getCoveredCallAlertConfig,
+  updateCoveredCallAlertConfig,
+} from "../../controllers/coveredCallAlertController";
+import { cacheResponse } from "../../middleware/responseCache";
 
 const router = Router();
 
+// Underlying ticks refresh every 5 min via cron, so a short cache meaningfully
+// cuts repeat/concurrent load on these CTE-heavy aggregation endpoints without
+// serving noticeably stale data.
+const CACHE_TTL_SECONDS = 30;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Covered Call Alert Routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/covered-calls/alerts/recent - Get recent covered call alerts
+router.get("/alerts/recent", getRecentCoveredCallAlerts);
+
+// GET /api/covered-calls/alerts/history - Get alert history with pagination
+router.get("/alerts/history", getCoveredCallAlertHistory);
+
+// GET /api/covered-calls/alerts/config - Get alert configuration
+router.get("/alerts/config", getCoveredCallAlertConfig);
+
+// POST /api/covered-calls/alerts/config - Update alert configuration
+router.post("/alerts/config", updateCoveredCallAlertConfig);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Covered Calls Data Routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/covered-calls/stats - Get covered calls stats (count, avg premium, expiry months)
+router.get("/stats", cacheResponse(CACHE_TTL_SECONDS), getCoveredCallsStats);
+
 // GET /api/covered-calls - Get all covered calls data
-router.get("/", getCoveredCallsData);
+router.get("/", cacheResponse(CACHE_TTL_SECONDS), getCoveredCallsData);
 
 // GET /api/covered-calls/by-underlying?underlying=SYMBOL - Get covered calls filtered by underlying symbol
-router.get("/by-underlying", getCoveredCallsByUnderlying);
+router.get("/by-underlying", cacheResponse(CACHE_TTL_SECONDS), getCoveredCallsByUnderlying);
 
 // GET /api/covered-calls-details/:instrumentId/symbols-expiry - Get symbols and expiry dates for filter dropdowns
 router.get("/:instrumentId/symbols-expiry", getCoveredCallsSymbolsExpiry);
@@ -33,3 +69,4 @@ router.get("/:instrumentId/trend/daily", getCoveredCallsTrendDaily);
 router.get("/:instrumentId/trend/hourly", getCoveredCallsTrendHourly);
 
 export default router;
+

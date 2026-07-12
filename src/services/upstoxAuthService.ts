@@ -1,6 +1,7 @@
 import axios from "axios";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
+import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
 
 let cachedAccessToken: string | null = null;
 let tokenExpiry: number | null = null;
@@ -46,19 +47,18 @@ export const upstoxAuthService = {
             const { access_token } = response.data;
 
             // Save to Database
-            const prisma = new PrismaClient(); // Instantiate or import singleton
             await prisma.app_config.upsert({
                 where: { key: 'UPSTOX_ACCESS_TOKEN' },
                 update: { value: access_token },
                 create: { key: 'UPSTOX_ACCESS_TOKEN', value: access_token }
             });
-            await prisma.$disconnect();
 
             cachedAccessToken = access_token;
-            console.log("? Upstox Access Token generated and saved to DB");
+            devLog("? Upstox Access Token generated and saved to DB");
             return access_token;
         } catch (error: any) {
-            console.error("? Failed to generate Upstox access token:", error.response?.data || error.message);
+            devError("? Failed to generate Upstox access token:", error.response?.data || error.message);
+            prodError("Failed to generate Upstox access token");
             throw error;
         }
     },
@@ -67,24 +67,27 @@ export const upstoxAuthService = {
      * Returns the valid cached token or throws if missing/expired.
      */
     getAccessToken: async (): Promise<string | null> => {
-        // Try cache first (optional, but good for performance)
-        // if (cachedAccessToken) return cachedAccessToken;
-
-        // Fetch from DB
         try {
-            const prisma = new PrismaClient();
             const config = await prisma.app_config.findUnique({
                 where: { key: 'UPSTOX_ACCESS_TOKEN' }
             });
-            await prisma.$disconnect();
 
-            if (config?.value) {
-                cachedAccessToken = config.value;
-                return config.value;
+            if (!config?.value) return null;
+
+            // 12-hour expiry check
+            const TWELVE_HOURS = 12 * 60 * 60 * 1000;
+            const tokenAge = Date.now() - new Date(config.updated_at).getTime();
+
+            if (tokenAge > TWELVE_HOURS) {
+                devWarn("⚠️ Upstox Access Token expired (> 12h). Need fresh login.");
+                return null;
             }
-            return null;
+
+            cachedAccessToken = config.value;
+            return config.value;
         } catch (error: any) {
-            console.error("? Failed to fetch token from DB:", error.message);
+            devError("? Failed to fetch token from DB:", error.message);
+            prodError("Failed to fetch Upstox token from DB");
             return null;
         }
     },
@@ -94,13 +97,11 @@ export const upstoxAuthService = {
      */
     setAccessToken: async (token: string) => {
         cachedAccessToken = token;
-        const prisma = new PrismaClient();
         await prisma.app_config.upsert({
             where: { key: 'UPSTOX_ACCESS_TOKEN' },
             update: { value: token },
             create: { key: 'UPSTOX_ACCESS_TOKEN', value: token }
         });
-        await prisma.$disconnect();
     }
 };
 

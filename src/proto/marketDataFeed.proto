@@ -1,98 +1,131 @@
 syntax = "proto3";
+package com.upstox.marketdatafeederv3udapi.rpc.proto;
 
-package upstox.market_data;
-
-// Market data feed structure
-message FeedResponse {
-  repeated Feed feeds = 1;
-}
-
-message Feed {
-  FullFeed ff = 1;
-  LTPC ltpc = 2;
-}
-
-// Full Feed - Complete market data
-message FullFeed {
-  MarketFF marketFF = 1;
-  IndexFF indexFF = 2;
-  OptionGreeks optionGreeks = 3;
-  MarketLevel marketLevel = 4;
-}
-
-// Market Full Feed
-message MarketFF {
-  LTPC ltpc = 1;
-  MarketOHLC marketOHLC = 2;
-  Quote quote = 3;
-  string instrument_key = 4;
-  int64 last_trade_time = 5;
-  OHLC ohlc = 6;
-}
-
-// Index Full Feed
-message IndexFF {
-  LTPC ltpc = 1;
-  MarketOHLC marketOHLC = 2;
-  string instrument_key = 3;
-  int64 last_trade_time = 4;
-}
-
-// Last Traded Price/Close
 message LTPC {
   double ltp = 1;
   int64 ltt = 2;
-  double ltq = 3;
-  double cp = 4;  // closing price
+  int64 ltq = 3;
+  double cp = 4;
 }
 
-// Market OHLC
+message MarketLevel {
+  repeated Quote bidAskQuote = 1;
+}
+
 message MarketOHLC {
   repeated OHLC ohlc = 1;
 }
 
-// OHLC
+message Quote {
+  int64 bidQ = 1;
+  double bidP = 2;
+  int64 askQ = 3;
+  double askP = 4;
+}
+
+message OptionGreeks {
+  double delta = 1;
+  double theta = 2;
+  double gamma = 3;
+  double vega = 4;
+  double rho = 5;
+}
+
 message OHLC {
   string interval = 1;
   double open = 2;
   double high = 3;
   double low = 4;
   double close = 5;
-  int64 volume = 6;
+  int64 vol = 6;
   int64 ts = 7;
 }
 
-// Quotes for depth data
-message Quote {
-  repeated DepthQueue bids = 1;
-  repeated DepthQueue asks = 2;
-  int64 volume = 3;
-  int64 oi = 4;
-  double total_buy_qty = 5;
-  double total_sell_qty = 6;
-  double atp = 7;
+enum Type{
+  initial_feed = 0;
+  live_feed = 1;
+  market_info = 2;
 }
 
-// Depth Queue Entry
-message DepthQueue {
-  int32 bidQ = 1;
-  double bidP = 2;
-  int32 orders = 3;
-  int32 askQ = 4;
-  double askP = 5;
+message MarketFullFeed{
+  LTPC ltpc = 1;
+  MarketLevel marketLevel = 2;
+  OptionGreeks optionGreeks = 3;
+  MarketOHLC marketOHLC = 4;
+  double atp = 5;
+  int64 vtt = 6;
+  double oi = 7;
+  double iv = 8;
+  double tbq = 9;
+  double tsq = 10;
 }
 
-// Option Greeks
-message OptionGreeks {
-  double delta = 1;
-  double theta = 2;
-  double gamma = 3;
-  double vega = 4;
-  double iv = 5;
+message IndexFullFeed{
+  LTPC ltpc = 1;
+  MarketOHLC marketOHLC = 2;
 }
 
-// Market Level - for level 2 data
-message MarketLevel {
-  repeated DepthQueue bids = 1;
-  repeated DepthQueue asks = 2;
+
+message FullFeed {
+  oneof FullFeedUnion {
+    MarketFullFeed marketFF = 1;
+    IndexFullFeed indexFF = 2;
+  }
+}
+
+message FirstLevelWithGreeks{
+  LTPC ltpc = 1;
+  Quote firstDepth = 2;
+  OptionGreeks optionGreeks = 3;
+  int64 vtt = 4;
+  double oi = 5;
+  double iv = 6;
+}
+
+message Feed {
+  oneof FeedUnion {
+    LTPC ltpc = 1;
+    FullFeed fullFeed = 2;
+    FirstLevelWithGreeks firstLevelWithGreeks = 3;
+  }
+  RequestMode requestMode = 4;
+}
+
+enum RequestMode {
+  ltpc = 0;
+  full_d5 = 1;
+  option_greeks = 2;
+  full_d30 = 3;
+}
+
+enum MarketStatus {
+  PRE_OPEN_START = 0;
+  PRE_OPEN_END = 1;
+  NORMAL_OPEN = 2;
+  NORMAL_CLOSE = 3;
+  CLOSING_START = 4;
+  CLOSING_END = 5;
+}
+
+message MarketInfo {
+  map<string, MarketStatus> segmentStatus = 1;
+}
+
+message FeedResponse{
+  Type type = 1;
+  map<string, Feed> feeds = 2;
+  int64 currentTs = 3;
+  MarketInfo marketInfo = 4;
+}
+
+// Request message for subscribing/unsubscribing
+message FeedRequest {
+  string guid = 1;
+  string method = 2;  // "sub" or "unsub"
+  RequestData data = 3;
+}
+
+message RequestData {
+  string mode = 1;  // "full", "ltpc", "option_greeks"
+  repeated string instrumentKeys = 2;
 }

@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { logger } from "../utils/logger";
 import {
   marginCalculatorService,
   MarginCalculatorRequest,
@@ -6,6 +7,8 @@ import {
   TransactionType,
   ProductType,
 } from "../services/marginCalculatorService";
+import { devError, prodError } from "../utils/errorLogger";
+import { parseInteger } from "../utils/validation";
 
 /**
  * Calculate margin for a single order
@@ -71,7 +74,8 @@ export const calculateMargin = async (req: Request, res: Response) => {
       data: marginData,
     });
   } catch (error: any) {
-    console.error("Error calculating margin:", error);
+    devError("Error calculating margin:", error);
+    prodError("Error calculating margin");
     res.status(500).json({
       success: false,
       error: "Failed to calculate margin",
@@ -120,11 +124,12 @@ export const calculateMarginOnly = async (req: Request, res: Response) => {
       data: marginData,
     });
   } catch (error: any) {
-    console.error("Error calculating margin:", error);
+    devError("Error calculating margin:", error);
+    prodError("Error calculating margin");
     res.status(500).json({
       success: false,
       error: "Failed to calculate margin",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -147,7 +152,7 @@ export const calculateBulkMargins = async (req: Request, res: Response) => {
     for (let i = 0; i < orders.length; i++) {
       const order = orders[i];
       if (!order.securityId || !order.exchangeSegment || !order.transactionType ||
-          !order.quantity || !order.productType || !order.price) {
+        !order.quantity || !order.productType || !order.price) {
         return res.status(400).json({
           success: false,
           error: `Order at index ${i} is missing required fields`,
@@ -162,11 +167,12 @@ export const calculateBulkMargins = async (req: Request, res: Response) => {
       data: result,
     });
   } catch (error: any) {
-    console.error("Error calculating bulk margins:", error);
+    devError("Error calculating bulk margins:", error);
+    prodError("Error calculating bulk margins");
     res.status(500).json({
       success: false,
       error: "Failed to calculate bulk margins",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -178,10 +184,12 @@ export const getStoredMargins = async (req: Request, res: Response) => {
   try {
     const { securityId, exchangeSegment, limit } = req.query;
 
+    const parsedLimit = limit ? parseInteger(limit, 100) : 100;
+
     const filters = {
       ...(securityId && { securityId: securityId as string }),
       ...(exchangeSegment && { exchangeSegment: exchangeSegment as string }),
-      ...(limit && { limit: parseInt(limit as string) }),
+      limit: parsedLimit,
     };
 
     const margins = await marginCalculatorService.getStoredMargins(filters);
@@ -192,11 +200,12 @@ export const getStoredMargins = async (req: Request, res: Response) => {
       count: margins.length,
     });
   } catch (error: any) {
-    console.error("Error fetching stored margins:", error);
+    devError("Error fetching stored margins:", error);
+    prodError("Error fetching stored margins");
     res.status(500).json({
       success: false,
       error: "Failed to fetch stored margins",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -232,11 +241,12 @@ export const getLatestMargin = async (req: Request, res: Response) => {
       data: margin,
     });
   } catch (error: any) {
-    console.error("Error fetching latest margin:", error);
+    devError("Error fetching latest margin:", error);
+    prodError("Error fetching latest margin");
     res.status(500).json({
       success: false,
       error: "Failed to fetch latest margin",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };
@@ -247,7 +257,7 @@ export const getLatestMargin = async (req: Request, res: Response) => {
 export const cleanupOldMargins = async (req: Request, res: Response) => {
   try {
     const { daysToKeep } = req.query;
-    const days = daysToKeep ? parseInt(daysToKeep as string) : 30;
+    const days = parseInteger(daysToKeep, 30);
 
     const deletedCount = await marginCalculatorService.cleanupOldMargins(days);
 
@@ -257,11 +267,12 @@ export const cleanupOldMargins = async (req: Request, res: Response) => {
       deletedCount,
     });
   } catch (error: any) {
-    console.error("Error cleaning up margins:", error);
+    devError("Error cleaning up margins:", error);
+    prodError("Error cleaning up margins");
     res.status(500).json({
       success: false,
       error: "Failed to cleanup margins",
-      message: error.message,
+      ...(process.env.NODE_ENV !== "production" && { message: error.message }),
     });
   }
 };

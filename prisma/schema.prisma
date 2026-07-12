@@ -9,7 +9,7 @@ datasource db {
 }
 
 model bse_equity {
-  id         Int       @id @default(autoincrement())
+  id         Int       @default(autoincrement())
   symbol_id  String?
   symbol     String    @db.VarChar(50)
   date       DateTime  @db.Date
@@ -24,13 +24,13 @@ model bse_equity {
   updated_at DateTime? @updatedAt @db.Timestamp(6)
 
   @@unique([symbol, date], map: "bse_equity_symbol_date_unique")
-  @@index([symbol, date], map: "idx_bse_eq_symbol_date")
+  @@index([date(sort: Desc)])
   @@schema("market_data")
 }
 
 model nse_equity {
-  id         BigInt    @id @default(autoincrement())
-  symbol_id  String?
+  id         BigInt    @default(autoincrement())
+  symbol_id  Int?
   symbol     String    @db.VarChar(50)
   date       DateTime  @db.Date
   open       Float?
@@ -44,13 +44,14 @@ model nse_equity {
   updated_at DateTime? @updatedAt @db.Timestamp(6)
 
   @@unique([symbol, date], map: "nse_equity_symbol_date_unique")
-  @@index([symbol, date], map: "idx_nse_eq_symbol_date")
-  @@index([symbol, date], map: "idx_nse_equity_symbol_date")
+  @@index([symbol_id, date], map: "idx_nse_equity_symbol_id_date")
+  @@index([date(sort: Desc)])
   @@schema("market_data")
 }
 
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model nse_futures {
-  id          BigInt    @id @default(autoincrement())
+  id          BigInt    @default(autoincrement())
   symbol_id   String?
   symbol      Int
   date        DateTime  @db.Date
@@ -65,13 +66,17 @@ model nse_futures {
   created_at  DateTime? @default(now()) @db.Timestamp(6)
   updated_at  DateTime? @updatedAt @db.Timestamp(6)
 
+  @@id([id, date])
   @@unique([symbol, date, underlying, expiry_date], map: "nse_futures_symbol_date_underlying_expir_unique")
   @@index([symbol, date], map: "idx_nse_fut_symbol_date")
+  @@index([underlying, date(sort: Desc)], map: "idx_nse_futures_underlying_date")
+  @@index([date(sort: Desc)])
   @@schema("market_data")
 }
 
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
 model nse_options {
-  id           BigInt    @id @default(autoincrement())
+  id           BigInt    @default(autoincrement())
   symbol_id    String?
   symbol       Int
   date         DateTime  @db.Date
@@ -89,12 +94,29 @@ model nse_options {
   updated_at   DateTime? @updatedAt @db.Timestamp(6)
   expiry_month String?
 
+  @@id([id, date])
   @@unique([symbol, date, underlying, expiry_date, option_type], map: "nse_options_symbol_date_underlying_expiry_unique")
   @@index([strike, date], map: "idx_nse_opt_strike_date")
   @@index([symbol, date], map: "idx_nse_opt_symbol_date")
   @@index([expiry_date], map: "idx_nse_options_expiry_date")
   @@index([expiry_month], map: "idx_options_expirymonth")
   @@index([date(sort: Desc)], map: "idx_nse_options_date_desc")
+  @@index([underlying, date(sort: Desc)], map: "idx_nse_options_underlying_date")
+  @@schema("market_data")
+}
+
+model User {
+  id                Int       @id @default(autoincrement())
+  email             String    @unique
+  password          String?   // Hashed password
+  otp               String?
+  otpExpiresAt      DateTime?
+  resetToken        String?
+  resetTokenExpires DateTime?
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
   @@schema("market_data")
 }
 
@@ -111,12 +133,9 @@ model instrument_lists {
   @@unique([exchange, instrument_type], map: "instrument_lists_exchange_instrument_type_unique")
   @@index([exchange, instrument_type], map: "idx_instrument_lists_exchange_instrument_type")
   @@index([id, instrument_type], map: "idx_instrument_lists_id")
-  @@index([id, instrument_type], map: "idx_instrument_lists_id_type")
   @@index([instrument_type], map: "idx_instr_instrumenttype")
-  @@index([id, instrument_type], map: "idx_instrument_lists_id_instrument_type")
   @@index([instrument_type(ops: raw("gin_trgm_ops"))], map: "idx_underlying_trgm", type: Gin)
   @@index([exchange, instrument_type, upstox_id], map: "idx_instrument_lists_exchange_instrument_type_upstox_id")
-  @@index([instrument_type])
   @@schema("market_data")
 }
 
@@ -172,12 +191,10 @@ model symbols_list {
   strike        String?   @default(dbgenerated("0")) @db.VarChar(15)
   option_type   String?   @db.VarChar(2)
   expiry_month  String?
-  upstox_id     String?   @unique @db.VarChar(50)
+  upstox_id     String?   @db.VarChar(50)
   upstox_symbol String?   @db.VarChar(100)
 
   @@unique([instrument_id, symbol], map: "instrument_symbol_unique")
-  @@index([instrument_id, symbol], map: "idx_instrument_symbol")
-  @@index([instrument_id], map: "idx_symbols_list_instrument_id")
   @@index([segment], map: "idx_symbols_list_segment")
   @@index([instrument_id, expiry_date(sort: Desc)], map: "idx_symbols_expiry")
   @@index([expiry_month], map: "idx_symbols_expirymonth")
@@ -185,12 +202,12 @@ model symbols_list {
   @@index([instrument_id, strike], map: "idx_calc_underlying_strike")
   @@index([segment, expiry_date], map: "idx_symbols_opt_expiry")
   @@index([option_type], map: "idx_symbols_option_type")
-  @@index([instrument_id])
+  @@index([upstox_id], map: "idx_symbols_list_upstox_id")
   @@schema("market_data")
 }
 
 model ohlcDataNSE {
-  id           BigInt   @id @default(autoincrement())
+  id           BigInt   @default(autoincrement())
   instrumentId Int
   open         String
   high         String
@@ -205,11 +222,12 @@ model ohlcDataNSE {
   @@unique([instrumentId, time], map: "uniq_data_nse")
   @@index([instrumentId], map: "idx_instrumentId_nse")
   @@index([time], map: "idx_time_nse")
+  @@index([instrumentId, time(sort: Desc)], map: "idx_ohlc_nse_inst_time")
   @@schema("periodic_market_data")
 }
 
 model ohlcEQDataBSE {
-  id           BigInt   @id @default(autoincrement())
+  id           BigInt   @default(autoincrement())
   instrumentId BigInt
   open         String
   high         String
@@ -224,12 +242,13 @@ model ohlcEQDataBSE {
   @@unique([instrumentId, time], map: "uniq_data_bse")
   @@index([instrumentId], map: "idx_instrumentId_bse")
   @@index([time], map: "idx_time_bse")
+  @@index([instrumentId, time(sort: Desc)], map: "idx_ohlc_bse_inst_time")
   @@schema("periodic_market_data")
 }
 
 /// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
 model ticksDataNSEEQ {
-  id           BigInt    @id @default(autoincrement())
+  id           BigInt    @default(autoincrement())
   instrumentId Int
   ltp          String
   volume       String?   @default("0")
@@ -244,18 +263,15 @@ model ticksDataNSEEQ {
   time_bucket  DateTime? @db.Timestamp(6)
 
   @@unique([instrumentId, time], map: "uniq_data_nse_eq")
-  @@index([instrumentId], map: "idx_instrumentId_nse_eq")
   @@index([time], map: "idx_time_nse_eq")
-  @@index([instrumentId], map: "idx_ticksdatanseeq_instrumentid")
   @@index([instrumentId, id(sort: Desc), ltp], map: "idx_cover_ticks_nseeq")
-  @@index([instrumentId, id(sort: Desc)], map: "idx_ticks_nseeq_instrument_id_desc")
   @@index([instrumentId, time(sort: Desc)], map: "idx_eq_time")
   @@index([instrumentId, time_bucket, time(sort: Desc)], map: "idx_eq_inst_tb")
   @@schema("periodic_market_data")
 }
 
 model ticksDataNSEFUT {
-  id           BigInt   @id @default(autoincrement())
+  id           BigInt   @default(autoincrement())
   instrumentId Int
   ltp          String
   volume       String?  @default("0")
@@ -271,11 +287,12 @@ model ticksDataNSEFUT {
   @@unique([instrumentId, time], map: "uniq_data_nse_fut")
   @@index([instrumentId], map: "idx_instrumentId_nse_fut")
   @@index([time], map: "idx_time_nse_fut")
+  @@index([instrumentId, id(sort: Desc), ltp, volume], map: "idx_cover_ticks_nsefut")
   @@schema("periodic_market_data")
 }
 
 model ticksDataNSEOPT {
-  id           BigInt   @id @default(autoincrement())
+  id           BigInt   @default(autoincrement())
   instrumentId Int
   ltp          String
   volume       String?  @default("0")
@@ -289,13 +306,8 @@ model ticksDataNSEOPT {
   updatedAt    DateTime
 
   @@unique([instrumentId, time], map: "uniq_data_nse_opt")
-  @@index([instrumentId], map: "idx_instrumentId_nse_opt")
   @@index([time], map: "idx_time_nse_opt")
-  @@index([instrumentId], map: "idx_ticksdatanseopt_instrumentid")
   @@index([instrumentId, id(sort: Desc), ltp, volume], map: "idx_cover_ticks_nseopt")
-  @@index([instrumentId, id(sort: Desc)], map: "idx_ticks_nseopt_instrument_id_desc")
-  @@index([instrumentId, id(sort: Desc)], map: "idx_opt_latest")
-  @@index([instrumentId, id(sort: Desc)], map: "idx_opt_instrumentid_id_desc")
   @@schema("periodic_market_data")
 }
 
@@ -393,6 +405,59 @@ model app_config {
   key        String   @unique @db.VarChar(100)
   value      String
   updated_at DateTime @default(now()) @updatedAt
+
+  @@schema("market_data")
+}
+
+/// DB-backed replacement for the old local history.json file — lets the
+/// api process read job status written by the separate sync-worker process.
+model cron_job_status {
+  job_name         String    @id @db.VarChar(100)
+  last_run         DateTime?
+  next_run         DateTime?
+  status           String    @default("idle") @db.VarChar(20)
+  last_duration_ms Int?
+  error_message    String?
+  updated_at       DateTime  @default(now()) @updatedAt
+
+  @@schema("market_data")
+}
+
+model covered_call_alerts {
+  id               BigInt   @id @default(autoincrement())
+  instrument_id    Int
+  instrument_name  String
+  symbol           String   @db.VarChar(100)
+  strike           Float
+  option_type      String   @db.VarChar(2)
+  expiry_date      DateTime @db.Date
+  time_slot        String   @db.VarChar(5)
+  underlying_price Float
+  premium          Float
+  otm_percent      Float
+  premium_percent  Float
+  max_upside       Float
+  triggered_at     DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([instrument_id], map: "idx_cc_alerts_instrument")
+  @@index([triggered_at], map: "idx_cc_alerts_triggered")
+  @@schema("market_data")
+}
+
+model covered_call_alert_config {
+  id                  Int      @id @default(autoincrement())
+  instrument_id       Int?     @unique(map: "cc_alert_config_instrument_unique")
+  is_active           Boolean  @default(true)
+  min_otm_percent     Float    @default(4)
+  max_otm_percent     Float    @default(5)
+  min_premium_percent Float    @default(2)
+  max_premium_percent Float    @default(2.5)
+  min_upside_percent  Float    @default(6)
+  max_upside_percent  Float    @default(7)
+  consecutive_count   Int      @default(10)
+  cooldown_minutes    Int      @default(60)
+  created_at          DateTime @default(now()) @db.Timestamp(6)
+  updated_at          DateTime @updatedAt @db.Timestamp(6)
 
   @@schema("market_data")
 }

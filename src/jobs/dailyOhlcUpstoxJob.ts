@@ -1,12 +1,13 @@
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import cron from "node-cron";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { upstoxOhlcService, OhlcQuote } from "../services/upstoxOhlcService";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { loadEnv } from "../config/env";
+import { devLog, devError } from "../utils/errorLogger";
+import { withJobTracking } from "../utils/cronMonitor";
 
 loadEnv();
-const prisma = new PrismaClient();
 
 // Batch size for Upstox Quote API
 const BATCH_SIZE = 500;
@@ -15,6 +16,7 @@ interface InstrumentData {
     id: number;
     instrument_type: string;
     upstox_id: string;
+    upstox_symbol?: string | null;
 }
 
 interface SymbolData {
@@ -30,6 +32,17 @@ interface SymbolData {
 }
 
 /**
+ * Reduces a timestamp to its IST calendar date (midnight UTC of that date),
+ * matching the date-only convention used across nse_equity/nse_futures/nse_options.
+ * Computed via the IST timezone explicitly rather than server-local time, since
+ * the container's OS timezone isn't guaranteed to be Asia/Kolkata.
+ */
+function toDateOnly(d: Date): Date {
+    const istDateStr = d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }); // YYYY-MM-DD
+    return new Date(`${istDateStr}T00:00:00.000Z`);
+}
+
+/**
  * Fetch active NSE Equity instruments from instrument_lists with valid Upstox IDs.
  */
 async function getActiveEquityInstruments(): Promise<InstrumentData[]> {
@@ -37,15 +50,17 @@ async function getActiveEquityInstruments(): Promise<InstrumentData[]> {
         const instruments = await prisma.instrument_lists.findMany({
             where: {
                 exchange: "NSE",
-                upstox_id: {
-                    not: null,
-                    startsWith: "NSE_EQ"
-                },
+                upstox_id: { not: null },
+                OR: [
+                    { upstox_id: { startsWith: "NSE_EQ" } },
+                    { upstox_id: { startsWith: "NSE_INDEX" } }
+                ]
             },
             select: {
                 id: true,
                 instrument_type: true,
                 upstox_id: true,
+                upstox_symbol: true,
             },
         });
 
@@ -53,9 +68,10 @@ async function getActiveEquityInstruments(): Promise<InstrumentData[]> {
             id: s.id,
             instrument_type: s.instrument_type,
             upstox_id: s.upstox_id!,
+            upstox_symbol: s.upstox_symbol,
         }));
     } catch (error: any) {
-        console.error("❌ Failed to fetch active equity instruments from DB:", error.message);
+        devError("❌ Failed to fetch active equity instruments from DB:", error.message);
         return [];
     }
 }
@@ -100,7 +116,7 @@ async function getActiveFuturesSymbols(): Promise<SymbolData[]> {
             expiry_month: s.expiry_month,
         }));
     } catch (error: any) {
-        console.error("❌ Failed to fetch active futures symbols from DB:", error.message);
+        devError("❌ Failed to fetch active futures symbols from DB:", error.message);
         return [];
     }
 }
@@ -145,7 +161,7 @@ async function getActiveOptionsSymbols(): Promise<SymbolData[]> {
             expiry_month: s.expiry_month,
         }));
     } catch (error: any) {
-        console.error("❌ Failed to fetch active options symbols from DB:", error.message);
+        devError("❌ Failed to fetch active options symbols from DB:", error.message);
         return [];
     }
 }
@@ -232,10 +248,10 @@ async function sendDailyJobEmail(
         );
 
         if (process.env.NODE_ENV === "development") {
-            console.log(`📧 Email notification sent: ${status}`);
+            devLog(`📧 Email notification sent: ${status}`);
         }
     } catch (error: any) {
-        console.error(`❌ Failed to send email notification:`, error.message);
+        devError(`❌ Failed to send email notification:`, error.message);
     }
 }
 
@@ -252,7 +268,7 @@ async function processEquityOhlc(
     let totalInserted = 0;
     const upstoxKeys = instruments.map(inst => inst.upstox_id);
 
-    console.log(`📊 Processing ${instruments.length} NSE Equity instruments...`);
+    devLog(`📊 Processing ${instruments.length} NSE Equity instruments...`);
 
     const ohlcData = await upstoxOhlcService.fetchOhlcBatched(
         upstoxKeys,
@@ -260,16 +276,16 @@ async function processEquityOhlc(
         "1d",
         (batchIndex, totalBatches) => {
             if (process.env.NODE_ENV === "development") {
-                console.log(`✅ Equity OHLC batch ${batchIndex}/${totalBatches} completed`);
+                devLog(`✅ Equity OHLC batch ${batchIndex}/${totalBatches} completed`);
             }
         }
     );
 
     const equityRecords = [];
     for (const inst of instruments) {
-        // Response key format: NSE_EQ:SYMBOL
-        const parts = inst.upstox_id.split("|");
-        const lookupKey = `NSE_EQ:${inst.instrument_type}`;
+        const prefix = inst.upstox_id.split("|")[0];
+        const symbolKey = inst.upstox_symbol || inst.instrument_type;
+        const lookupKey = `${prefix}:${symbolKey}`;
         const quote = ohlcData[lookupKey] as OhlcQuote | undefined;
 
         if (!quote) continue;
@@ -281,14 +297,14 @@ async function processEquityOhlc(
         if (ohlc.open === 0 && ohlc.high === 0 && ohlc.low === 0 && ohlc.close === 0) continue;
 
         equityRecords.push({
-            symbol_id: inst.id.toString(),
+            symbol_id: inst.id,
             symbol: inst.id.toString(),
-            date: today,
+            date: ohlc.timestamp ? toDateOnly(ohlc.timestamp) : today,
             open: ohlc.open,
             high: ohlc.high,
             low: ohlc.low,
             close: ohlc.close,
-            volume: ohlc.volume.toString(),
+            volume: ohlc.volume?.toString() ?? "0",
             oi: "0",
             exchange: "NSE",
         });
@@ -302,7 +318,7 @@ async function processEquityOhlc(
         totalInserted = result.count;
     }
 
-    console.log(`✅ NSE Equity: ${totalInserted} records inserted`);
+    devLog(`✅ NSE Equity: ${totalInserted} records inserted`);
     return totalInserted;
 }
 
@@ -319,7 +335,7 @@ async function processFuturesOhlc(
     let totalInserted = 0;
     const upstoxKeys = symbols.map(sym => sym.upstox_id);
 
-    console.log(`📊 Processing ${symbols.length} NSE Futures symbols...`);
+    devLog(`📊 Processing ${symbols.length} NSE Futures symbols...`);
 
     const ohlcData = await upstoxOhlcService.fetchOhlcBatched(
         upstoxKeys,
@@ -327,7 +343,7 @@ async function processFuturesOhlc(
         "1d",
         (batchIndex, totalBatches) => {
             if (process.env.NODE_ENV === "development") {
-                console.log(`✅ Futures OHLC batch ${batchIndex}/${totalBatches} completed`);
+                devLog(`✅ Futures OHLC batch ${batchIndex}/${totalBatches} completed`);
             }
         }
     );
@@ -349,12 +365,12 @@ async function processFuturesOhlc(
         futuresRecords.push({
             symbol_id: sym.id.toString(),
             symbol: sym.id,
-            date: today,
+            date: ohlc.timestamp ? toDateOnly(ohlc.timestamp) : today,
             open: ohlc.open,
             high: ohlc.high,
             low: ohlc.low,
             close: ohlc.close,
-            volume: ohlc.volume.toString(),
+            volume: ohlc.volume?.toString() ?? "0",
             oi: "0",
             underlying: sym.instrument_id,
             expiry_date: sym.expiry_date,
@@ -369,7 +385,7 @@ async function processFuturesOhlc(
         totalInserted = result.count;
     }
 
-    console.log(`✅ NSE Futures: ${totalInserted} records inserted`);
+    devLog(`✅ NSE Futures: ${totalInserted} records inserted`);
     return totalInserted;
 }
 
@@ -386,7 +402,7 @@ async function processOptionsOhlc(
     let totalInserted = 0;
     const upstoxKeys = symbols.map(sym => sym.upstox_id);
 
-    console.log(`📊 Processing ${symbols.length} NSE Options symbols...`);
+    devLog(`📊 Processing ${symbols.length} NSE Options symbols...`);
 
     const ohlcData = await upstoxOhlcService.fetchOhlcBatched(
         upstoxKeys,
@@ -394,7 +410,7 @@ async function processOptionsOhlc(
         "1d",
         (batchIndex, totalBatches) => {
             if (process.env.NODE_ENV === "development") {
-                console.log(`✅ Options OHLC batch ${batchIndex}/${totalBatches} completed`);
+                devLog(`✅ Options OHLC batch ${batchIndex}/${totalBatches} completed`);
             }
         }
     );
@@ -416,12 +432,12 @@ async function processOptionsOhlc(
         optionsRecords.push({
             symbol_id: sym.id.toString(),
             symbol: sym.id,
-            date: today,
+            date: ohlc.timestamp ? toDateOnly(ohlc.timestamp) : today,
             open: ohlc.open,
             high: ohlc.high,
             low: ohlc.low,
             close: ohlc.close,
-            volume: ohlc.volume.toString(),
+            volume: ohlc.volume?.toString() ?? "0",
             oi: "0",
             underlying: sym.instrument_id,
             expiry_date: sym.expiry_date,
@@ -439,7 +455,7 @@ async function processOptionsOhlc(
         totalInserted = result.count;
     }
 
-    console.log(`✅ NSE Options: ${totalInserted} records inserted`);
+    devLog(`✅ NSE Options: ${totalInserted} records inserted`);
     return totalInserted;
 }
 
@@ -448,22 +464,31 @@ async function processOptionsOhlc(
  */
 export async function executeDailyOhlcUpstoxJob(): Promise<void> {
     const startTime = Date.now();
-    console.log(`🕐 Starting Daily NSE OHLC Upstox Job at ${new Date().toISOString()}`);
+    devLog(`🕐 Starting Daily NSE OHLC Upstox Job at ${new Date().toISOString()}`);
 
     try {
+        // Guard against the NODE_ENV=development immediate-run-on-startup path
+        // firing outside the Mon-Fri cron schedule (e.g. a local dev instance
+        // pointed at prod started on a weekend) - NSE doesn't trade on weekends,
+        // so there's nothing valid to fetch/insert.
+        const istWeekday = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata", weekday: "short" });
+        if (istWeekday === "Sat" || istWeekday === "Sun") {
+            devLog(`⏭️ Skipping Daily OHLC job — ${istWeekday} is not an NSE trading day (IST).`);
+            return;
+        }
+
         // Send start notification
-        await sendDailyJobEmail("started", {});
+        // await sendDailyJobEmail("started", {});
 
         // 1. Get Access Token
         const token = await upstoxAuthService.getAccessToken();
         if (!token) {
-            console.error("❌ No Upstox Access Token available. Skipping job.");
+            devError("❌ No Upstox Access Token available. Skipping job.");
             await sendDailyJobEmail("failed", { errorMessage: "No Upstox Access Token available" });
             return;
         }
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = toDateOnly(new Date());
 
         // 2. Get Active Instruments and Symbols
         const [equityInstruments, futuresSymbols, optionsSymbols] = await Promise.all([
@@ -472,7 +497,7 @@ export async function executeDailyOhlcUpstoxJob(): Promise<void> {
             getActiveOptionsSymbols(),
         ]);
 
-        console.log(`📊 Found: ${equityInstruments.length} equity, ${futuresSymbols.length} futures, ${optionsSymbols.length} options`);
+        devLog(`📊 Found: ${equityInstruments.length} equity, ${futuresSymbols.length} futures, ${optionsSymbols.length} options`);
 
         // 3. Process each segment
         const equityCount = await processEquityOhlc(equityInstruments, token, today);
@@ -482,7 +507,7 @@ export async function executeDailyOhlcUpstoxJob(): Promise<void> {
         const totalInserted = equityCount + futuresCount + optionsCount;
         const duration = (Date.now() - startTime) / 1000;
 
-        console.log(`✅ Daily OHLC Job Completed. Total: ${totalInserted} records in ${duration.toFixed(2)}s`);
+        devLog(`✅ Daily OHLC Job Completed. Total: ${totalInserted} records in ${duration.toFixed(2)}s`);
 
         // Send completion notification
         await sendDailyJobEmail("completed", {
@@ -493,7 +518,7 @@ export async function executeDailyOhlcUpstoxJob(): Promise<void> {
         });
 
     } catch (error: any) {
-        console.error("❌ Critical Error in Daily OHLC Job:", error.message);
+        devError("❌ Critical Error in Daily OHLC Job:", error.message);
         await sendDailyJobEmail("failed", { errorMessage: error.message });
     }
 }
@@ -510,9 +535,9 @@ export function initializeDailyOhlcUpstoxJob(): void {
     }
 
     // Schedule to run every day 7 PM, Monday to Friday
-    cron.schedule("0 19 * * 1-5", executeDailyOhlcUpstoxJob, {
+    cron.schedule("0 19 * * 1-5", withJobTracking("dailyOhlcUpstoxJob", "0 19 * * 1-5", executeDailyOhlcUpstoxJob), {
         timezone: "Asia/Kolkata",
     });
 
-    console.log("⏰ Daily OHLC Upstox Job scheduled to run every day 7 PM, Monday to Friday (IST)");
+    devLog("⏰ Daily OHLC Upstox Job scheduled to run every day 7 PM, Monday to Friday (IST)");
 }

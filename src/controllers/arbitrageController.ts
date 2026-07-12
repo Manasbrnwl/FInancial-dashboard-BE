@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../config/prisma";
+import { logger } from "../utils/logger";
+import { devError, prodError } from "../utils/errorLogger";
 
 export const getArbitrageData = async (req: Request, res: Response) => {
   try {
@@ -13,15 +15,15 @@ export const getArbitrageData = async (req: Request, res: Response) => {
       }>
     >`
   WITH latest_tick_fut AS (
-    SELECT *, ROW_NUMBER() OVER (PARTITION BY "instrumentId" ORDER BY id DESC) rn
+    SELECT DISTINCT ON ("instrumentId") "instrumentId", ltp, volume, time
     FROM periodic_market_data."ticksDataNSEFUT" 
-    WHERE date(time) = '2026-01-08'
-    -- WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+    WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+    ORDER BY "instrumentId", id DESC
   ), latest_tick_eq AS (
-    SELECT *, ROW_NUMBER() OVER (PARTITION BY "instrumentId" ORDER BY id DESC) rn
+    SELECT DISTINCT ON ("instrumentId") "instrumentId", ltp, time
     FROM periodic_market_data."ticksDataNSEEQ" 
-    WHERE date(time) = '2026-01-08'
-    -- WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+    WHERE time >= CURRENT_DATE - INTERVAL '3 days'
+    ORDER BY "instrumentId", id DESC
   )
   SELECT
     il.id AS instrumentid,
@@ -32,6 +34,7 @@ export const getArbitrageData = async (req: Request, res: Response) => {
       json_build_object(
         'expiry_date', sl.expiry_date,
         'symbol', sl.symbol,
+        'upstox_id', sl.upstox_id,
         'ltp', tf.ltp,
         'volume', tf.volume,
         'time', TO_CHAR(tf.time, 'yyyy-mm-dd HH12:MI AM')
@@ -41,9 +44,9 @@ export const getArbitrageData = async (req: Request, res: Response) => {
   INNER JOIN market_data.instrument_lists il
     ON sl.instrument_id = il.id
   INNER JOIN latest_tick_fut tf
-    ON sl.id = tf."instrumentId" AND tf.rn = 1
+    ON sl.id = tf."instrumentId"
   INNER JOIN latest_tick_eq te
-    ON sl.instrument_id = te."instrumentId" AND te.rn = 1
+    ON sl.instrument_id = te."instrumentId"
   WHERE sl.segment = 'FUT' and sl.expiry_date >= CURRENT_DATE
   GROUP BY il.id, il.instrument_type, te.ltp, te.time
   ORDER BY il.instrument_type
@@ -60,18 +63,21 @@ export const getArbitrageData = async (req: Request, res: Response) => {
         time: item.time,
         nearFutureSymbol: symbols[0]?.symbol || null,
         nearFuturePrice: symbols[0]?.ltp ? parseFloat(symbols[0].ltp) : null,
+        nearFutureUpstoxId: symbols[0]?.upstox_id || null,
         nearFutureVolume: symbols[0]?.volume
           ? parseInt(symbols[0].volume)
           : null,
         nearFutureTime: symbols[0]?.time,
         nextFutureSymbol: symbols[1]?.symbol || null,
         nextFuturePrice: symbols[1]?.ltp ? parseFloat(symbols[1].ltp) : null,
+        nextFutureUpstoxId: symbols[1]?.upstox_id || null,
         nextFutureVolume: symbols[1]?.volume
           ? parseInt(symbols[1].volume)
           : null,
         nextFutureTime: symbols[1]?.time,
         farFutureSymbol: symbols[2]?.symbol || null,
         farFuturePrice: symbols[2]?.ltp ? parseFloat(symbols[2].ltp) : null,
+        farFutureUpstoxId: symbols[2]?.upstox_id || null,
         farFutureVolume: symbols[2]?.volume
           ? parseInt(symbols[2].volume)
           : null,
@@ -84,7 +90,8 @@ export const getArbitrageData = async (req: Request, res: Response) => {
       data: transformedData,
     });
   } catch (error: any) {
-    console.error("Error fetching Arbitrage data:", error);
+    devError("Error fetching Arbitrage data:", error);
+    prodError("Error fetching Arbitrage data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch Arbitrage data",
@@ -137,7 +144,7 @@ export const getNSEOptionsData = async (req: Request, res: Response) => {
         opt.expiry_date,
         opt.option_type
       FROM market_data.nse_options opt
-      INNER JOIN market_data.symbols_list li ON opt.symbol = li.symbol
+      INNER JOIN market_data.symbols_list li ON opt.symbol = li.id
       WHERE opt.expiry_date >= CURRENT_DATE
         AND li.instrument_id = ${instrumentIdNum}
       ORDER BY opt.expiry_date ASC
@@ -149,7 +156,8 @@ export const getNSEOptionsData = async (req: Request, res: Response) => {
       count: optionsData.length,
     });
   } catch (error: any) {
-    console.error("Error fetching NSE Options data:", error);
+    devError("Error fetching NSE Options data:", error);
+    prodError("Error fetching NSE Options data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE Options data",
@@ -200,7 +208,7 @@ export const getNSEFuturesData = async (req: Request, res: Response) => {
         fut.oi,
         fut.expiry_date
       FROM market_data.nse_futures fut
-      INNER JOIN market_data.symbols_list li ON fut.symbol = li.symbol
+      INNER JOIN market_data.symbols_list li ON fut.symbol = li.id
       WHERE fut.expiry_date >= CURRENT_DATE
         AND li.instrument_id = ${instrumentIdNum}
       ORDER BY fut.expiry_date ASC
@@ -212,7 +220,8 @@ export const getNSEFuturesData = async (req: Request, res: Response) => {
       count: futuresData.length,
     });
   } catch (error: any) {
-    console.error("Error fetching NSE Futures data:", error);
+    devError("Error fetching NSE Futures data:", error);
+    prodError("Error fetching NSE Futures data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE Futures data",
@@ -269,6 +278,7 @@ export const getNSEFuturesTicksData = async (req: Request, res: Response) => {
       WHERE li.expiry_date >= CURRENT_DATE
         AND li.instrument_id = ${instrumentIdNum}
         AND li.segment = 'FUT'
+        AND fut.time >= CURRENT_DATE - INTERVAL '3 days'
       ORDER BY li.expiry_date ASC
     `;
 
@@ -278,7 +288,8 @@ export const getNSEFuturesTicksData = async (req: Request, res: Response) => {
       count: futuresTicksData.length,
     });
   } catch (error: any) {
-    console.error("Error fetching NSE Futures Ticks data:", error);
+    devError("Error fetching NSE Futures Ticks data:", error);
+    prodError("Error fetching NSE Futures Ticks data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE Futures Ticks data",
@@ -335,6 +346,7 @@ export const getNSEOptionsTicksData = async (req: Request, res: Response) => {
       WHERE li.expiry_date >= CURRENT_DATE
         AND li.instrument_id = ${instrumentIdNum}
         AND li.segment = 'OPT'
+        AND opt.time >= CURRENT_DATE - INTERVAL '3 days'
       ORDER BY li.expiry_date ASC
     `;
 
@@ -344,7 +356,8 @@ export const getNSEOptionsTicksData = async (req: Request, res: Response) => {
       count: optionsTicksData.length,
     });
   } catch (error: any) {
-    console.error("Error fetching NSE Options Ticks data:", error);
+    devError("Error fetching NSE Options Ticks data:", error);
+    prodError("Error fetching NSE Options Ticks data");
     res.status(500).json({
       success: false,
       error: "Failed to fetch NSE Options Ticks data",

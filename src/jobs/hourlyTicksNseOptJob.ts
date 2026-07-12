@@ -1,13 +1,15 @@
 import axios from "axios";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../config/prisma";
 import cron from "node-cron";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { loadEnv } from "../config/env";
+import { devLog, devError, prodError } from "../utils/errorLogger";
+import { upstoxQuoteService } from "../services/upstoxQuoteService";
+import { withJobTracking } from "../utils/cronMonitor";
 
 loadEnv();
-const prisma = new PrismaClient();
 
 // Batch size for Upstox Quote API (Upstox supports up to 500)
 const BATCH_SIZE = 500;
@@ -46,55 +48,27 @@ async function getActiveOptions(): Promise<InstrumentMap[]> {
       upstoxName: s.upstox_symbol || "", // Handle null safety
     }));
   } catch (error: any) {
-    console.error("❌ Failed to fetch active options from DB:", error.message);
+    devError("❌ Failed to fetch active options from DB:", error.message);
+    prodError("Failed to fetch active options from DB");
     return [];
   }
 }
 
-/**
- * Fetch Market Quotes from Upstox for a batch of keys.
- */
-async function fetchQuotes(keys: string[], accessToken: string) {
-  try {
-    const url = `${UPSTOX_CONFIG.BASE_URL}/market-quote/quotes`;
-    const params = new URLSearchParams({
-      instrument_key: keys.join(","),
-    });
-
-    const response = await axios.get(url, {
-      params,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
-    });
-
-    if (response.data.status === "success") {
-      return response.data.data;
-    }
-    return null;
-  } catch (error: any) {
-    console.error(
-      "❌ Failed to fetch quotes batch:",
-      error.response?.data?.message || error.message
-    );
-    return null;
-  }
-}
 
 /**
  * Main execution function for the 5-minute job.
  */
 export async function executeFiveMinuteJob() {
   const startTime = Date.now();
-  console.log(`⏰ Starting 5-minute NSE Options Job at ${new Date().toISOString()}`);
+  devLog(`⏰ Starting 5-minute NSE Options Job at ${new Date().toISOString()}`);
 
   try {
     // 1. Get Access Token (Must be valid)
     // 1. Get Access Token (Must be valid)
     const token = await upstoxAuthService.getAccessToken(); // Use service!
     if (!token) {
-      console.error("? No Upstox Access Token available. Skipping job.");
+      devError("? No Upstox Access Token available. Skipping job.");
+      prodError("No Upstox Access Token for options job");
       // Optional: Trigger re-login or alert
       return;
     }
@@ -103,11 +77,11 @@ export async function executeFiveMinuteJob() {
     // 2. Get Active Instruments
     const instruments = await getActiveOptions();
     if (instruments.length === 0) {
-      console.log("⚠️ No active options with Upstox IDs found.");
+      devLog("⚠️ No active options with Upstox IDs found.");
       return;
     }
 
-    console.log(`✅ Found ${instruments.length} active options. Processing batches...`);
+    devLog(`✅ Found ${instruments.length} active options. Processing batches...`);
 
     // 3. Batch Process
     let totalInserted = 0;
@@ -117,7 +91,7 @@ export async function executeFiveMinuteJob() {
       const batchInstruments = instruments.slice(i, i + BATCH_SIZE);
       const batchKeys = batchInstruments.map(inst => inst.upstoxId);
 
-      const quotes = await fetchQuotes(batchKeys, token);
+      const quotes = await upstoxQuoteService.fetchQuotesResilient(batchKeys, token);
 
       if (quotes) {
         const dbRecords = [];
@@ -127,11 +101,11 @@ export async function executeFiveMinuteJob() {
           // User request implies using upstox name for lookup.
           // Based on debug (Step 90), response keys use "NSE_FO:SYMBOL" format.
           const lookupKey = `NSE_FO:${inst.upstoxName}`;
-          
+
           const quote = quotes[lookupKey];
 
           if (!quote) {
-             continue;
+            continue;
           }
 
           // Extract best Bid/Ask
@@ -168,10 +142,11 @@ export async function executeFiveMinuteJob() {
     }
 
     const duration = (Date.now() - startTime) / 1000;
-    console.log(`✅ Job Completed. Inserted ${totalInserted} records in ${duration.toFixed(2)}s.`);
+    devLog(`✅ Job Completed. Inserted ${totalInserted} records in ${duration.toFixed(2)}s.`);
 
   } catch (error: any) {
-    console.error("❌ Critical Error in 5-minute Options Job:", error.message);
+    devError("❌ Critical Error in 5-minute Options Job:", error.message);
+    prodError("Critical error in 5-minute options job");
     // await sendEmailNotification(...) // Optional failure alert
   }
 }
@@ -187,11 +162,11 @@ export function initializeHourlyTicksNseOptJob(): void {
 
   const schedule = "*/5 9-15 * * 1-5";
 
-  cron.schedule(schedule, executeFiveMinuteJob, {
+  cron.schedule(schedule, withJobTracking("hourlyTicksNseOptJob", schedule, executeFiveMinuteJob), {
     timezone: "Asia/Kolkata",
   });
 
-  console.log(`? 5-Minute Options Job Scheduled (${schedule})`);
+  devLog(`? 5-Minute Options Job Scheduled (${schedule})`);
 
   // Optional: Run once on start for DEV verification
   if (process.env.NODE_ENV === "development") {

@@ -1,5 +1,8 @@
-import { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import prisma from "../config/prisma";
 import { loadEnv } from "../config/env";
+import { logger } from "../utils/logger";
+import { devLog } from "../utils/errorLogger";
 
 loadEnv();
 
@@ -9,9 +12,8 @@ interface GapBaseline {
   baselineDate: Date | null; // most recent sample date in the window
 }
 
-// Map<instrumentId, GapBaseline> 
+// Map<instrumentId, GapBaseline>
 const gapBaselines = new Map<number, GapBaseline>();
-const prisma = new PrismaClient();
 
 function getBaselineWindow(): { minDays: number; maxDays: number } {
   const minDays = Number(process.env.GAP_BASELINE_DAYS_MIN || 10);
@@ -61,7 +63,7 @@ export async function loadGapBaselines(): Promise<void> {
     });
   });
 
-  console.log(
+  devLog(
     `?? Loaded gap baselines for ${gapBaselines.size} instruments`
   );
 }

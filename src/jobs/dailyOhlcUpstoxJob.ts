@@ -32,6 +32,17 @@ interface SymbolData {
 }
 
 /**
+ * Reduces a timestamp to its IST calendar date (midnight UTC of that date),
+ * matching the date-only convention used across nse_equity/nse_futures/nse_options.
+ * Computed via the IST timezone explicitly rather than server-local time, since
+ * the container's OS timezone isn't guaranteed to be Asia/Kolkata.
+ */
+function toDateOnly(d: Date): Date {
+    const istDateStr = d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }); // YYYY-MM-DD
+    return new Date(`${istDateStr}T00:00:00.000Z`);
+}
+
+/**
  * Fetch active NSE Equity instruments from instrument_lists with valid Upstox IDs.
  */
 async function getActiveEquityInstruments(): Promise<InstrumentData[]> {
@@ -288,7 +299,7 @@ async function processEquityOhlc(
         equityRecords.push({
             symbol_id: inst.id,
             symbol: inst.id.toString(),
-            date: today,
+            date: ohlc.timestamp ? toDateOnly(ohlc.timestamp) : today,
             open: ohlc.open,
             high: ohlc.high,
             low: ohlc.low,
@@ -354,7 +365,7 @@ async function processFuturesOhlc(
         futuresRecords.push({
             symbol_id: sym.id.toString(),
             symbol: sym.id,
-            date: today,
+            date: ohlc.timestamp ? toDateOnly(ohlc.timestamp) : today,
             open: ohlc.open,
             high: ohlc.high,
             low: ohlc.low,
@@ -421,7 +432,7 @@ async function processOptionsOhlc(
         optionsRecords.push({
             symbol_id: sym.id.toString(),
             symbol: sym.id,
-            date: today,
+            date: ohlc.timestamp ? toDateOnly(ohlc.timestamp) : today,
             open: ohlc.open,
             high: ohlc.high,
             low: ohlc.low,
@@ -456,6 +467,16 @@ export async function executeDailyOhlcUpstoxJob(): Promise<void> {
     devLog(`🕐 Starting Daily NSE OHLC Upstox Job at ${new Date().toISOString()}`);
 
     try {
+        // Guard against the NODE_ENV=development immediate-run-on-startup path
+        // firing outside the Mon-Fri cron schedule (e.g. a local dev instance
+        // pointed at prod started on a weekend) - NSE doesn't trade on weekends,
+        // so there's nothing valid to fetch/insert.
+        const istWeekday = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata", weekday: "short" });
+        if (istWeekday === "Sat" || istWeekday === "Sun") {
+            devLog(`⏭️ Skipping Daily OHLC job — ${istWeekday} is not an NSE trading day (IST).`);
+            return;
+        }
+
         // Send start notification
         // await sendDailyJobEmail("started", {});
 
@@ -467,8 +488,7 @@ export async function executeDailyOhlcUpstoxJob(): Promise<void> {
             return;
         }
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = toDateOnly(new Date());
 
         // 2. Get Active Instruments and Symbols
         const [equityInstruments, futuresSymbols, optionsSymbols] = await Promise.all([

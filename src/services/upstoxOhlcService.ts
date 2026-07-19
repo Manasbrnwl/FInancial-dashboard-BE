@@ -1,6 +1,6 @@
 import axios from "axios";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
-import { devError, prodError } from "../utils/errorLogger";
+import { devLog, devError, prodError } from "../utils/errorLogger";
 
 // OHLC data structure from Upstox V3 API
 export interface OhlcCandle {
@@ -68,6 +68,35 @@ export const upstoxOhlcService = {
             prodError("Upstox OHLC API returned non-success status");
             return null;
         } catch (error: any) {
+            const errorData = error.response?.data?.errors;
+            const isInvalidSymbolError = errorData?.some((e: any) =>
+                e.errorCode?.startsWith("UDAPI") || e.message?.toLowerCase().includes("invalid symbol")
+            );
+
+            // A single stale/delisted instrument key 400s the whole batch. Isolate
+            // it by splitting instead of silently dropping every instrument in the
+            // batch for the day - this previously zeroed out all equity spot data
+            // whenever one instrument_lists row had a bad upstox_id.
+            if (isInvalidSymbolError && instrumentKeys.length > 1) {
+                devLog(`⚠️ Invalid symbol detected in OHLC batch of ${instrumentKeys.length}. Splitting and retrying...`);
+
+                const mid = Math.floor(instrumentKeys.length / 2);
+                const left = instrumentKeys.slice(0, mid);
+                const right = instrumentKeys.slice(mid);
+
+                const [leftResult, rightResult] = await Promise.all([
+                    upstoxOhlcService.fetchOhlc(left, accessToken, interval),
+                    upstoxOhlcService.fetchOhlc(right, accessToken, interval),
+                ]);
+
+                return { ...(leftResult || {}), ...(rightResult || {}) };
+            }
+
+            if (isInvalidSymbolError && instrumentKeys.length === 1) {
+                devError(`❌ Instrument ${instrumentKeys[0]} is invalid/delisted for OHLC and will be skipped.`);
+                return null;
+            }
+
             devError(
                 "❌ Failed to fetch OHLC data:",
                 error.response?.data?.errors || error.message

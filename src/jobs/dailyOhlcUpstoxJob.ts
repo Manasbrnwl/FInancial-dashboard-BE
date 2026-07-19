@@ -283,8 +283,12 @@ async function processEquityOhlc(
 
     const equityRecords = [];
     for (const inst of instruments) {
-        const prefix = inst.upstox_id.split("|")[0];
-        const symbolKey = inst.upstox_symbol || inst.instrument_type;
+        const [prefix, upstoxIdSuffix] = inst.upstox_id.split("|");
+        // For NSE_INDEX instruments, Upstox's OHLC response key uses the
+        // descriptive name embedded in upstox_id itself (e.g. "Nifty 50",
+        // "India VIX") - the separately-maintained upstox_symbol field
+        // (e.g. "NIFTY") doesn't match it and silently drops every index.
+        const symbolKey = prefix === "NSE_INDEX" ? upstoxIdSuffix : (inst.upstox_symbol || inst.instrument_type);
         const lookupKey = `${prefix}:${symbolKey}`;
         const quote = ohlcData[lookupKey] as OhlcQuote | undefined;
 

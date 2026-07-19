@@ -7,7 +7,7 @@ import { upstoxAuthService } from "../services/upstoxAuthService";
 import { upstoxOhlcService, OhlcQuote } from "../services/upstoxOhlcService";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { loadEnv } from "../config/env";
-import { devLog, devError } from "../utils/errorLogger";
+import { devLog, devWarn, devError } from "../utils/errorLogger";
 import { withJobTracking } from "../utils/cronMonitor";
 
 loadEnv();
@@ -111,7 +111,7 @@ async function getActiveEquityInstruments(): Promise<InstrumentData[]> {
         const filtered = mapped.filter((inst) => validKeys.has(inst.upstox_id));
         const skipped = mapped.length - filtered.length;
         if (skipped > 0) {
-            devLog(`⏭️ Skipping ${skipped} instrument_lists rows Upstox no longer recognizes (stale/delisted/malformed upstox_id).`);
+            devWarn(`⏭️ Skipping ${skipped} instrument_lists rows Upstox no longer recognizes (stale/delisted/malformed upstox_id).`);
         }
         return filtered;
     } catch (error: any) {

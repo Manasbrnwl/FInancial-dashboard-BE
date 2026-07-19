@@ -1,5 +1,8 @@
 import prisma from "../config/prisma";
 import cron from "node-cron";
+import axios from "axios";
+import zlib from "zlib";
+import { promisify } from "util";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { upstoxOhlcService, OhlcQuote } from "../services/upstoxOhlcService";
 import { sendEmailNotification } from "../utils/sendEmail";
@@ -8,6 +11,8 @@ import { devLog, devError } from "../utils/errorLogger";
 import { withJobTracking } from "../utils/cronMonitor";
 
 loadEnv();
+
+const gunzip = promisify(zlib.gunzip);
 
 // Batch size for Upstox Quote API
 const BATCH_SIZE = 500;
@@ -43,6 +48,33 @@ function toDateOnly(d: Date): Date {
 }
 
 /**
+ * Loads Upstox's own published NSE instrument master (their source of truth for which
+ * instrument_key values are currently valid) and returns the set of keys it contains.
+ * instrument_lists accumulates stale rows over time - delisted ISINs, bonds/T-bills
+ * mistakenly tagged NSE_EQ, even index display names stored where a real key belongs
+ * (e.g. "NSE_EQ|Nifty Multi Infra") - that Upstox's OHLC endpoint always rejects.
+ * Cross-checking against this file filters those out without touching the DB.
+ */
+async function loadValidUpstoxKeys(): Promise<Set<string> | null> {
+    try {
+        const response = await axios.get(
+            "https://assets.upstox.com/market-quote/instruments/exchange/NSE.csv.gz",
+            { responseType: "arraybuffer", timeout: 30000 }
+        );
+        const csv = (await gunzip(response.data)).toString("utf-8");
+        const keys = new Set<string>();
+        for (const line of csv.split("\n")) {
+            const key = line.split(",")[0]?.replace(/"/g, "").trim();
+            if (key && key !== "instrument_key") keys.add(key);
+        }
+        return keys;
+    } catch (error: any) {
+        devError("❌ Failed to load Upstox instrument master for validation:", error.message);
+        return null;
+    }
+}
+
+/**
  * Fetch active NSE Equity instruments from instrument_lists with valid Upstox IDs.
  */
 async function getActiveEquityInstruments(): Promise<InstrumentData[]> {
@@ -64,12 +96,24 @@ async function getActiveEquityInstruments(): Promise<InstrumentData[]> {
             },
         });
 
-        return instruments.map((s) => ({
+        const mapped = instruments.map((s) => ({
             id: s.id,
             instrument_type: s.instrument_type,
             upstox_id: s.upstox_id!,
             upstox_symbol: s.upstox_symbol,
         }));
+
+        // A transient failure to fetch/parse Upstox's master file shouldn't zero out
+        // the entire equity run - fail open and process the unfiltered list instead.
+        const validKeys = await loadValidUpstoxKeys();
+        if (!validKeys) return mapped;
+
+        const filtered = mapped.filter((inst) => validKeys.has(inst.upstox_id));
+        const skipped = mapped.length - filtered.length;
+        if (skipped > 0) {
+            devLog(`⏭️ Skipping ${skipped} instrument_lists rows Upstox no longer recognizes (stale/delisted/malformed upstox_id).`);
+        }
+        return filtered;
     } catch (error: any) {
         devError("❌ Failed to fetch active equity instruments from DB:", error.message);
         return [];

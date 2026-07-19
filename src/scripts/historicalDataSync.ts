@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import axios from "axios";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { upstoxAuthService } from "../services/upstoxAuthService";
+import { upstoxInstrumentService } from "../services/upstoxInstrumentService";
 import { loadEnv } from "../config/env";
 import { devError, devLog } from "../utils/errorLogger";
 
@@ -164,11 +165,24 @@ async function loadEquityInstruments(): Promise<InstrumentData[]> {
         select: { id: true, instrument_type: true, upstox_id: true },
     });
 
-    return instruments.map((s) => ({
+    const mapped = instruments.map((s) => ({
         id: s.id,
         instrument_type: s.instrument_type,
         upstox_id: s.upstox_id!,
     }));
+
+    // Skip rows Upstox no longer recognizes (delisted ISINs, bonds/T-bills mistakenly
+    // tagged NSE_EQ, malformed keys) - these always fail and would otherwise burn a
+    // historical-candle call (and rate-limit delay) every run for no benefit.
+    const validKeys = await upstoxInstrumentService.loadValidNseInstrumentKeys();
+    if (!validKeys) return mapped;
+
+    const filtered = mapped.filter((inst) => validKeys.has(inst.upstox_id));
+    const skipped = mapped.length - filtered.length;
+    if (skipped > 0) {
+        devLog(`⏭️ Skipping ${skipped} instrument_lists rows Upstox no longer recognizes.`);
+    }
+    return filtered;
 }
 
 async function loadFuturesSymbols(): Promise<SymbolData[]> {

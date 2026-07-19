@@ -373,4 +373,32 @@ export const upstoxInstrumentService = {
     //     const data = bseInstruments.filter((inst) => inst.instrumentType === "EQUITY");
     //     devLog(bseInstruments[0])
     // },
+
+    /**
+     * Loads Upstox's own published NSE instrument master (their source of truth for
+     * which instrument_key values are currently valid) and returns the raw set of keys
+     * it contains, unfiltered by segment/type - covers NSE_EQ, NSE_INDEX, NSE_FO, etc.
+     * instrument_lists accumulates stale rows over time (delisted ISINs, bonds/T-bills
+     * mistakenly tagged NSE_EQ, even display names stored where a real key belongs)
+     * that Upstox always rejects; cross-checking against this file filters those out
+     * without touching the DB.
+     */
+    loadValidNseInstrumentKeys: async (): Promise<Set<string> | null> => {
+        try {
+            const response = await axios.get(
+                "https://assets.upstox.com/market-quote/instruments/exchange/NSE.csv.gz",
+                { responseType: "arraybuffer", timeout: 30000 }
+            );
+            const csv = (await gunzip(response.data)).toString("utf-8");
+            const keys = new Set<string>();
+            for (const line of csv.split("\n")) {
+                const key = line.split(",")[0]?.replace(/"/g, "").trim();
+                if (key && key !== "instrument_key") keys.add(key);
+            }
+            return keys;
+        } catch (error: any) {
+            devError("❌ Failed to load Upstox NSE instrument master for validation:", error.message);
+            return null;
+        }
+    },
 }

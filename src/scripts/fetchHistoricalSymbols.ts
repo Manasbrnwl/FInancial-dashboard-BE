@@ -12,7 +12,7 @@ loadEnv();
 const scratchDir = path.resolve(__dirname, "../../scratch/temp_bhavcopy");
 
 // Generate date strings between two dates
-function generateDates(start: string, end: string): string[] {
+export function generateDates(start: string, end: string): string[] {
     const dates: string[] = [];
     let current = new Date(start);
     const last = new Date(end);
@@ -28,7 +28,7 @@ function generateDates(start: string, end: string): string[] {
 }
 
 // Download a file
-async function downloadFile(url: string, destPath: string): Promise<boolean> {
+export async function downloadFile(url: string, destPath: string): Promise<boolean> {
     try {
         const response = await axios({
             method: "get",
@@ -55,7 +55,7 @@ async function downloadFile(url: string, destPath: string): Promise<boolean> {
 }
 
 // Extract zip (PowerShell on Windows, unzip on Linux/macOS)
-function extractZip(zipPath: string, destDir: string): boolean {
+export function extractZip(zipPath: string, destDir: string): boolean {
     try {
         if (!fs.existsSync(destDir)) {
             fs.mkdirSync(destDir, { recursive: true });
@@ -72,8 +72,44 @@ function extractZip(zipPath: string, destDir: string): boolean {
     }
 }
 
+// Splits a single CSV line into fields, respecting double-quoted fields that may
+// contain commas (a naive `line.split(",")` misaligns every column after such a
+// field, which is how garbage values ended up in numeric columns like XpryDt/StrkPric).
+function parseCsvLine(line: string): string[] {
+    const fields: string[] = [];
+    let current = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (inQuotes) {
+            if (char === '"') {
+                if (line[i + 1] === '"') {
+                    current += '"';
+                    i++;
+                } else {
+                    inQuotes = false;
+                }
+            } else {
+                current += char;
+            }
+        } else {
+            if (char === '"') {
+                inQuotes = true;
+            } else if (char === ",") {
+                fields.push(current.trim());
+                current = "";
+            } else {
+                current += char;
+            }
+        }
+    }
+    fields.push(current.trim());
+    return fields;
+}
+
 // Parse CSV file line by line
-async function parseCsv(csvPath: string, onRow: (row: Record<string, string>) => void): Promise<number> {
+export async function parseCsv(csvPath: string, onRow: (row: Record<string, string>) => void): Promise<number> {
     const fileStream = fs.createReadStream(csvPath);
     const rl = readline.createInterface({
         input: fileStream,
@@ -85,7 +121,7 @@ async function parseCsv(csvPath: string, onRow: (row: Record<string, string>) =>
 
     for await (const line of rl) {
         if (!line.trim()) continue;
-        const columns = line.split(",").map(c => c.trim());
+        const columns = parseCsvLine(line);
         if (headers.length === 0) {
             headers = columns;
             continue;
@@ -101,8 +137,17 @@ async function parseCsv(csvPath: string, onRow: (row: Record<string, string>) =>
     return count;
 }
 
+// Sane bounds for an option/future expiry — NSE doesn't list contracts this far out.
+// Anything outside this window is a parsing artifact, not a real contract.
+const MIN_SANE_EXPIRY = new Date(Date.now() - 24 * 60 * 60 * 1000); // yesterday (tolerate same-day timing)
+const MAX_SANE_EXPIRY = new Date(Date.now() + 2 * 365 * 24 * 60 * 60 * 1000); // +2 years
+
+function isSaneExpiry(expiryDate: Date): boolean {
+    return !isNaN(expiryDate.getTime()) && expiryDate >= MIN_SANE_EXPIRY && expiryDate <= MAX_SANE_EXPIRY;
+}
+
 // Format strike price to slice off unnecessary decimals
-function formatStrike(strikeStr: string): string {
+export function formatStrike(strikeStr: string): string {
     const num = parseFloat(strikeStr);
     if (isNaN(num)) return strikeStr;
     if (num % 1 === 0) {
@@ -112,7 +157,7 @@ function formatStrike(strikeStr: string): string {
 }
 
 // Fallback symbol generator for Options and Futures
-function getOptionOrFutureSymbol(row: Record<string, string>): string {
+export function getOptionOrFutureSymbol(row: Record<string, string>): string {
     if (row.FinInstrmNm) {
         return row.FinInstrmNm;
     }
@@ -297,6 +342,12 @@ export async function syncHistoricalSymbols(startDate: string, endDate: string, 
 
                         if (!existsSymbol) {
                             const expiryDate = new Date(`${row.XpryDt}T00:00:00Z`);
+
+                            if (!isSaneExpiry(expiryDate)) {
+                                console.error(`⚠️ Skipping row with implausible expiry_date (${row.XpryDt} -> ${expiryDate.toISOString()}) for symbol "${symbol}" — likely a CSV column misalignment.`);
+                                return;
+                            }
+
                             const expiryMonth = expiryDate.toLocaleString("default", { month: "long", timeZone: "UTC" }).toUpperCase();
                             const strikeStr = segment === "FUT" ? "0" : formatStrike(row.StrkPric);
                             const finalOptType = segment === "FUT" ? "" : optType;

@@ -137,6 +137,14 @@ async function getFuturesSymbols(): Promise<SymbolData[]> {
         where: {
             segment: "FUT",
             upstox_id: { not: null },
+            // Upstox recycles NSE_FO exchange tokens once a contract expires,
+            // so an already-expired symbol's stored upstox_id can silently
+            // point at a completely different, currently-listed contract.
+            // Without this bound, fetchHistoricalCandles would fetch that
+            // other contract's data and insert it under the old (wrong)
+            // symbol_id -- confirmed in production: thousands of expired FUT
+            // and OPT rows had data recorded after their own expiry date.
+            expiry_date: { gte: new Date() },
         },
         select: {
             id: true,
@@ -172,9 +180,12 @@ async function getOptionsSymbols(fromDate: string): Promise<SymbolData[]> {
         where: {
             segment: "OPT",
             upstox_id: { not: null },
-            expiry_date: {
-                gte: new Date(fromDate)
-            },
+            // Bounded by "now", not fromDate: a contract that expired between
+            // fromDate and today would still pass an expiry_date >= fromDate
+            // check, and its upstox_id may have already been recycled to an
+            // unrelated contract by the time this actually runs. See the
+            // matching comment in getFuturesSymbols for the full incident.
+            expiry_date: { gte: new Date() },
         },
         select: {
             id: true,

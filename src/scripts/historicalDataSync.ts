@@ -190,7 +190,15 @@ async function loadFuturesSymbols(): Promise<SymbolData[]> {
         where: {
             segment: "FUT",
             upstox_id: { not: null },
-            // expiry_date: { gte: new Date() },
+            // Upstox recycles NSE_FO exchange tokens once a contract expires,
+            // so a stale (already-expired) symbol's upstox_id can silently
+            // point at a different, currently-listed contract. Without this
+            // bound, that other contract's OHLC data gets fetched and written
+            // under the OLD symbol_id -- confirmed in production: thousands
+            // of expired FUT/OPT rows had data recorded after their own
+            // expiry date, in a recurring ~monthly pattern matching this
+            // script's regular sync runs. Do not remove/comment this out.
+            expiry_date: { gte: new Date() },
         },
         select: {
             id: true,
@@ -223,7 +231,8 @@ async function loadOptionsSymbols(): Promise<SymbolData[]> {
         where: {
             segment: "OPT",
             upstox_id: { not: null },
-            // expiry_date: { gte: new Date() },
+            // See the matching comment in loadFuturesSymbols -- same incident.
+            expiry_date: { gte: new Date() },
         },
         select: {
             id: true,

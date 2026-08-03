@@ -13,6 +13,7 @@ import { initializeGapAverageLoader } from "../jobs/gapAverageLoader";
 import { initializeGapHistoryCleanupJob } from "../jobs/gapHistoryCleanup";
 import { initializeLoginReminderJob } from "../jobs/dailyLoginEmailJob";
 import { syncHistoricalSymbols } from "../scripts/fetchHistoricalSymbols";
+import { upstoxInstrumentService } from "../services/upstoxInstrumentService";
 import { withJobTracking } from "../utils/cronMonitor";
 
 // Polyfill for BigInt JSON serialization
@@ -21,6 +22,7 @@ import { withJobTracking } from "../utils/cronMonitor";
 };
 
 const WEEKLY_SYMBOL_SYNC_CRON = "0 6 * * 2"; // Every Tuesday 6 AM IST
+const WEEKLY_UPSTOX_TOKEN_REFRESH_CRON = "15 6 * * 2"; // Every Tuesday 6:15 AM IST, after the bhavcopy sync above
 
 async function syncNewSymbolsFromBhavcopy() {
   try {
@@ -32,6 +34,24 @@ async function syncNewSymbolsFromBhavcopy() {
   } catch (error: any) {
     devError("Failed to sync instruments from Bhavcopy:", error.message);
     prodError("Failed to sync instruments from Bhavcopy");
+  }
+}
+
+/**
+ * Upstox recycles NSE_FO exchange tokens (symbols_list.upstox_id) across
+ * expiries. Nothing else refreshes them, so they silently go stale and every
+ * historical-candle/quote call for an affected contract starts failing with
+ * "Invalid Instrument key". Re-matching against Upstox's current instrument
+ * master by (instrument_id, symbol) keeps them current; safe to re-run any
+ * time since it only refreshes rows, keyed off symbol, never off the token.
+ */
+async function refreshUpstoxTokens() {
+  try {
+    await upstoxInstrumentService.loadNseFutInstruments();
+    await upstoxInstrumentService.loadNseOptInstruments();
+  } catch (error: any) {
+    devError("Failed to refresh Upstox instrument keys:", error.message);
+    prodError("Failed to refresh Upstox instrument keys");
   }
 }
 
@@ -52,6 +72,13 @@ export function startSyncWorker(): void {
     { timezone: "Asia/Kolkata" }
   );
   devLog("Weekly Bhavcopy Instrument Sync scheduled (Every Tuesday 6 AM IST)");
+
+  cron.schedule(
+    WEEKLY_UPSTOX_TOKEN_REFRESH_CRON,
+    withJobTracking("weeklyUpstoxTokenRefresh", WEEKLY_UPSTOX_TOKEN_REFRESH_CRON, refreshUpstoxTokens),
+    { timezone: "Asia/Kolkata" }
+  );
+  devLog("Weekly Upstox Token Refresh scheduled (Every Tuesday 6:15 AM IST)");
 
   if (process.env.NODE_ENV === "development") {
     syncNewSymbolsFromBhavcopy();

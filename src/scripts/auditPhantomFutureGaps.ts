@@ -179,11 +179,13 @@ async function main(): Promise<void> {
 
     if (markInvalid && confirmedPhantom.length > 0) {
         const ids = confirmedPhantom.map((s) => allMissingSymbols.get(s)!.id);
-        const result = await prisma.symbols_list.updateMany({
-            where: { id: { in: ids } },
-            data: { data_status: "invalid" },
-        });
-        console.log(`\n✅ Marked ${result.count} symbols_list rows as data_status='invalid'.`);
+        // Raw query: data_status isn't always present in the currently
+        // deployed schema.prisma's generated client (see backfillMissingData
+        // for the full note), so this goes straight to the column.
+        const result = await prisma.$executeRaw`
+            UPDATE market_data.symbols_list SET data_status = 'invalid' WHERE id = ANY(${ids})
+        `;
+        console.log(`\n✅ Marked ${result} symbols_list rows as data_status='invalid'.`);
     } else if (confirmedPhantom.length > 0) {
         console.log(`\nRun with --mark-invalid to flag these ${confirmedPhantom.length} rows as data_status='invalid' (excludes them from future gap scans; does not delete anything).`);
     }

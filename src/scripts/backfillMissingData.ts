@@ -203,21 +203,32 @@ export async function findMissingDailySymbols(
     const calendarKeys = calendar.map(fmt);
     const today = fmt(new Date());
 
-    const candidates = await prisma.symbols_list.findMany({
-        where: { segment, upstox_id: { not: null }, expiry_date: { gte: new Date(START) }, data_status: null },
-        select: {
-            id: true,
-            symbol: true,
-            upstox_id: true,
-            instrument_id: true,
-            expiry_date: true,
-            strike: true,
-            option_type: true,
-            expiry_month: true,
-            created_at: true,
-        },
-        orderBy: { symbol: "asc" },
-    });
+    // Raw query, not prisma.symbols_list.findMany: data_status exists on the
+    // live DB column but isn't always present in schema.prisma's checked-in
+    // text (seen as an uncommitted local-only change on at least one dev
+    // machine) -- going through $queryRaw avoids depending on that field
+    // being in whatever generated Prisma Client build is currently deployed.
+    const candidates = await prisma.$queryRaw<
+        Array<{
+            id: number;
+            symbol: string;
+            upstox_id: string | null;
+            instrument_id: number;
+            expiry_date: Date | null;
+            strike: string | null;
+            option_type: string | null;
+            expiry_month: string | null;
+            created_at: Date | null;
+        }>
+    >`
+        SELECT id, symbol, upstox_id, instrument_id, expiry_date, strike, option_type, expiry_month, created_at
+        FROM market_data.symbols_list
+        WHERE segment = ${segment}
+          AND upstox_id IS NOT NULL
+          AND expiry_date >= ${START}::date
+          AND data_status IS NULL
+        ORDER BY symbol ASC
+    `;
 
     // symbols_list.instrument_id has no declared Prisma relation to
     // instrument_lists, so the ticker is fetched separately.

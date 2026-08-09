@@ -1,6 +1,7 @@
 import prisma from "../config/prisma";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { loadEnv } from "../config/env";
+import { toDateOnly } from "../utils/istDate";
 import {
     START,
     RATE_LIMIT_DELAY_MS,
@@ -114,7 +115,7 @@ async function fillOneDay(slot: GapSlot, token: string): Promise<number> {
         .map((c) => ({
             symbol_id: symbol.id.toString(),
             symbol: symbol.id,
-            date: new Date(c.timestamp),
+            date: toDateOnly(new Date(c.timestamp)),
             open: c.open,
             high: c.high,
             low: c.low,

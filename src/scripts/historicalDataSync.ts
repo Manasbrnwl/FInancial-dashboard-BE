@@ -3,6 +3,7 @@ import axios from "axios";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { upstoxInstrumentService } from "../services/upstoxInstrumentService";
+import { toDateOnly } from "../utils/istDate";
 import { loadEnv } from "../config/env";
 import { devError, devLog } from "../utils/errorLogger";
 
@@ -313,7 +314,7 @@ async function syncEquity(
                     .map((c) => ({
                         symbol_id: inst.id,
                         symbol: inst.id.toString(),
-                        date: new Date(c.timestamp),
+                        date: toDateOnly(new Date(c.timestamp)),
                         open: c.open,
                         high: c.high,
                         low: c.low,
@@ -410,7 +411,7 @@ async function syncFutures(
                     .map((c) => ({
                         symbol_id: sym.id.toString(),
                         symbol: sym.id,
-                        date: new Date(c.timestamp),
+                        date: toDateOnly(new Date(c.timestamp)),
                         open: c.open,
                         high: c.high,
                         low: c.low,
@@ -508,7 +509,7 @@ async function syncOptions(
                     .map((c) => ({
                         symbol_id: sym.id.toString(),
                         symbol: sym.id,
-                        date: new Date(c.timestamp),
+                        date: toDateOnly(new Date(c.timestamp)),
                         open: c.open,
                         high: c.high,
                         low: c.low,

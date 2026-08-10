@@ -14,6 +14,7 @@ import { initializeGapHistoryCleanupJob } from "../jobs/gapHistoryCleanup";
 import { initializeLoginReminderJob } from "../jobs/dailyLoginEmailJob";
 import { syncHistoricalSymbols } from "../scripts/fetchHistoricalSymbols";
 import { upstoxInstrumentService } from "../services/upstoxInstrumentService";
+import { runFillBseEquity } from "../scripts/fillBseEquityFromBhavcopy";
 import { withJobTracking } from "../utils/cronMonitor";
 
 // Polyfill for BigInt JSON serialization
@@ -23,6 +24,7 @@ import { withJobTracking } from "../utils/cronMonitor";
 
 const WEEKLY_SYMBOL_SYNC_CRON = "0 6 * * 2"; // Every Tuesday 6 AM IST
 const WEEKLY_UPSTOX_TOKEN_REFRESH_CRON = "15 6 * * 2"; // Every Tuesday 6:15 AM IST, after the bhavcopy sync above
+const DAILY_BSE_EQUITY_SYNC_CRON = "30 20 * * 1-5"; // Mon-Fri 8:30 PM IST, after BSE bhavcopy is typically published
 
 async function syncNewSymbolsFromBhavcopy() {
   try {
@@ -56,6 +58,24 @@ async function refreshUpstoxTokens() {
 }
 
 /**
+ * bse_equity was stuck at 2025-09-12 for ~11 months: the only code that ever
+ * wrote to it (getBseEquityHistory, DhanHQ-based) was never wired to any
+ * cron/script -- dead on arrival. DhanHQ also isn't a viable path right now
+ * (no token configured, dhanTokenManager module referenced but doesn't
+ * exist). BSE publishes the same UDiFF bhavcopy format NSE does, no auth
+ * needed, so this fills from bhavcopy instead and resumes automatically from
+ * MAX(bse_equity.date) + 1 day each run.
+ */
+async function syncBseEquityFromBhavcopy() {
+  try {
+    await runFillBseEquity();
+  } catch (error: any) {
+    devError("Failed to sync BSE equity from bhavcopy:", error.message);
+    prodError("Failed to sync BSE equity from bhavcopy");
+  }
+}
+
+/**
  * The sync-worker process — every cron job (tick ingestion, daily OHLC, covered
  * call alerts, gap baselines/cleanup, weekly instrument sync, login reminders).
  * Isolated from the API and realtime processes so a burst of Upstox Quote API
@@ -79,6 +99,13 @@ export function startSyncWorker(): void {
     { timezone: "Asia/Kolkata" }
   );
   devLog("Weekly Upstox Token Refresh scheduled (Every Tuesday 6:15 AM IST)");
+
+  cron.schedule(
+    DAILY_BSE_EQUITY_SYNC_CRON,
+    withJobTracking("dailyBseEquitySync", DAILY_BSE_EQUITY_SYNC_CRON, syncBseEquityFromBhavcopy),
+    { timezone: "Asia/Kolkata" }
+  );
+  devLog("Daily BSE Equity Bhavcopy Sync scheduled (Mon-Fri 8:30 PM IST)");
 
   if (process.env.NODE_ENV === "development") {
     syncNewSymbolsFromBhavcopy();

@@ -187,7 +187,10 @@ export function createMcpServer(): McpServer {
     'get_instruments',
     {
       description:
-        'List instruments from instrument_lists. Filter by exchange (NSE/BSE) and/or instrument_type (e.g. NIFTY, BANKNIFTY).',
+        'List instruments from instrument_lists. Filter by exchange (NSE/BSE) and/or instrument_type (e.g. NIFTY, BANKNIFTY). ' +
+        'NOTE: BSE instruments were never registered in instrument_lists (an NSE/Upstox-oriented table) -- for ' +
+        'exchange=BSE this falls back to the distinct symbols actually present in bse_equity, in a reduced shape ' +
+        '(no upstox_id/upstox_symbol, since BSE data doesn\'t come via Upstox).',
       inputSchema: {
         exchange:        z.string().optional().describe('Exchange: NSE or BSE'),
         instrument_type: z.string().optional().describe('Instrument type string e.g. NIFTY, BANKNIFTY, FINNIFTY'),
@@ -197,16 +200,40 @@ export function createMcpServer(): McpServer {
     },
     async ({ exchange, instrument_type, limit }: { exchange?: string; instrument_type?: string; limit: number }) => {
       try {
+        const take = safeLimit(limit);
         const rows = await prisma.instrument_lists.findMany({
           where: {
             ...(exchange         ? { exchange }         : {}),
             ...(instrument_type  ? { instrument_type }  : {}),
           },
-          take: safeLimit(limit),
+          take,
           select: { id: true, exchange: true, instrument_type: true, upstox_symbol: true, upstox_id: true },
           orderBy: { id: 'asc' },
         });
-        return ok({ count: rows.length, rows });
+
+        if (rows.length > 0 || exchange?.toUpperCase() !== 'BSE') {
+          return ok({ count: rows.length, rows });
+        }
+
+        // instrument_lists has nothing for BSE; fall back to bse_equity's own
+        // distinct symbols rather than returning an empty result that looks
+        // like "no BSE data exists" when it plainly does.
+        const bseSymbols = await prisma.bse_equity.findMany({
+          where: instrument_type ? { symbol: instrument_type } : {},
+          distinct: ['symbol'],
+          take,
+          select: { symbol: true, symbol_id: true },
+          orderBy: { symbol: 'asc' },
+        });
+        const fallbackRows = bseSymbols.map((s) => ({
+          id: null,
+          exchange: 'BSE',
+          instrument_type: s.symbol,
+          upstox_symbol: null,
+          upstox_id: null,
+          bse_symbol_id: s.symbol_id,
+        }));
+        return ok({ count: fallbackRows.length, rows: fallbackRows, source: 'bse_equity (instrument_lists has no BSE rows)' });
       } catch (e: any) {
         return err(e.message);
       }

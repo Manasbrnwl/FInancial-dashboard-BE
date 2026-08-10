@@ -354,7 +354,11 @@ export function createMcpServer(): McpServer {
     'get_periodic_ohlc',
     {
       description:
-        'Fetch intraday (5-min) OHLC data for NSE instruments from the periodic_market_data schema.',
+        'Fetch intraday (5-min) OHLC data for NSE instruments from the periodic_market_data schema. ' +
+        'WARNING: the ohlcDataNSE table this reads from has not been populated since 2025-10-03 ' +
+        '(~4k rows total) -- this will return nothing for any recent date. Use get_ticks for current ' +
+        'intraday data instead; this tool is effectively unmaintained pending a decision to either fix ' +
+        'the job that was supposed to feed it or deprecate it outright.',
       inputSchema: {
         instrument_id: z.number().int().describe('Instrument ID from instrument_lists'),
         from:          z.string().describe('Start datetime ISO-8601 e.g. 2025-01-15T09:15:00'),
@@ -388,9 +392,15 @@ export function createMcpServer(): McpServer {
     'get_ticks',
     {
       description:
-        'Fetch tick-level data (LTP, bid, ask, volume, OI) for NSE instruments. Choose segment: EQ, FUT, or OPT.',
+        'Fetch tick-level data (LTP, bid, ask, volume, OI) for NSE instruments. Choose segment: EQ, FUT, or OPT. ' +
+        'IMPORTANT: instrument_id means different things per segment -- see its description.',
       inputSchema: {
-        instrument_id: z.number().int().describe('Instrument ID from instrument_lists'),
+        instrument_id: z.number().int().describe(
+          'For segment=EQ: an instrument_lists.id (the underlying, e.g. RELIANCE). ' +
+          'For segment=FUT/OPT: a symbols_list.id (the specific contract, e.g. one expiry/strike) -- ' +
+          'use get_symbols to find it, NOT instrument_lists.id. Passing an instrument_lists.id for FUT/OPT ' +
+          'will silently return zero rows, since ticksDataNSEFUT/ticksDataNSEOPT key on the contract, not the underlying.'
+        ),
         segment:       z.enum(['EQ', 'FUT', 'OPT']).describe('Market segment: EQ (equity), FUT (futures), OPT (options)'),
         from:          z.string().describe('Start datetime ISO-8601'),
         to:            z.string().describe('End datetime ISO-8601'),

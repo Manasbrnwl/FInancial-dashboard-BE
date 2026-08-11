@@ -147,7 +147,12 @@ export function createMcpServer(): McpServer {
     'get_nse_options',
     {
       description:
-        'Fetch NSE options OHLCV data. Filter by underlying, expiry, strike price, and option type (CE/PE).',
+        'Fetch NSE options OHLCV data. Filter by underlying, expiry, strike price, and option type (CE/PE). ' +
+        'NOTE on `close`: for stock options (not index options like NIFTY/BANKNIFTY) this is NSE\'s official ' +
+        'settlement/theoretical close -- a closing-window VWAP or model price, not necessarily a price that ' +
+        'actually traded. On ~14-23% of stock-option bars (illiquid strikes) it falls outside that bar\'s own ' +
+        '[low, high] range despite real volume. Correct for margin/P&L; do not treat it as an executable fill ' +
+        'price. Index options are unaffected.',
       inputSchema: {
         underlying:  z.number().int().describe('Underlying instrument_id (integer)'),
         from:         z.string().describe('Start date YYYY-MM-DD'),

@@ -5,6 +5,12 @@ import { devError, prodError } from "../utils/errorLogger";
 import { parseLimitOffset, parseDateRange } from "../utils/validation";
 
 // OHLC Data NSE
+// NOTE: ohlcDataNSE has not been written to since 2025-10-03. Its old writer
+// (dailyNseOhlcJob.ts, Dhan-based) was deleted in e798569 during the Upstox
+// migration; dailyOhlcUpstoxJob replaced it for daily bars in
+// nse_equity/nse_futures/nse_options but nothing replaced the intraday-OHLC
+// write path. This endpoint is kept for existing callers but only ever
+// returns pre-2025-10-03 data -- see the `warning` field below.
 export const getOhlcDataNSE = async (req: Request, res: Response) => {
   try {
     const { instrumentId, startTime, endTime } = req.query;
@@ -40,6 +46,7 @@ export const getOhlcDataNSE = async (req: Request, res: Response) => {
         offset,
         hasMore: offset + data.length < total,
       },
+      warning: "ohlcDataNSE has not been populated since 2025-10-03 (writer job was removed and never replaced); all returned rows predate that.",
     });
   } catch (error: any) {
     devError("Error fetching OHLC NSE data:", error);

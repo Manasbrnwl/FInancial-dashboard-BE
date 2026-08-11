@@ -2,11 +2,13 @@ import prisma from "../config/prisma";
 import cron from "node-cron";
 import { upstoxAuthService } from "../services/upstoxAuthService";
 import { upstoxOhlcService, OhlcQuote } from "../services/upstoxOhlcService";
+import { upstoxQuoteService } from "../services/upstoxQuoteService";
 import { upstoxInstrumentService } from "../services/upstoxInstrumentService";
 import { sendEmailNotification } from "../utils/sendEmail";
 import { loadEnv } from "../config/env";
 import { devLog, devWarn, devError } from "../utils/errorLogger";
 import { withJobTracking } from "../utils/cronMonitor";
+import { isNseHoliday } from "../utils/nseHolidays";
 
 loadEnv();
 
@@ -365,6 +367,8 @@ async function processFuturesOhlc(
         }
     );
 
+    const oiBySymbolKey = await fetchFnoOi(upstoxKeys, token);
+
     const futuresRecords = [];
     for (const sym of symbols) {
         // Response key format: NSE_FO:SYMBOL
@@ -388,7 +392,7 @@ async function processFuturesOhlc(
             low: ohlc.low,
             close: ohlc.close,
             volume: ohlc.volume?.toString() ?? "0",
-            oi: "0",
+            oi: oiBySymbolKey.get(lookupKey) ?? "0",
             underlying: sym.instrument_id,
             expiry_date: sym.expiry_date,
         });
@@ -404,6 +408,34 @@ async function processFuturesOhlc(
 
     devLog(`✅ NSE Futures: ${totalInserted} records inserted`);
     return totalInserted;
+}
+
+/**
+ * Fetches OI for a batch of NSE_FO instrument keys (futures or options) via
+ * Upstox's full-quote endpoint (/market-quote/quotes, the same one
+ * hourlyTicksNseOptJob already uses successfully for live OI). The v3 OHLC
+ * endpoint used below for open/high/low/close doesn't return oi at all --
+ * that's a limitation of that specific endpoint's response shape, not
+ * something fetchOhlcBatched can be made to return no matter how it's called.
+ */
+async function fetchFnoOi(upstoxKeys: string[], token: string): Promise<Map<string, string>> {
+    const oiMap = new Map<string, string>();
+    for (let i = 0; i < upstoxKeys.length; i += BATCH_SIZE) {
+        const batch = upstoxKeys.slice(i, i + BATCH_SIZE);
+        try {
+            const quotes = await upstoxQuoteService.fetchQuotesResilient(batch, token);
+            if (quotes) {
+                for (const [key, quote] of Object.entries(quotes)) {
+                    if (quote && (quote as any).oi !== undefined && (quote as any).oi !== null) {
+                        oiMap.set(key, (quote as any).oi.toString());
+                    }
+                }
+            }
+        } catch (error: any) {
+            devError("❌ Failed to fetch OI batch:", error.message);
+        }
+    }
+    return oiMap;
 }
 
 /**
@@ -432,6 +464,8 @@ async function processOptionsOhlc(
         }
     );
 
+    const oiBySymbolKey = await fetchFnoOi(upstoxKeys, token);
+
     const optionsRecords = [];
     for (const sym of symbols) {
         // Response key format: NSE_FO:SYMBOL
@@ -455,7 +489,7 @@ async function processOptionsOhlc(
             low: ohlc.low,
             close: ohlc.close,
             volume: ohlc.volume?.toString() ?? "0",
-            oi: "0",
+            oi: oiBySymbolKey.get(lookupKey) ?? "0",
             underlying: sym.instrument_id,
             expiry_date: sym.expiry_date,
             strike: sym.strike,
@@ -487,10 +521,18 @@ export async function executeDailyOhlcUpstoxJob(): Promise<void> {
         // Guard against the NODE_ENV=development immediate-run-on-startup path
         // firing outside the Mon-Fri cron schedule (e.g. a local dev instance
         // pointed at prod started on a weekend) - NSE doesn't trade on weekends,
-        // so there's nothing valid to fetch/insert.
-        const istWeekday = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata", weekday: "short" });
+        // so there's nothing valid to fetch/insert. NSE weekday holidays (Republic
+        // Day, Holi, etc.) need the same guard: without it, Upstox's OHLC endpoint
+        // still returns a (stale/garbage-volume) quote for a closed market and this
+        // job stores it as if it were a real session.
+        const now = new Date();
+        const istWeekday = now.toLocaleString("en-US", { timeZone: "Asia/Kolkata", weekday: "short" });
         if (istWeekday === "Sat" || istWeekday === "Sun") {
             devLog(`⏭️ Skipping Daily OHLC job — ${istWeekday} is not an NSE trading day (IST).`);
+            return;
+        }
+        if (isNseHoliday(now)) {
+            devLog(`⏭️ Skipping Daily OHLC job — today is an NSE trading holiday (IST).`);
             return;
         }
 

@@ -15,6 +15,7 @@ import { initializeLoginReminderJob } from "../jobs/dailyLoginEmailJob";
 import { syncHistoricalSymbols } from "../scripts/fetchHistoricalSymbols";
 import { upstoxInstrumentService } from "../services/upstoxInstrumentService";
 import { runFillBseEquity } from "../scripts/fillBseEquityFromBhavcopy";
+import { runRepairOptionsOi } from "../scripts/repairOptionsOi";
 import { withJobTracking } from "../utils/cronMonitor";
 
 // Polyfill for BigInt JSON serialization
@@ -25,6 +26,7 @@ import { withJobTracking } from "../utils/cronMonitor";
 const WEEKLY_SYMBOL_SYNC_CRON = "0 6 * * 2"; // Every Tuesday 6 AM IST
 const WEEKLY_UPSTOX_TOKEN_REFRESH_CRON = "15 6 * * 2"; // Every Tuesday 6:15 AM IST, after the bhavcopy sync above
 const DAILY_BSE_EQUITY_SYNC_CRON = "30 20 * * 1-5"; // Mon-Fri 8:30 PM IST, after BSE bhavcopy is typically published
+const WEEKLY_OPTIONS_OI_REPAIR_CRON = "0 9 * * 6"; // Every Saturday 9 AM IST, after the week's bhavcopies are all published
 
 async function syncNewSymbolsFromBhavcopy() {
   try {
@@ -76,6 +78,21 @@ async function syncBseEquityFromBhavcopy() {
 }
 
 /**
+ * dailyOhlcUpstoxJob now fetches OI directly (see fetchFnoOi in that file),
+ * so this should mostly find nothing. Kept as a rolling weekly safety net --
+ * default 14-day window -- in case that fetch missed some symbols on a given
+ * day (rate limits, transient Upstox errors).
+ */
+async function repairRecentOptionsOi() {
+  try {
+    await runRepairOptionsOi();
+  } catch (error: any) {
+    devError("Failed to repair recent options OI:", error.message);
+    prodError("Failed to repair recent options OI");
+  }
+}
+
+/**
  * The sync-worker process — every cron job (tick ingestion, daily OHLC, covered
  * call alerts, gap baselines/cleanup, weekly instrument sync, login reminders).
  * Isolated from the API and realtime processes so a burst of Upstox Quote API
@@ -106,6 +123,13 @@ export function startSyncWorker(): void {
     { timezone: "Asia/Kolkata" }
   );
   devLog("Daily BSE Equity Bhavcopy Sync scheduled (Mon-Fri 8:30 PM IST)");
+
+  cron.schedule(
+    WEEKLY_OPTIONS_OI_REPAIR_CRON,
+    withJobTracking("weeklyOptionsOiRepair", WEEKLY_OPTIONS_OI_REPAIR_CRON, repairRecentOptionsOi),
+    { timezone: "Asia/Kolkata" }
+  );
+  devLog("Weekly Options OI Repair scheduled (Every Saturday 9 AM IST)");
 
   if (process.env.NODE_ENV === "development") {
     syncNewSymbolsFromBhavcopy();

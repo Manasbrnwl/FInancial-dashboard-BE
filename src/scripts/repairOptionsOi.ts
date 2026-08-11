@@ -8,26 +8,23 @@ import { downloadFile, extractZip, parseCsv, formatStrike } from "./fetchHistori
 loadEnv();
 
 /**
- * Repairs nse_options.oi for the 2026-06-25 -> ongoing window where it's
- * stuck at 0/NULL. Root cause: dailyOhlcUpstoxJob's processOptionsOhlc reads
- * from Upstox's /v3/market-quote/ohlc endpoint, whose OhlcQuote/OhlcCandle
- * types carry no `oi` field at all -- that endpoint doesn't return open
- * interest, so the hardcoded oi: "0" isn't a regression, it's a permanent
- * limitation of that endpoint. Real OI historically came from periodic
- * historical-candle-based backfills (which do return it); once those stopped
- * running regularly, dailyOhlcUpstoxJob's zero-OI rows became permanent --
- * skipDuplicates means a later correct backfill can never overwrite a row
- * that already exists.
+ * Repairs nse_options.oi where it's stuck at 0/NULL. Originally written for
+ * the 2026-06-25 dailyOhlcUpstoxJob regression (processOptionsOhlc read from
+ * Upstox's /v3/market-quote/ohlc endpoint, whose OhlcQuote/OhlcCandle types
+ * carry no `oi` field at all) -- that job now fetches OI from the full-quote
+ * endpoint directly, so this should no longer be needed for new days. Kept
+ * as a rolling safety net (see runRepairOptionsOi's default window below) in
+ * case that fetch misses symbols on a given day (rate limits, transient
+ * errors, a symbol Upstox briefly doesn't recognize).
  *
- * This uses NSE's bhavcopy archive (no Upstox token needed -- the stored
- * token is stale and refreshing it needs an interactive OAuth login) via the
- * same normalized ticker+expiry+strike+type matching already proven in
+ * This uses NSE's bhavcopy archive (no Upstox token needed) via the same
+ * normalized ticker+expiry+strike+type matching already proven in
  * fillGapsFromNseBhavcopy.ts, but as an UPDATE against existing rows instead
  * of an insert, since these rows already exist with wrong OI.
  *
  * Usage:
  *   npx ts-node src/scripts/repairOptionsOi.ts --dry-run
- *   npx ts-node src/scripts/repairOptionsOi.ts
+ *   npx ts-node src/scripts/repairOptionsOi.ts [--since YYYY-MM-DD]
  */
 
 const SCRATCH_DIR = path.resolve(__dirname, "../../scratch/oi_repair");
@@ -41,10 +38,10 @@ function fmt(d: Date): string {
     return d.toISOString().split("T")[0];
 }
 
-async function getAffectedDates(): Promise<string[]> {
+async function getAffectedDates(sinceDateStr: string): Promise<string[]> {
     const rows = await prisma.$queryRaw<Array<{ date: Date }>>`
         SELECT DISTINCT date FROM market_data.nse_options
-        WHERE date >= '2026-06-25' AND (oi IS NULL OR oi = '0')
+        WHERE date >= ${sinceDateStr}::date AND (oi IS NULL OR oi = '0')
         ORDER BY date
     `;
     return rows.map((r) => fmt(r.date));
@@ -131,13 +128,20 @@ async function repairOneDate(dateKey: string, dryRun: boolean): Promise<{ found:
     return { found: true, matched: updates.length, updated: dryRun ? updates.length : updated };
 }
 
-async function main(): Promise<void> {
-    const dryRun = process.argv.includes("--dry-run");
-    console.log(`Repairing nse_options.oi via NSE bhavcopy (dry-run: ${dryRun})`);
+/**
+ * Repairs nse_options.oi from `sinceDate` onward (default: 14 days ago, a
+ * rolling window sized for the recurring safety-net cron -- see
+ * runRepairOptionsOi in sync.ts). Exported so it can be both a one-off CLI
+ * script (for a wider historical repair, via --since) and wired into a cron.
+ */
+export async function runRepairOptionsOi(sinceDate?: Date, dryRun = false): Promise<{ datesChecked: number; notFound: number; matched: number; updated: number }> {
+    const effectiveSince = sinceDate ?? new Date(Date.now() - 14 * 86400000);
+    const sinceDateStr = fmt(effectiveSince);
+    console.log(`Repairing nse_options.oi via NSE bhavcopy since ${sinceDateStr} (dry-run: ${dryRun})`);
 
     if (!fs.existsSync(SCRATCH_DIR)) fs.mkdirSync(SCRATCH_DIR, { recursive: true });
 
-    const dates = await getAffectedDates();
+    const dates = await getAffectedDates(sinceDateStr);
     console.log(`Affected dates: ${dates.length}`);
 
     let totalMatched = 0;
@@ -157,12 +161,23 @@ async function main(): Promise<void> {
     }
 
     console.log(`\n✅ Done. Dates checked: ${dates.length}, no bhavcopy: ${notFound}, rows with real OI found: ${totalMatched}, updated: ${totalUpdated}`);
+    return { datesChecked: dates.length, notFound, matched: totalMatched, updated: totalUpdated };
 }
 
-main()
-    .then(() => prisma.$disconnect())
-    .catch(async (err) => {
-        console.error("❌ repairOptionsOi failed:", err);
-        await prisma.$disconnect();
-        process.exit(1);
-    });
+async function main(): Promise<void> {
+    const args = process.argv.slice(2);
+    const dryRun = args.includes("--dry-run");
+    const sinceIdx = args.indexOf("--since");
+    const sinceDate = sinceIdx !== -1 && args[sinceIdx + 1] ? new Date(args[sinceIdx + 1]) : undefined;
+    await runRepairOptionsOi(sinceDate, dryRun);
+}
+
+if (require.main === module) {
+    main()
+        .then(() => prisma.$disconnect())
+        .catch(async (err) => {
+            console.error("❌ repairOptionsOi failed:", err);
+            await prisma.$disconnect();
+            process.exit(1);
+        });
+}

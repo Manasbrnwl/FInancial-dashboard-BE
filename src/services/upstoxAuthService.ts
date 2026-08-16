@@ -1,7 +1,7 @@
 import axios from "axios";
 import prisma from "../config/prisma";
 import { UPSTOX_CONFIG } from "../config/upstoxConfig";
-import { devLog, devWarn, devError, prodError } from "../utils/errorLogger";
+import { devLog, devError, prodError } from "../utils/errorLogger";
 
 let cachedAccessToken: string | null = null;
 let tokenExpiry: number | null = null;
@@ -64,7 +64,18 @@ export const upstoxAuthService = {
     },
 
     /**
-     * Returns the valid cached token or throws if missing/expired.
+     * Returns the stored token, or null if missing/unreadable.
+     *
+     * UPSTOX_ACCESS_TOKEN now holds an Analytics Token (switched 2026-08-16),
+     * not a standard OAuth access token -- Analytics Tokens are read-only but
+     * carry a 1-year validity and aren't tied to daily re-login, unlike the
+     * standard token which expires at 3:30 AM IST every day regardless of
+     * issue time. That's what the old 12-hour staleness check here was
+     * guarding against; it doesn't apply to this token type and was actively
+     * harmful for it (would reject a token that's still genuinely valid for
+     * up to a year). If Upstox ever rejects this token outright (expired,
+     * revoked, regenerated elsewhere), that surfaces as a real 401 from the
+     * API call itself, same as any other invalid-token case.
      */
     getAccessToken: async (): Promise<string | null> => {
         try {
@@ -73,15 +84,6 @@ export const upstoxAuthService = {
             });
 
             if (!config?.value) return null;
-
-            // 12-hour expiry check
-            const TWELVE_HOURS = 12 * 60 * 60 * 1000;
-            const tokenAge = Date.now() - new Date(config.updated_at).getTime();
-
-            if (tokenAge > TWELVE_HOURS) {
-                devWarn("⚠️ Upstox Access Token expired (> 12h). Need fresh login.");
-                return null;
-            }
 
             cachedAccessToken = config.value;
             return config.value;

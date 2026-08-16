@@ -183,11 +183,23 @@ async function main(): Promise<void> {
             .map((s) => s.trim())
             .filter((s): s is Segment => (ALL_SEGMENTS as readonly string[]).includes(s));
     }
+    // Scope to specific dates (e.g. a known incident window) instead of the
+    // full history back to START -- findMissingDailySymbols always walks the
+    // whole calendar, so this just filters its result rather than skipping
+    // the scan itself.
+    const datesIdx = args.indexOf("--dates");
+    const dateFilter = datesIdx !== -1 && args[datesIdx + 1]
+        ? new Set(args[datesIdx + 1].split(",").map((s) => s.trim()))
+        : null;
 
     console.log(`🚀 NSE bhavcopy gap fill after ${START} (dry-run: ${dryRun})`);
     console.log(`📊 Segments: ${segments.join(", ")}`);
+    if (dateFilter) console.log(`📅 Restricted to dates: ${[...dateFilter].join(", ")}`);
 
-    const byDate = await buildMissingByDate(segments);
+    const byDateAll = await buildMissingByDate(segments);
+    const byDate = dateFilter
+        ? new Map([...byDateAll].filter(([d]) => dateFilter.has(d)))
+        : byDateAll;
     const dates = [...byDate.keys()].sort();
     const totalSlots = dates.reduce((sum, d) => {
         const bySeg = byDate.get(d)!;
